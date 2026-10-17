@@ -49,11 +49,21 @@ except Exception:
 # Keep the license texts with the binaries; metadata paths differ across build platforms.
 import sysconfig
 site = Path(sysconfig.get_paths()["purelib"])
+LICENSED = {"paramiko", "cryptography", "bcrypt", "pynacl", "cffi", "pycparser", "invoke", "pywebview", "pythonnet", "proxy-tools", "bottle", "typing-extensions", "clr-loader"}
+# Packages whose wheel carries no license file: the text is kept in packaging/licenses/<name>.txt instead.
+EXTRA_LICENSES = {"proxy-tools": ROOT / "packaging" / "licenses" / "proxy_tools.txt"}
+for name, path in EXTRA_LICENSES.items():
+    datas.append((str(path), "licenses/" + name.replace("-", "_")))
+# The WebView2 SDK DLLs inside pywebview (webview/lib) are Microsoft's, under their own BSD-3-Clause license.
+datas.append((str(ROOT / "packaging" / "licenses" / "Microsoft.Web.WebView2.txt"), "licenses/Microsoft.Web.WebView2"))
 for info in site.glob("*.dist-info"):
-    if info.name.split("-", 1)[0].lower().replace("_", "-") in {"paramiko", "cryptography", "bcrypt", "pynacl", "cffi", "pycparser", "invoke", "pywebview", "pythonnet", "proxy-tools", "bottle", "typing-extensions", "clr-loader"}:
-        for license_file in list((info / "licenses").glob("**/*")) + list(info.glob("LICENSE*")):
-            if license_file.is_file():
-                datas.append((str(license_file), "licenses/" + info.name))
+    pkg = info.name.split("-", 1)[0].lower().replace("_", "-")
+    if pkg in LICENSED:
+        found = [f for f in list((info / "licenses").glob("**/*")) + list(info.glob("LICENSE*")) + list(info.glob("COPYING*")) if f.is_file()]
+        for license_file in found:
+            datas.append((str(license_file), "licenses/" + info.name))
+        if not found and pkg not in EXTRA_LICENSES:
+            print("WARNING: %s has no license file in its dist-info; add packaging/licenses/%s.txt and list it in EXTRA_LICENSES" % (info.name, pkg.replace("-", "_")))
 
 a = Analysis(
     [str(ROOT / "app.py")],

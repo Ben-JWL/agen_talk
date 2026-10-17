@@ -77,8 +77,11 @@ jobs:
         run: |
           $exe = "build\dist\$env:APP_FILE\$env:APP_FILE.exe"
           $p = Start-Process $exe -ArgumentList "--selftest" -PassThru
-          if (-not $p.WaitForExit(120000)) { $p.Kill(); throw "selftest timed out" }
-          Get-Content "$env:LOCALAPPDATA\AgenTalk\agen-talk.log" -Tail 40 -ErrorAction SilentlyContinue
+          try {
+            if (-not $p.WaitForExit(120000)) { $p.Kill(); throw "selftest timed out" }
+          } finally {   # the log is printed on a timeout too
+            Get-Content "$env:LOCALAPPDATA\AgenTalk\agen-talk.log" -Tail 40 -ErrorAction SilentlyContinue
+          }
           if ($p.ExitCode -ne 0) { throw "selftest exit code $($p.ExitCode)" }
 
       - name: Smoke test built GUI
@@ -87,8 +90,11 @@ jobs:
           AT_VERSION: ${{ env.AT_VERSION }}
         run: |
           $p = Start-Process "build\dist\$env:APP_FILE\$env:APP_FILE.exe" -ArgumentList "--smoke-gui" -PassThru
-          if (-not $p.WaitForExit(60000)) { $p.Kill(); throw "GUI smoke timed out" }
-          Get-Content "$env:LOCALAPPDATA\AgenTalk\agen-talk.log" -Tail 40 -ErrorAction SilentlyContinue
+          try {
+            if (-not $p.WaitForExit(60000)) { $p.Kill(); throw "GUI smoke timed out" }
+          } finally {
+            Get-Content "$env:LOCALAPPDATA\AgenTalk\agen-talk.log" -Tail 40 -ErrorAction SilentlyContinue
+          }
           if ($p.ExitCode -ne 0) { throw "GUI smoke exit code $($p.ExitCode)" }
 
       - name: Portable zip
@@ -119,12 +125,18 @@ jobs:
           $p = Start-Process $setup -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART","/CURRENTUSER","/DIR=$dir" -PassThru -Wait
           if ($p.ExitCode -ne 0) { throw "install exit code $($p.ExitCode)" }
           $app = Start-Process "$dir\$env:APP_FILE.exe" -ArgumentList "--selftest" -PassThru
-          if (-not $app.WaitForExit(120000)) { $app.Kill(); throw "installed selftest timed out" }
-          Get-Content "$env:LOCALAPPDATA\AgenTalk\agen-talk.log" -Tail 40 -ErrorAction SilentlyContinue
+          try {
+            if (-not $app.WaitForExit(120000)) { $app.Kill(); throw "installed selftest timed out" }
+          } finally {
+            Get-Content "$env:LOCALAPPDATA\AgenTalk\agen-talk.log" -Tail 40 -ErrorAction SilentlyContinue
+          }
           if ($app.ExitCode -ne 0) { throw "installed selftest exit code $($app.ExitCode)" }
           $gui = Start-Process "$dir\$env:APP_FILE.exe" -ArgumentList "--smoke-gui" -PassThru
-          if (-not $gui.WaitForExit(60000)) { $gui.Kill(); throw "installed GUI smoke timed out" }
-          Get-Content "$env:LOCALAPPDATA\AgenTalk\agen-talk.log" -Tail 40 -ErrorAction SilentlyContinue
+          try {
+            if (-not $gui.WaitForExit(60000)) { $gui.Kill(); throw "installed GUI smoke timed out" }
+          } finally {
+            Get-Content "$env:LOCALAPPDATA\AgenTalk\agen-talk.log" -Tail 40 -ErrorAction SilentlyContinue
+          }
           if ($gui.ExitCode -ne 0) { throw "installed GUI smoke exit code $($gui.ExitCode)" }
           $u = Start-Process "$dir\unins000.exe" -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART" -PassThru -Wait
           if ($u.ExitCode -ne 0) { throw "uninstall exit code $($u.ExitCode)" }

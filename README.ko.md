@@ -21,7 +21,7 @@ Windows 10/11, 관리자 권한 불필요, 서버에는 아무것도 설치하�
 
 **회사 정책으로 막히면?** 서명 없는 앱을 막는 회사가 있습니다. 이 경우:
 - **포터블 zip**(`AgenTalk-<버전>-portable.zip`)을 아무 폴더에 풀고 `AgenTalk.exe` 를 실행하거나(이것도 막힐 수 있음),
-- **소스로 실행**: Python 3.8 이상에서 `python app.py` (창을 쓰려면 `pip install pywebview`, 없으면 Chrome/Edge 앱 창으로 열립니다. SSH는 OpenSSH 대체 경로를 사용하며 콘솔에서 지문 확인과 비밀번호 입력을 요청할 수 있습니다).
+- **소스로 실행**: Python 3.8 이상에서 `python app.py` (창을 쓰려면 `pip install pywebview`, 없으면 Chrome/Edge 앱 창으로 열립니다. `pip install paramiko` 를 해 두면 SSH는 앱 내장 클라이언트를 쓰고, paramiko가 없으면 OpenSSH 대체 경로를 사용하며 이때 콘솔에서 지문 확인과 비밀번호 입력을 요청할 수 있습니다).
 
 창은 Microsoft Edge WebView2 를 씁니다. 최신 Windows 10/11 에는 들어 있고, 없으면 Chrome/Edge 창으로 대신 열면서 설치 방법을 알려 줍니다.
 
@@ -37,11 +37,13 @@ Windows 10/11, 관리자 권한 불필요, 서버에는 아무것도 설치하�
    형식: `{"presets": [{"name": "GPU 서버", "host": "gpu.example.com", "port": 22}]}`
 4. 설정에서 **Windows 알림** 을 켜 두면 입력 대기·응답 없음·끊김을 알려 줍니다.
 
-설치된 앱은 자체 SSH 클라이언트를 사용합니다. OpenSSH는 소스 실행 모드의 대체 경로에서만 사용합니다.
+설치된 앱은 앱 내장 SSH 클라이언트(paramiko)를 사용합니다. OpenSSH는 대체 경로로만 씁니다. paramiko 없이 소스로 실행할 때,
+또는 `channels.json` 에 직접 적은 `ssh_args` 에 `-i`, `-p`, `-o IdentitiesOnly=...` 외의 옵션(예: `-o ProxyJump=...`)이 있는 서버일 때입니다.
 
-### 소스 모드 OpenSSH 대체 경로: Entra 가입 PC의 "Bad owner or permissions" 오류
+### OpenSSH 대체 경로: Entra 가입 PC의 "Bad owner or permissions" 오류
 
-회사 Entra ID 가입 PC에서는 OpenSSH 설정 파일의 소유자가 어긋나는 일이 흔합니다. 소스 모드 대체 경로에서만 필요한 수정입니다.
+회사 Entra ID 가입 PC에서는 OpenSSH 설정 파일의 소유자가 어긋나는 일이 흔합니다. OpenSSH 대체 경로에서만 필요한 수정입니다
+(앱 내장 클라이언트는 `~/.ssh/config` 를 읽지 않습니다). 앱에도 이 명령을 복사하는 버튼이 있습니다.
 PowerShell 에서 실행하세요(사용자 이름은 자동으로 들어갑니다).
 
 ```powershell
@@ -67,6 +69,10 @@ Codex는 지시 본문을 암호화하므로 해당 카드는 잠금(🔒)으로
 **개인정보와 안전.**
 - 설정의 **톡 보내기 허용** 을 끄면 모든 방에서 보내기가 꺼지고, 허브도 이를 강제합니다. 흐름 보기는 그대로입니다.
 - 메시지 본문은 앱 로그에 기록하지 않습니다. 보낼 때마다 대상·길이·결과만 담은 감사 로그 한 줄이 남습니다.
+- 다시 실행해도 방 내용이 남도록 창이 로컬 캐시를 둡니다. 내가 보낸 톡, 에이전트의 지시·보고, 방에 보이는 활동 줄(에이전트가 실행한
+  명령 포함)이 `%LOCALAPPDATA%\AgenTalk\webview` 의 WebView2 프로필에 저장되며, 약 24시간 보관되고 다음 실행 때 정리됩니다
+  (프로세스 명령줄이 들어갈 수 있는 알림 목록은 최대 500개, 7일). Chrome/Edge 대체 창에서는 같은 데이터가 그 브라우저의
+  `127.0.0.1` 사이트 데이터에 남습니다.
 - 표시되는 지시에서 뚜렷한 비밀값(API 키, 토큰, 개인 키, `password=` 값 등)은 `[가려짐]` 으로 가립니다.
 - 페이지는 엄격한 Content-Security-Policy 로 제공됩니다.
 - Claude Code 세션이 다른 세션의 메시지를 받을지는 그 세션의 설정 `crossSessionInbound`(`accept`, `hold`, `refuse`)로 사용자가 정합니다.
@@ -74,8 +80,8 @@ Codex는 지시 본문을 암호화하므로 해당 카드는 잠금(🔒)으로
 
 ## 서버 쪽은 어떻게 동작하나요
 
-서버에는 아무것도 설치하지 않습니다. 앱이 서버마다 `ssh` 를 열어, 수집기(`agen_talk.py`, 파이썬 표준 라이브러리만 사용)를
-SSH 세션으로 흘려 보내 `python3 -c` 로 실행합니다. 수집기는 에이전트 상태를 읽기 전용으로 읽고(`/proc`, `~/.codex`, `~/.claude`, `~/.gemini`)
+서버에는 아무것도 설치하지 않습니다. 앱이 서버마다 내장 SSH 연결을 열어, 수집기(`agen_talk.py`, 파이썬 표준 라이브러리만 사용)를
+그 세션으로 흘려 보내 `python3 -c` 로 실행합니다. 수집기는 에이전트 상태를 읽기 전용으로 읽고(`/proc`, `~/.codex`, `~/.claude`, `~/.gemini`)
 요청마다 JSON 한 줄을 돌려줍니다. 창을 닫거나 연결이 끊기면 세션이 끝나면서 수집기도 함께 끝납니다.
 서버 조건: `python3` 3.8 이상.
 
@@ -87,15 +93,17 @@ SSH 세션으로 흘려 보내 `python3 -c` 로 실행합니다. 수집기는 �
 - 변경 요청에는 실행마다 다른 토큰과 일치하는 `Host`가 필요합니다. `Origin` 헤더를 보내면 값이 일치해야 하며, 톡 엔드포인트에는 필수입니다.
 - 내가 추가한 서버로 가는 내 SSH 연결 말고는 데이터가 PC 밖으로 나가지 않습니다. 원격 측정, 계정, 클라우드 서비스가 없습니다.
 - 서버 비밀번호는 앱에서 입력하며 등록 작업 동안에만 메모리에 보관합니다. 세션 비밀번호 옵션도 앱을 닫으면 사라집니다. 처음 보는 서버 지문은 확인을 받아야 하며, 기록된 지문이 바뀌면 연결을 거부합니다.
-- 전용 키와 서버 지문은 `%APPDATA%\AgenTalk\id_ed25519`, `%APPDATA%\AgenTalk\known_hosts` 에 있습니다.
-- 설정은 `%APPDATA%\AgenTalk\channels.json`, 로그는 `%LOCALAPPDATA%\AgenTalk\agen-talk.log` 에 있습니다.
+- 전용 키와 서버 지문은 `%APPDATA%\AgenTalk\id_ed25519`, `%APPDATA%\AgenTalk\known_hosts` 에 있습니다. paramiko를 쓸 수 없어 OpenSSH 대체 경로를 쓰면 `%USERPROFILE%\.ssh\agen_talk_ed25519` 키를 씁니다.
+- 설정은 `%APPDATA%\AgenTalk\channels.json`, 로그(`agen-talk.log`)와 창의 WebView2 프로필(`webview\`, 위의 개인정보 참고)은 `%LOCALAPPDATA%\AgenTalk` 에 있습니다.
 
 ## 제거
 
-설정 > 앱 > 설치된 앱 > 에겐 톡 (Agen Talk) > 제거. `%APPDATA%\AgenTalk` 의 서버 목록과 설정은 남습니다(완전히 지우려면 그 폴더를 직접 삭제).
+설정 > 앱 > 설치된 앱 > 에겐 톡 (Agen Talk) > 제거. 제거 프로그램은 프로그램만 지웁니다. `%APPDATA%\AgenTalk` 의 서버 목록과 설정,
+`%LOCALAPPDATA%\AgenTalk` 의 로그와 방 내용 캐시는 남습니다. 완전히 지우려면 두 폴더를 직접 삭제하세요.
 
 접속 권한까지 없애려면 각 서버의 `~/.ssh/authorized_keys` 에서 `agen-talk@<내 PC 이름>` 으로 끝나는 줄을 지운 뒤,
 내 PC의 `%APPDATA%\AgenTalk\id_ed25519`, `id_ed25519.pub`, `known_hosts` 파일을 지웁니다.
+OpenSSH 대체 경로를 쓴 적이 있다면 `%USERPROFILE%\.ssh\agen_talk_ed25519`, `agen_talk_ed25519.pub` 도 지웁니다(이 키도 주석이 `agen-talk@<내 PC 이름>` 입니다).
 
 ## 소스에서 빌드
 

@@ -22,7 +22,7 @@ Click **More info**, then **Run anyway**.
 
 **Company policy blocks it?** Some organisations block unsigned apps. Use one of these instead:
 - the **portable zip** (`AgenTalk-<version>-portable.zip`): unzip anywhere and run `AgenTalk.exe` (may still be blocked), or
-- **run from source** with Python 3.8+: `python app.py` (the window needs `pip install pywebview`; without it a Chrome/Edge app window is used. SSH falls back to OpenSSH when paramiko is not installed; its console may ask you to confirm the fingerprint and enter the password.)
+- **run from source** with Python 3.8+: `python app.py` (the window needs `pip install pywebview`; without it a Chrome/Edge app window is used. SSH uses the in-app client when `pip install paramiko` is done, and falls back to OpenSSH when paramiko is not installed; its console may ask you to confirm the fingerprint and enter the password.)
 
 The window uses Microsoft Edge WebView2, which is part of current Windows 10/11. If it is missing the app falls
 back to a Chrome/Edge window and tells you how to install WebView2.
@@ -40,12 +40,14 @@ back to a Chrome/Edge window and tells you how to install WebView2.
    Format: `{"presets": [{"name": "GPU box", "host": "gpu.example.com", "port": 22}]}`.
 4. Settings: turn on **Windows 알림** to be told about waiting, stalled, or disconnected agents.
 
-The installed app uses its in-app SSH client. OpenSSH is used only when running the source-mode fallback.
+The installed app uses its in-app SSH client (paramiko). OpenSSH is used only as a fallback: when a source run has no
+paramiko, or for a server whose hand-edited `ssh_args` in `channels.json` use an option other than `-i`, `-p` or
+`-o IdentitiesOnly=...` (for example `-o ProxyJump=...`).
 
-### Source-mode OpenSSH fallback: "Bad owner or permissions" on an Entra-joined PC
+### OpenSSH fallback: "Bad owner or permissions" on an Entra-joined PC
 
-On work PCs joined to Entra ID the SSH config file often has the wrong owner. The app shows a copy button with this
-fix for the source-mode OpenSSH config; run it in PowerShell:
+On work PCs joined to Entra ID the SSH config file often has the wrong owner. This only matters for the OpenSSH
+fallback (the in-app client never reads `~/.ssh/config`). The app shows a copy button with this fix; run it in PowerShell:
 
 ```powershell
 $f = "$env:USERPROFILE\.ssh\config"; $me = whoami; icacls $f /setowner $me; icacls $f /inheritance:r /grant:r "${me}:F"
@@ -70,6 +72,11 @@ tree of who told whom. Codex encrypts its instruction bodies, so those cards sho
 **Privacy and safety.**
 - Settings > **톡 보내기 허용** turns sending off everywhere; the hub enforces it too. Viewing the flow stays on.
 - The message text is never written to the app log; each send leaves one audit line (target, length, outcome).
+- The window keeps a local cache so rooms survive a restart: the talks you sent, the agents' instructions and reports, and
+  the activity lines shown in rooms (including commands the agents ran). It lives in the WebView2 profile under
+  `%LOCALAPPDATA%\AgenTalk\webview`, is kept about 24 hours and is pruned on the next start (the 알림 feed, which can
+  include process command lines, keeps up to 500 entries for 7 days). In the Chrome/Edge fallback window the same data
+  sits in that browser's site data for `127.0.0.1`.
 - Obvious secrets (API keys, tokens, private keys, `password=` values) are masked as `[가려짐]` in displayed instructions.
 - The page is served with a strict Content-Security-Policy.
 - Whether a Claude Code session accepts messages from other sessions is that session's own choice: the `crossSessionInbound`
@@ -90,15 +97,18 @@ closes or the connection drops, the session ends and the collector exits with it
 - No data leaves your PC except over your own SSH connections to servers you added. There is no telemetry, no account, no cloud service.
 - The server password is entered in the app and held only while the add-server job runs; the session-password option lasts only until the app closes. Unknown server fingerprints require confirmation; changed fingerprints are rejected.
 - The dedicated key and trusted server fingerprints live at `%APPDATA%\AgenTalk\id_ed25519` and `%APPDATA%\AgenTalk\known_hosts`. If paramiko is unavailable, OpenSSH fallback uses `%USERPROFILE%\.ssh\agen_talk_ed25519`.
-- Config lives in `%APPDATA%\AgenTalk\channels.json`, logs in `%LOCALAPPDATA%\AgenTalk\agen-talk.log`.
+- Config lives in `%APPDATA%\AgenTalk\channels.json`; logs (`agen-talk.log`) and the window's WebView2 profile (`webview\`, see Privacy above) live in `%LOCALAPPDATA%\AgenTalk`.
 
 ## Uninstall
 
-Settings > Apps > Installed apps > 에겐 톡 (Agen Talk) > Uninstall. Your servers and settings in `%APPDATA%\AgenTalk` are kept
-(delete that folder yourself for a clean slate).
+Settings > Apps > Installed apps > 에겐 톡 (Agen Talk) > Uninstall. The uninstaller removes the program only. Your servers and
+settings in `%APPDATA%\AgenTalk` and the logs and cached room contents in `%LOCALAPPDATA%\AgenTalk` are kept. For a full
+removal delete both folders yourself.
 
 To also revoke access, remove the line ending in `agen-talk@<your PC name>` from `~/.ssh/authorized_keys` on each server,
 then delete `%APPDATA%\AgenTalk\id_ed25519`, `%APPDATA%\AgenTalk\id_ed25519.pub`, and `%APPDATA%\AgenTalk\known_hosts` on your PC.
+If you ever used the OpenSSH fallback, also delete `%USERPROFILE%\.ssh\agen_talk_ed25519` and `%USERPROFILE%\.ssh\agen_talk_ed25519.pub`
+(that key carries the same `agen-talk@<your PC name>` comment).
 
 ## Build from source
 

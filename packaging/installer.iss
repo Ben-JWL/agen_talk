@@ -56,6 +56,10 @@ korean.LaunchApp={#AppName} 시작
 [Tasks]
 Name: "desktopicon"; Description: "{cm:DesktopIcon}"; Flags: unchecked
 
+[InstallDelete]
+; An upgrade must not mix old and new runtime files: clear the PyInstaller onedir's _internal before copying.
+Type: filesandordirs; Name: "{app}\_internal"
+
 [Files]
 Source: "..\build\dist\{#AppDirName}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
