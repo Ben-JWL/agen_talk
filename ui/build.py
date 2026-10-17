@@ -15,5 +15,6 @@ html = "".join(out)
 assert "<script src" not in html and "@import" not in html and "eval(" not in html, "no external scripts, no eval"
 assert not re.search(r"\.innerHTML\s*=\s*[^'\"`;]*\$\{", html), "innerHTML with interpolation is forbidden"
 (HERE / "dist").mkdir(exist_ok=True)
-(HERE / "dist" / "index.html").write_text(html, encoding="utf-8")
+with open(HERE / "dist" / "index.html", "w", encoding="utf-8", newline="\n") as f:   # LF on Windows too: index.html is compared byte-for-byte
+    f.write(html)
 print("dist/index.html", len(html), "bytes from", [p.name for p in parts])
