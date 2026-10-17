@@ -96,9 +96,18 @@ jobs:
         run: |
           $p = Start-Process "build\dist\$env:APP_FILE\$env:APP_FILE.exe" -ArgumentList "--smoke-gui" -PassThru
           try {
-            if (-not $p.WaitForExit(60000)) { $p.Kill(); throw "GUI smoke timed out" }
+            if (-not $p.WaitForExit(60000)) {
+              # a hang: keep the desktop (an error dialog shows up here) and the app's own stack dump before killing it
+              Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+              $b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+              $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
+              [System.Drawing.Graphics]::FromImage($bmp).CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)
+              New-Item -ItemType Directory -Force diag | Out-Null; $bmp.Save("$PWD\diag\gui-smoke-desktop.png")
+              $p.Kill(); throw "GUI smoke timed out"
+            }
           } finally {
             Get-Content "$env:LOCALAPPDATA\AgenTalk\agen-talk.log" -Tail 40 -ErrorAction SilentlyContinue
+            Write-Host "---- smoke-stacks.txt"; Get-Content "$env:LOCALAPPDATA\AgenTalk\smoke-stacks.txt" -ErrorAction SilentlyContinue
           }
           if ($p.ExitCode -ne 0) { throw "GUI smoke exit code $($p.ExitCode)" }
 
@@ -164,6 +173,14 @@ jobs:
             release/${{ env.APP_FILE }}-Setup-${{ env.AT_VERSION }}.exe
             release/${{ env.APP_FILE }}-${{ env.AT_VERSION }}-portable.zip
             release/SHA256SUMS
+
+      - name: Diagnostics on failure (desktop screenshot of a hung GUI smoke)
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: diag
+          path: diag/*
+          if-no-files-found: ignore
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

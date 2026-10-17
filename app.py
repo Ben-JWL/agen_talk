@@ -466,8 +466,17 @@ def main(argv):
             raise
         log.info("selftest ok")
         return 0
-    if "--smoke-gui" in argv:
-        return run_app(smoke_gui=True)
+    if "--smoke-gui" in argv:   # a hang must explain itself: every thread's stack goes to smoke-stacks.txt after 40 s (CI kills at 60 s)
+        import faulthandler
+        st = ar.state_dir()
+        st.mkdir(parents=True, exist_ok=True)
+        stacks = open(str(st / "smoke-stacks.txt"), "w", encoding="utf-8")
+        faulthandler.dump_traceback_later(40, exit=False, file=stacks)
+        try:
+            return run_app(smoke_gui=True)
+        finally:
+            faulthandler.cancel_dump_traceback_later()
+            stacks.close()
     return run_app()
 
 
