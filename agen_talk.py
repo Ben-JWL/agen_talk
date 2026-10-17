@@ -1,27 +1,27 @@
 #!/usr/bin/env python3
-"""agent room (상황실): every codex / claude / agy agent on your machines, live: what it is for, what it does now, whether it is really working.
+"""Agen Talk (에겐 톡): every codex / claude / agy agent on your machines, live: what it is for, what it does now, whether it is really working.
 
-  agent_room.py                  tree: what each agent is for and what it is doing now
-  agent_room.py --board          kanban
-  agent_room.py --all            also show sessions idle for more than a day
-  agent_room.py --json           state as JSON (the /agent-tree pane reads this)
-  agent_room.py hub [FILE]       (Windows; on a shared Linux box needs --insecure) dashboard for several machines: reads channels.json (next to this file, or FILE),
+  agen_talk.py                  tree: what each agent is for and what it is doing now
+  agen_talk.py --board          kanban
+  agen_talk.py --all            also show sessions idle for more than a day
+  agen_talk.py --json           state as JSON (the /agent-tree pane reads this)
+  agen_talk.py hub [FILE]       (Windows; on a shared Linux box needs --insecure) dashboard for several machines: reads channels.json (next to this file, or FILE),
                                  serves http://127.0.0.1:PORT/ only. ssh channels stream this file to the server
                                  over the ssh session (python3 -c, nothing installed there); the server-side collector
-                                 exits when the session ends. agent-room.cmd starts this on Windows.
+                                 exits when the session ends. agen-talk.cmd starts this on Windows.
                                  설정 → 서버 추가 registers servers without editing channels.json (type the password once; the
-                                 hub installs ~/.ssh/agent_room_ed25519). Test-only env: AR_SSH, AR_SSH_KEYGEN, AR_KEYINSTALL_TIMEOUT.
+                                 hub installs ~/.ssh/agen_talk_ed25519). Test-only env: AT_SSH, AT_SSH_KEYGEN, AT_KEYINSTALL_TIMEOUT.
                                  Page and API live under a random /<secret>/ (printed URL); --insecure = no secret, root paths.
-                                 Without FILE: channels.json next to this file if it exists, else %APPDATA%\\AgentRoom (Linux ~/.config/agent-room).
+                                 Without FILE: channels.json next to this file if it exists, else %APPDATA%\\AgenTalk (Linux ~/.config/agen-talk).
                                  app.py (the installed Windows app) runs this same hub in-process via hub_start().
-  agent_room.py keyinstall RESULT_FILE user@host PORT [NAME]   internal: the password console the hub opens
-  agent_room.py pipe             collector over stdin/stdout, one JSON line per input line (the hub runs this remotely);
+  agen_talk.py keyinstall RESULT_FILE user@host PORT [NAME]   internal: the password console the hub opens
+  agen_talk.py pipe             collector over stdin/stdout, one JSON line per input line (the hub runs this remotely);
                                  a line starting with { is a talk request (톡: a message into a claude / codex session), anything else is a poll
-  agent_room.py serve [SOCK]     legacy: dashboard over a unix socket (dir 0700, socket 0600), default
-                                 ~/.cache/agent-room/sock. Exits when stdin closes, so
-                                 `ssh -L PORT:SOCK host agent_room.py serve` lives and dies with the tunnel.
-  agent_room.py --selftest
-  watch -c -n3 'agent_room.py -c'
+  agen_talk.py serve [SOCK]     legacy: dashboard over a unix socket (dir 0700, socket 0600), default
+                                 ~/.cache/agen-talk/sock. Exits when stdin closes, so
+                                 `ssh -L PORT:SOCK host agen_talk.py serve` lives and dies with the tunnel.
+  agen_talk.py --selftest
+  watch -c -n3 'agen_talk.py -c'
 
 Read-only sources: /proc, ~/.codex (state_5.sqlite + rollouts), ~/.claude (sessions + transcripts),
 ~/.gemini/antigravity-cli (conversation_summaries.db). Each user sees only their own agents, provided ~/.codex, ~/.claude and
@@ -215,7 +215,7 @@ def acts_fin(raw):
 
 
 # ---------- msgs: the instructions that travel between agents (TALK-ENG 1) ----------
-TALK_RE = re.compile(r"\[상황실 톡 · ([A-Za-z0-9._-]{1,32}@[A-Za-z0-9._-]{1,64}) · (ar-[0-9a-f]{8})\]")   # our own talk prefix, anchored at the body's start
+TALK_RE = re.compile(r"\[Agen Talk · ([A-Za-z0-9._-]{1,32}@[A-Za-z0-9._-]{1,64}) · (at-[0-9a-f]{8})\]")   # our own talk prefix, anchored at the body's start
 TALK_MAX = 4000
 
 
@@ -693,7 +693,7 @@ def codex_msgs(t, lines):
         elif not par and ty == "event_msg" and pt == "user_message":
             m = TALK_RE.match(str(p.get("message")).lstrip())
             if m:
-                msgs_add(ms, t, "down", "talk", "상황실:" + m.group(1), t, m.group(1), ts, str(p["message"]).lstrip()[m.end():].strip(), msg_id=m.group(2), by=m.group(1))
+                msgs_add(ms, t, "down", "talk", "agen-talk:" + m.group(1), t, m.group(1), ts, str(p["message"]).lstrip()[m.end():].strip(), msg_id=m.group(2), by=m.group(1))
     return msgs_fin(ms)
 
 
@@ -936,7 +936,7 @@ def claude_origin(d):
 
 
 def claude_foreign(d, text):
-    """A user record the human did not type: injected (isMeta), from another origin (peer, coordinator, task-notification) or one of our own 상황실 talks."""
+    """A user record the human did not type: injected (isMeta), from another origin (peer, coordinator, task-notification) or one of our own 에겐 톡 talks."""
     body = text.partition("\n")[2] if text.startswith("Another Claude session sent a message") else text
     return bool(d.get("isMeta") or claude_origin(d).get("kind") not in (None, "human") or TALK_RE.match(body))
 
@@ -1190,7 +1190,7 @@ def claude_msgs(lines, kind, nid, par, prompt, st):
             m = TALK_RE.match(body)
             e = re.search(r"<cross-session-message\b([^>]*)>(.*?)</cross-session-message>", body, re.S)
             if m and not e and not str(o.get("from")).startswith("uds:"):   # copied into an envelope or sent from a uds: peer = not ours
-                msgs_add(ms, nid, "down", "talk", "상황실:" + m.group(1), nid, m.group(1), ts, body[m.end():].strip(), msg_id=m.group(2), by=m.group(1))
+                msgs_add(ms, nid, "down", "talk", "agen-talk:" + m.group(1), nid, m.group(1), ts, body[m.end():].strip(), msg_id=m.group(2), by=m.group(1))
             elif o.get("kind") == "peer":
                 a = dict(re.findall(r'([\w-]+)="([^"]*)"', e.group(1))) if e else {}
                 msgs_add(ms, nid, "down", "peer", a.get("from") or o.get("from") or "?", nid, a.get("from-name") or o.get("name") or "다른 세션", ts,
@@ -1864,7 +1864,7 @@ def selftest_agy():
 
 
 # ---------- talk: a human's message into a session (TALK-ENG 2, 3) ----------
-TALK_ROOT = os.environ.get("AR_TALK_ROOT") or None
+TALK_ROOT = os.environ.get("AT_TALK_ROOT") or None
 CX_RPC = ("initialize", "thread/loaded/list", "thread/read", "thread/turns/list", "turn/start", "turn/steer")   # the only methods this program ever sends to codex
 CX_DEADLINE = 20   # seconds for one codex send (a test lowers it)
 
@@ -1980,7 +1980,7 @@ def claude_session(sid):
 
 
 def talk_line(by, mid, text):
-    return "[상황실 톡 · %s · %s]\n%s" % (by, mid, text)
+    return "[Agen Talk · %s · %s]\n%s" % (by, mid, text)
 
 
 def talk_drain(c, timeout=1):
@@ -2050,7 +2050,7 @@ def talk_codex(tid, text, by, mid):
     if not re.fullmatch(r"[0-9a-f-]{36}", tid) or not h or "app-server" not in argv(h) or not own_sock(sock):
         return "unreachable", "no-daemon", None
     a0 = argv(h)[0]
-    exe = os.environ.get("AR_CODEX") or (a0 if os.path.isabs(a0) and os.access(a0, os.X_OK) else shutil.which("codex"))   # the daemon's own binary: same version
+    exe = os.environ.get("AT_CODEX") or (a0 if os.path.isabs(a0) and os.access(a0, os.X_OK) else shutil.which("codex"))   # the daemon's own binary: same version
     if not exe:
         return "unreachable", "no-daemon", "codex 프로그램을 찾을 수 없습니다"
     sent, box, n = [False], queue.Queue(), [0]
@@ -2113,7 +2113,7 @@ def talk_codex(tid, text, by, mid):
     inp = [{"type": "text", "text": talk_line(by, mid, text), "text_elements": []}]
     threading.Thread(target=reader, daemon=True).start()
     try:
-        rpc("initialize", {"clientInfo": {"name": "agent-room", "title": "상황실", "version": APP_VERSION}, "capabilities": {"experimentalApi": False}})
+        rpc("initialize", {"clientInfo": {"name": "agen-talk", "title": "에겐 톡", "version": APP_VERSION}, "capabilities": {"experimentalApi": False}})
         send({"method": "initialized", "params": {}})
         cur, loaded = None, False
         for _ in range(5):   # never thread/resume: a thread nobody loaded is not ours to load
@@ -2177,7 +2177,7 @@ def talk_req(raw):
         d = None
     d = d if isinstance(d, dict) else {}
     mid, by, text, tool, tid = d.get("msg_id"), d.get("by"), d.get("text"), d.get("tool"), d.get("id")
-    mid = mid if isinstance(mid, str) and re.fullmatch(r"ar-[0-9a-f]{8}", mid) else None
+    mid = mid if isinstance(mid, str) and re.fullmatch(r"at-[0-9a-f]{8}", mid) else None
     if d.get("op") != "talk" and d:
         return rep(mid, "refused", "bad-op")
     if not mid or tool not in ("claude", "codex") or not isinstance(tid, str) or not 0 < len(tid) <= 200 or not isinstance(text, str) or CTRL.search(text):
@@ -2335,8 +2335,8 @@ def board(forest):
 # ---------- pipe / serve / hub ----------
 # the hub feeds this to `python3 -c "BOOT"` on the server: first line = byte length, then the source, then one
 # newline per poll. ponytail: BOOT must never contain " $ ` or \ (it passes through the remote login shell)
-BOOT = ("import sys;b=sys.stdin.buffer;n=int(b.readline());s=b.read(n);sys.argv=['agent_room.py','pipe'];"
-        "exec(compile(s,'agent_room.py','exec'),{'__name__':'__main__','__file__':'agent_room.py'})")
+BOOT = ("import sys;b=sys.stdin.buffer;n=int(b.readline());s=b.read(n);sys.argv=['agen_talk.py','pipe'];"
+        "exec(compile(s,'agen_talk.py','exec'),{'__name__':'__main__','__file__':'agen_talk.py'})")
 INTERVAL = 3
 HUB_SEEN = [time.time()]   # last /api request; channels stop polling 30 s after it (the ssh session stays)
 
@@ -2356,8 +2356,8 @@ SRV_USER = r"[A-Za-z_][A-Za-z0-9._-]{0,31}"
 SRV_PY = r"[A-Za-z0-9._/-]{1,64}"
 PUBKEY = r"ssh-ed25519 [A-Za-z0-9+/=]+( [A-Za-z0-9@._-]+)?"   # embedded in a remote command: this regex is what makes that safe
 PC = re.sub(r"[^A-Za-z0-9._-]", "", socket.gethostname()) or "pc"
-KEY = HOME / ".ssh" / "agent_room_ed25519"
-KEYINSTALL_TIMEOUT = float(os.environ.get("AR_KEYINSTALL_TIMEOUT", 180))   # seconds; test-only override, like AR_SSH / AR_SSH_KEYGEN
+KEY = HOME / ".ssh" / "agen_talk_ed25519"
+KEYINSTALL_TIMEOUT = float(os.environ.get("AT_KEYINSTALL_TIMEOUT", 180))   # seconds; test-only override, like AT_SSH / AT_SSH_KEYGEN
 NOSSH = "ssh 프로그램을 찾을 수 없습니다"
 
 
@@ -2366,8 +2366,8 @@ class SrvErr(Exception):
 
 
 def ssh_bin(name):
-    """ssh / ssh-keygen: env AR_SSH / AR_SSH_KEYGEN (tests only; no fallback when set), PATH, the Windows OpenSSH folder."""
-    env = os.environ.get("AR_SSH" if name == "ssh" else "AR_SSH_KEYGEN")
+    """ssh / ssh-keygen: env AT_SSH / AT_SSH_KEYGEN (tests only; no fallback when set), PATH, the Windows OpenSSH folder."""
+    env = os.environ.get("AT_SSH" if name == "ssh" else "AT_SSH_KEYGEN")
     if env:
         return env if os.path.isfile(env) else None
     if WIN:   # the absolute OpenSSH paths first: which() searches the cwd before PATH (Sysnative: a 32-bit python)
@@ -2470,13 +2470,13 @@ def bundle(name):
 
 
 def conf_dir(win=None):
-    """Per-user config folder (channels.json, ui.json): %APPDATA%\\AgentRoom, POSIX fallback ~/.config/agent-room."""
-    return Path(os.environ.get("APPDATA") or HOME / "AppData/Roaming") / "AgentRoom" if (WIN if win is None else win) else HOME / ".config/agent-room"
+    """Per-user config folder (channels.json, ui.json): %APPDATA%\\AgenTalk, POSIX fallback ~/.config/agen-talk."""
+    return Path(os.environ.get("APPDATA") or HOME / "AppData/Roaming") / "AgenTalk" if (WIN if win is None else win) else HOME / ".config/agen-talk"
 
 
 def state_dir(win=None):
-    """Per-user state folder (run.json, log): %LOCALAPPDATA%\\AgentRoom, POSIX fallback ~/.local/state/agent-room."""
-    return Path(os.environ.get("LOCALAPPDATA") or HOME / "AppData/Local") / "AgentRoom" if (WIN if win is None else win) else HOME / ".local/state/agent-room"
+    """Per-user state folder (run.json, log): %LOCALAPPDATA%\\AgenTalk, POSIX fallback ~/.local/state/agen-talk."""
+    return Path(os.environ.get("LOCALAPPDATA") or HOME / "AppData/Local") / "AgenTalk" if (WIN if win is None else win) else HOME / ".local/state/agen-talk"
 
 
 def default_cfg():
@@ -2575,13 +2575,13 @@ def key_ensure():
         r = subprocess.run([kg or "ssh-keygen", "-y", "-f", str(KEY)], **popen_kw(stdin=subprocess.DEVNULL, capture_output=True, timeout=30)) if kg else None
         if not r or r.returncode:
             raise SrvErr("other", "공개키(.pub)가 없고 개인키에서 만들 수 없습니다: %s" % KEY)
-        pub.write_text(" ".join(r.stdout.decode("utf-8", "replace").split()[:2]) + " agent-room@" + PC + "\n", encoding="utf-8")   # -y may print the old comment: keep type + key only
+        pub.write_text(" ".join(r.stdout.decode("utf-8", "replace").split()[:2]) + " agen-talk@" + PC + "\n", encoding="utf-8")   # -y may print the old comment: keep type + key only
     if not KEY.exists():
         kg = ssh_bin("ssh-keygen")
         if not kg:
             raise SrvErr("ssh_missing", "ssh-keygen 을 찾을 수 없습니다")
         KEY.parent.mkdir(mode=0o700, exist_ok=True)   # POSIX: 700 (umask only removes bits); Windows ignores the mode
-        r = subprocess.run([kg, "-q", "-t", "ed25519", "-N", "", "-C", "agent-room@" + PC, "-f", str(KEY)],
+        r = subprocess.run([kg, "-q", "-t", "ed25519", "-N", "", "-C", "agen-talk@" + PC, "-f", str(KEY)],
                            **popen_kw(stdin=subprocess.DEVNULL, capture_output=True, timeout=30))
         if r.returncode:
             raise SrvErr("other", last(r.stderr.decode("utf-8", "replace")) or "ssh-keygen 실패")
@@ -2653,13 +2653,13 @@ def jset(j, **kw):
 def srv_install(j, rq, tgt):
     """Run `keyinstall` in its own console and wait for it; raises SrvErr."""
     import subprocess, tempfile
-    fd, rf = tempfile.mkstemp(prefix="agent-room-", suffix=".json")
+    fd, rf = tempfile.mkstemp(prefix="agen-talk-", suffix=".json")
     os.close(fd)
     try:
         if j["cancel"]:
             raise SrvErr("cancelled", "")
         jset(j, state="waiting_password")
-        me = [sys.executable] if getattr(sys, "frozen", False) else [sys.executable, "-I", str(bundle("agent_room.py"))]   # the frozen app is its own keyinstall
+        me = [sys.executable] if getattr(sys, "frozen", False) else [sys.executable, "-I", str(bundle("agen_talk.py"))]   # the frozen app is its own keyinstall
         p = j["proc"] = subprocess.Popen(me + ["keyinstall", rf, tgt, str(rq["port"]), rq["name"] or rq["host"]], **popen_kw(console=True))
         if j["cancel"]:   # cancelled while the process was being started
             kill_tree(p)
@@ -2733,8 +2733,8 @@ def keyinstall(res, tgt, port, name=""):
             sys.stdin, sys.stdout = open("CONIN$", "r"), open("CONOUT$", "w", encoding="utf-8")
             sys.stderr = sys.stdout
         k32.SetConsoleOutputCP(65001)   # the Korean banner (and ssh's messages) as UTF-8
-        k32.SetConsoleTitleW("상황실 — %s (%s)" % (name or tgt.rpartition("@")[2], tgt))
-    print("상황실 — %s 에 이 PC의 전용 키를 등록합니다.\n처음 보는 서버라면 먼저 표시되는 지문이 서버 관리자가 알려 준 값과 같은지 확인하세요.\n"
+        k32.SetConsoleTitleW("에겐 톡 — %s (%s)" % (name or tgt.rpartition("@")[2], tgt))
+    print("에겐 톡 — %s 에 이 PC의 전용 키를 등록합니다.\n처음 보는 서버라면 먼저 표시되는 지문이 서버 관리자가 알려 준 값과 같은지 확인하세요.\n"
           "확인한 뒤 서버 비밀번호를 아래에 입력하고 Enter 를 누르세요 (입력 중에는 글자가 보이지 않습니다).\n"
           "비밀번호는 저장되지 않습니다. 취소하려면 이 창을 닫으세요.\n" % tgt, flush=True)
     buf, rc, kid = b"", 255, []
@@ -2770,8 +2770,8 @@ SESSION_PW = {}   # (user, host, port) -> password, for channels with auth "pass
 
 
 def pm_mod():
-    """paramiko, imported lazily (None when missing: the CLI on a bare Linux box, tests with AR_NO_PARAMIKO=1)."""
-    if os.environ.get("AR_NO_PARAMIKO"):
+    """paramiko, imported lazily (None when missing: the CLI on a bare Linux box, tests with AT_NO_PARAMIKO=1)."""
+    if os.environ.get("AT_NO_PARAMIKO"):
         return None
     try:
         import logging, paramiko
@@ -2806,7 +2806,7 @@ def pm_acl(path):
 
 
 def app_key(path=None):
-    """The app's own key (%APPDATA%\\AgentRoom\\id_ed25519, created on first need): (paramiko key, public line 'ssh-ed25519 AAAA… agent-room@pc')."""
+    """The app's own key (%APPDATA%\\AgenTalk\\id_ed25519, created on first need): (paramiko key, public line 'ssh-ed25519 AAAA… agen-talk@pc')."""
     paramiko = pm_mod()
     p = Path(path) if path else conf_dir() / "id_ed25519"
     if not p.exists():
@@ -2835,7 +2835,7 @@ def app_key(path=None):
         pm_acl(p)
         _PM_ACL_VALIDATED.add(str(p))
     key = paramiko.Ed25519Key.from_private_key_file(str(p))
-    pub = "ssh-ed25519 %s agent-room@%s" % (key.get_base64(), PC)
+    pub = "ssh-ed25519 %s agen-talk@%s" % (key.get_base64(), PC)
     pp = p.with_name(p.name + ".pub")
     if not pp.exists():
         pp.write_text(pub + "\n", encoding="utf-8")
@@ -3279,7 +3279,7 @@ def page_csp(body):
     body = body.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
     m = re.findall(rb"<script>(.*?)</script>", body, re.S)
     if len(m) != 1 or body.count(b"<script") != 1:
-        logging.getLogger("agent-room").info("page has %d inline scripts, expected exactly one without attributes: serving script-src 'none'", body.count(b"<script"))
+        logging.getLogger("agen-talk").info("page has %d inline scripts, expected exactly one without attributes: serving script-src 'none'", body.count(b"<script"))
         src = "'none'"
     else:
         src = "'sha256-%s'" % base64.b64encode(hashlib.sha256(m[0]).digest()).decode()
@@ -3329,7 +3329,7 @@ def hub_chan(ch, slot):
                                  subprocess.Popen(hub_argv(ch), **popen_kw(stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)))
                 if p.stderr:
                     threading.Thread(target=drain_ssh_errors, args=(p.stderr, err), daemon=True).start()
-                src = bundle("agent_room.py").read_bytes()   # frozen: the bundled copy, never __file__
+                src = bundle("agen_talk.py").read_bytes()   # frozen: the bundled copy, never __file__
                 p.stdin.write(b"%d\n" % len(src) + src)
                 p.stdin.flush()
             while not slot.get("stop"):
@@ -3404,7 +3404,7 @@ def open_app(url, quiet=False):
                         return
                 except OSError:
                     pass
-    print("상황실: 브라우저 창을 열지 못했습니다" if quiet else f"상황실: 브라우저에서 {url} 를 여세요", flush=True)
+    print("에겐 톡: 브라우저 창을 열지 못했습니다" if quiet else f"에겐 톡: 브라우저에서 {url} 를 여세요", flush=True)
 
 
 def hub_running(port, secret=""):
@@ -3443,7 +3443,7 @@ def hub_start(cfg=None, port=None, secret="", on_show=None, token=None, fallback
     except FileNotFoundError:
         conf = json.loads(json.dumps(EXAMPLE_CONF))
         if explicit:
-            print(f"상황실: {cfg} 가 없어 내 PC 만 보여줍니다", file=sys.stderr)
+            print(f"에겐 톡: {cfg} 가 없어 내 PC 만 보여줍니다", file=sys.stderr)
         else:
             write_conf(cfg, conf)   # first run of the installed app: a starter file in the config folder
     except (OSError, ValueError) as e:
@@ -3453,18 +3453,18 @@ def hub_start(cfg=None, port=None, secret="", on_show=None, token=None, fallback
         sys.exit('channels.json 오류: 최상위는 {"port": 1~65535 숫자, "channels": [...]} 형태여야 합니다 — 메모장 등으로 고친 뒤 다시 실행하세요')
     presets, bad = presets_check(conf.get("presets"))   # optional server list for the first-run UI; saved back untouched by save()
     for b in bad:
-        print(f"상황실: 서버 목록(presets) 항목 건너뜀 {b}", file=sys.stderr, flush=True)
+        print(f"에겐 톡: 서버 목록(presets) 항목 건너뜀 {b}", file=sys.stderr, flush=True)
     chans, slots = [], {}
     for ch in conf.get("channels", []):
         ok = isinstance(ch, dict) and (re.fullmatch(r"[a-z0-9_-]+", str(ch.get("id"))) and ch["id"] not in slots and (
             ch.get("kind") == "local" or ch.get("kind") == "ssh" and ch.get("ssh")
             or ch.get("kind") == "argv" and isinstance(ch.get("argv"), list)))
         if not ok:
-            print(f"상황실: 채널 건너뜀 {ch}", file=sys.stderr)
+            print(f"에겐 톡: 채널 건너뜀 {ch}", file=sys.stderr)
             continue
         slots[ch["id"]] = {"state": "connecting", "error": None, "data": None, "t": None, "wake": threading.Event()}
         chans.append(ch)
-    token = token or secrets.token_urlsafe(24)   # per hub start; the page gets it in <meta name="ar-token">, POSTs must send it back
+    token = token or secrets.token_urlsafe(24)   # per hub start; the page gets it in <meta name="at-token">, POSTs must send it back
     lock, jobs = threading.Lock(), [None]   # jobs[0]: the one 서버 추가 job (running or last)
     tk, talk_lock = {"on": conf.get("talk") is not False, "dup": {}, "last": {}, "win": deque()}, threading.Lock()   # the talk switch (channels.json "talk") and the rate limits
     page = bundle("index.html")
@@ -3515,13 +3515,13 @@ def hub_start(cfg=None, port=None, secret="", on_show=None, token=None, fallback
             return 400, {"error": "입력이 올바르지 않습니다"}
         HUB_SEEN[0] = time.time()
         text = text.replace("\r", "").rstrip()
-        mid = "ar-" + secrets.token_hex(4)
+        mid = "at-" + secrets.token_hex(4)
         out = {"msg_id": mid, "ts": time.time(), "client_id": cid}
         if not text or len(text) > TALK_MAX or CTRL.search(text):
             return 200, dict(out, outcome="refused", reason="empty" if not text else "too-long" if len(text) > TALK_MAX else "bad-text")
 
         def done(outcome, reason=None, detail=None, tool="-", code=200, **kw):
-            logging.getLogger("agent-room").info("talk ch=%s tool=%s target=%s len=%d msg_id=%s outcome=%s reason=%s", ch, tool, tid, len(text), mid, outcome, reason)
+            logging.getLogger("agen-talk").info("talk ch=%s tool=%s target=%s len=%d msg_id=%s outcome=%s reason=%s", ch, tool, tid, len(text), mid, outcome, reason)
             return code, dict(out, outcome=outcome, **dict({k: v for k, v in (("reason", reason), ("detail", detail)) if v}, **kw))
 
         if not tk["on"]:
@@ -3601,7 +3601,7 @@ def hub_start(cfg=None, port=None, secret="", on_show=None, token=None, fallback
             if secret and u.path == prefix:   # relative URLs (api/...) need the trailing slash
                 return self.send(301, b"", extra={"Location": prefix + "/"})
             if path in ("/", "/index.html"):
-                body = page.read_bytes().replace(b"__AR_TOKEN__", token.encode()).replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+                body = page.read_bytes().replace(b"__AT_TOKEN__", token.encode()).replace(b"\r\n", b"\n").replace(b"\r", b"\n")
                 return self.send(200, body, "text/html", csp=page_csp(body))
             if path.startswith("/api/"):
                 HUB_SEEN[0] = time.time()
@@ -3639,7 +3639,7 @@ def hub_start(cfg=None, port=None, secret="", on_show=None, token=None, fallback
             if path is None:
                 return self.send(404, {"error": "not found"})   # wrong secret: nothing to learn, not even that the token exists
             talking = path in ("/api/talk", "/api/talk/setting")   # these must name their Origin: a missing one is not the page
-            if (not hmac.compare_digest(h.get("X-AR-Token", "").encode(), token.encode())
+            if (not hmac.compare_digest(h.get("X-AT-Token", "").encode(), token.encode())
                     or h.get("Origin", None if talking else "http://127.0.0.1:%d" % port) not in ("http://127.0.0.1:%d" % port, "http://localhost:%d" % port)):
                 return self.send(403, {"error": "forbidden"})   # no CORS headers anywhere: other sites cannot even read the answer
             if h.get_content_type() != "application/json":
@@ -3683,7 +3683,7 @@ def hub_start(cfg=None, port=None, secret="", on_show=None, token=None, fallback
                 if path == "/api/presets/import":
                     new, bad = presets_check(d.get("presets") if isinstance(d, dict) else d)
                     for b in bad:
-                        print(f"상황실: 가져온 서버 목록 항목 건너뜀 {b}", file=sys.stderr, flush=True)
+                        print(f"에겐 톡: 가져온 서버 목록 항목 건너뜀 {b}", file=sys.stderr, flush=True)
                     try:
                         with lock:
                             cur = read_cur()
@@ -3710,9 +3710,9 @@ def hub_start(cfg=None, port=None, secret="", on_show=None, token=None, fallback
                         st0 = "connecting" if pmod else "keygen"
                         key_ = str(known_path().parent / "id_ed25519.pub") if pmod else str(KEY) + ".pub"
                         j = jobs[0] = {"id": secrets.token_hex(8), "state": st0, "phase": st0, "kind": None, "message": None, "channel": None, "log": "",
-                                       "cancel": False, "proc": None, "key": key_, "comment": "agent-room@" + PC,
+                                       "cancel": False, "proc": None, "key": key_, "comment": "agen-talk@" + PC,
                                        "ev": threading.Event(), "accept": None, "close": None,
-                                       "window_title": "상황실 — %s (%s@%s)" % (rq["name"] or rq["host"], rq["user"], rq["host"])}
+                                       "window_title": "에겐 톡 — %s (%s@%s)" % (rq["name"] or rq["host"], rq["user"], rq["host"])}
                         j["thread"] = threading.Thread(target=srv_job_pm if pmod else srv_job, args=(j, rq, lambda rq: save(rq, j)), daemon=True)
                         j["thread"].start()
                     return self.send(202, {"job": j["id"]})
@@ -3818,11 +3818,11 @@ def hub(args):
         except (OSError, ValueError, AttributeError):
             port = 8765
         if insecure and hub_running(port):   # double launch: just show the window (a secret hub cannot be probed from outside)
-            print(f"상황실: 이미 실행 중입니다 http://127.0.0.1:{port}/", flush=True)
+            print(f"에겐 톡: 이미 실행 중입니다 http://127.0.0.1:{port}/", flush=True)
             open_app(f"http://127.0.0.1:{port}/")
             sys.exit(0)
-        sys.exit(f"상황실: 포트 {port} 를 열 수 없습니다 ({e}) — 다른 프로그램이 쓰고 있으면 channels.json 의 port 를 바꾸세요")
-    print(f"상황실: {url} (Ctrl-C 로 끝냄)", flush=True)
+        sys.exit(f"에겐 톡: 포트 {port} 를 열 수 없습니다 ({e}) — 다른 프로그램이 쓰고 있으면 channels.json 의 port 를 바꾸세요")
+    print(f"에겐 톡: {url} (Ctrl-C 로 끝냄)", flush=True)
     open_app(url)
     try:
         srv.serve_forever()
@@ -3881,7 +3881,7 @@ def serve(sock):
         os.umask(old)
     # the ssh session's stdin closes when the tunnel goes away: take the server with it
     threading.Thread(target=lambda: (sys.stdin.read(), os._exit(0)), daemon=True).start()
-    print(f"agent-room: serving {sock} (close this window to stop)", flush=True)
+    print(f"agen-talk: serving {sock} (close this window to stop)", flush=True)
     srv.serve_forever()
 
 
@@ -3900,7 +3900,7 @@ def selftest_srv():
         except ValueError:
             continue
         raise AssertionError(bad)
-    k = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIabc+/= agent-room@PC-1.x"
+    k = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIabc+/= agen-talk@PC-1.x"
     assert re.fullmatch(PUBKEY, k) and re.fullmatch(PUBKEY, k.split(" agent")[0])
     assert not any(re.fullmatch(PUBKEY, x) for x in (k + "'", k + "\n", "ssh-rsa AAAA", k + " x y", k.replace("AAAA", "A'A")))
     E = {"host_key_changed": ("@@@ WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED! @@@\nHost key verification failed.", "Host key verification failed."),
@@ -3960,7 +3960,7 @@ def selftest_pack():
     assert mei or bundle("x") == Path(__file__).resolve().parent / "x"
     sys._MEIPASS = "/opt/frozen"
     try:
-        assert bundle("agent_room.py") == Path("/opt/frozen/agent_room.py")
+        assert bundle("agen_talk.py") == Path("/opt/frozen/agen_talk.py")
     finally:
         if mei is None:
             del sys._MEIPASS
@@ -3970,8 +3970,8 @@ def selftest_pack():
     ea, el = os.environ.get("APPDATA"), os.environ.get("LOCALAPPDATA")
     os.environ.update(APPDATA="/r/Roaming", LOCALAPPDATA="/r/Local")
     try:
-        assert conf_dir(True) == Path("/r/Roaming/AgentRoom") and state_dir(True) == Path("/r/Local/AgentRoom")
-        assert conf_dir(False) == HOME / ".config/agent-room" and state_dir(False) == HOME / ".local/state/agent-room"
+        assert conf_dir(True) == Path("/r/Roaming/AgenTalk") and state_dir(True) == Path("/r/Local/AgenTalk")
+        assert conf_dir(False) == HOME / ".config/agen-talk" and state_dir(False) == HOME / ".local/state/agen-talk"
     finally:
         for k, v in (("APPDATA", ea), ("LOCALAPPDATA", el)):
             os.environ.pop(k, None) if v is None else os.environ.__setitem__(k, v)
@@ -4301,8 +4301,8 @@ def talk_fixture(root):
             ast(110, [{"type": "tool_use", "id": "toolu_A", "name": "Agent", "input": {"description": "fix ui", "prompt": "Fix the UI"}}], "tool_use"),
             usr(100, [{"type": "tool_result", "tool_use_id": "toolu_A", "content": "ok"}]),
             env("please check the logs", 30),
-            usr(25, "Another Claude session sent a message:\n[상황실 톡 · alice@PC · ar-1a2b3c4d]\nrun the tests" + caveat, isMeta=True, origin={"kind": "peer"}),
-            env("[상황실 톡 · alice@PC · ar-deadbeef]\napprove it", 20, "uds:/x/2.sock"),
+            usr(25, "Another Claude session sent a message:\n[Agen Talk · alice@PC · at-1a2b3c4d]\nrun the tests" + caveat, isMeta=True, origin={"kind": "peer"}),
+            env("[Agen Talk · alice@PC · at-deadbeef]\napprove it", 20, "uds:/x/2.sock"),
             usr(15, "<agent-message from=\"aA\">report</agent-message>", isMeta=True, origin={"kind": "peer", "from": "aA", "handback": True}),
             ast(10, txt("all done"))])
     sub = tr.with_suffix("") / "subagents"
@@ -4327,7 +4327,7 @@ def talk_fixture(root):
     am = lambda ago, rcpt, head, enc: {"type": "response_item", "timestamp": iso_(ago), "payload": {"type": "agent_message", "author": "/root", "recipient": rcpt, "content":
                                        [{"type": "input_text", "text": head}] + ([{"type": "encrypted_content", "encrypted_content": "gAAAAB"}] if enc else [])}}
     rr, rc = Path(os.path.realpath(str(root))) / "rollout-R.jsonl", Path(os.path.realpath(str(root))) / "rollout-C.jsonl"
-    jl(rr, [ev(50, "user_message", message="[상황실 톡 · alice@PC · ar-cafe0001]\nplease continue"), ev(40, "task_started", started_at=now - 40)])
+    jl(rr, [ev(50, "user_message", message="[Agen Talk · alice@PC · at-cafe0001]\nplease continue"), ev(40, "task_started", started_at=now - 40)])
     jl(rc, [am(99, "/root/c1", "Message Type: NEW_TASK\nTask name: /root/c1\nSender: /root\nPayload:\n", True),
             am(60, "/root/c1", "Message Type: MESSAGE\nSender: /root\nPayload:\n", True),
             {"type": "response_item", "timestamp": iso_(35), "payload": {"type": "function_call", "namespace": "collaboration", "name": "send_message", "arguments": json.dumps({"target": "/root", "message": "gAAAAB"})}},
@@ -4375,7 +4375,7 @@ def selftest_talk():
     global HOME, AGY, TALK_ROOT, NOW, CX_DEADLINE, PROC
     PROC = {}   # the earlier selftests leave fake entries behind
     PREV.clear()
-    save, env0 = (HOME, AGY, TALK_ROOT, CX_DEADLINE), {k: os.environ.get(k) for k in ("HOME", "XDG_RUNTIME_DIR", "CODEX_HOME", "AR_CODEX", "FAKE_MODE", "FAKE_TID", "FAKE_PIDFILE", "AR_TALK_ROOT", "CLAUDE_CODE_MESSAGING_SOCKET")}
+    save, env0 = (HOME, AGY, TALK_ROOT, CX_DEADLINE), {k: os.environ.get(k) for k in ("HOME", "XDG_RUNTIME_DIR", "CODEX_HOME", "AT_CODEX", "FAKE_MODE", "FAKE_TID", "FAKE_PIDFILE", "AT_TALK_ROOT", "CLAUDE_CODE_MESSAGING_SOCKET")}
     procs, srvs = [], []
     # redaction + msgs helpers (no files)
     pem = "-----BEGIN " + "RSA PRIVATE KEY" + "-----\nabc\ndef\n-----END " + "RSA PRIVATE KEY" + "-----"
@@ -4437,8 +4437,8 @@ def selftest_talk():
     msgs_post(preview, cap=10)
     short_preview = preview[0]["msgs"][0]
     assert short_preview["text"] == "short" and "truncated" not in short_preview and "n" not in short_preview
-    assert claude_foreign({"type": "user"}, "see [상황실 톡 · alice@PC · ar-1a2b3c4d]") is False
-    hdr = claude_msgs([{"type": "user", "timestamp": "2026-10-16T07:11:39.457Z", "message": {"content": "Another Claude session sent a message\n[상황실 톡 · alice@PC · ar-1a2b3c4d]\nhello"}}], "main", "n", None, None, "user")
+    assert claude_foreign({"type": "user"}, "see [Agen Talk · alice@PC · at-1a2b3c4d]") is False
+    hdr = claude_msgs([{"type": "user", "timestamp": "2026-10-16T07:11:39.457Z", "message": {"content": "Another Claude session sent a message\n[Agen Talk · alice@PC · at-1a2b3c4d]\nhello"}}], "main", "n", None, None, "user")
     assert len(hdr) == 1 and hdr[0]["kind"] == "talk"
     import queue
     full = queue.Queue(1); full.put("busy")
@@ -4455,13 +4455,13 @@ def selftest_talk():
         with tempfile.TemporaryDirectory() as d:
             root = Path(os.path.realpath(d))
             HOME, AGY, TALK_ROOT = root / "home", root / "home/.gemini/antigravity-cli", str(root)
-            os.environ.update(HOME=str(HOME), XDG_RUNTIME_DIR=str(root / "run"), CODEX_HOME=str(HOME / ".codex"), AR_CODEX=str(root / "bin/codex"), AR_TALK_ROOT=str(root))
+            os.environ.update(HOME=str(HOME), XDG_RUNTIME_DIR=str(root / "run"), CODEX_HOME=str(HOME / ".codex"), AT_CODEX=str(root / "bin/codex"), AT_TALK_ROOT=str(root))
             os.environ.pop("CLAUDE_CODE_MESSAGING_SOCKET", None)
             HOME.mkdir()
             NOW = time.time()
             queued_file = root / "queued.jsonl"
             queued_file.write_text("".join(json.dumps({"type": "user", "message": {"content": "ordinary transcript"}}) + "\n" for _ in range(50)) +
-                                   json.dumps({"type": "attachment", "timestamp": "2026-10-16T07:11:39.457Z", "attachment": {"type": "queued_command", "prompt": "[상황실 톡 · alice@PC · ar-1a2b3c4d]\nhello", "origin": {"kind": "human"}}}) + "\n")
+                                   json.dumps({"type": "attachment", "timestamp": "2026-10-16T07:11:39.457Z", "attachment": {"type": "queued_command", "prompt": "[Agen Talk · alice@PC · at-1a2b3c4d]\nhello", "origin": {"kind": "human"}}}) + "\n")
             loads, parsed = json.loads, []
             json.loads = lambda *a, **kw: (parsed.append(1), loads(*a, **kw))[1]
             try:
@@ -4469,7 +4469,7 @@ def selftest_talk():
             finally:
                 json.loads = loads
             queued = claude_msgs(qlines, "main", "n", None, None, "user")
-            assert len(parsed) == 1 and queued[0]["kind"] == "talk" and queued[0]["msg_id"] == "ar-1a2b3c4d", queued
+            assert len(parsed) == 1 and queued[0]["kind"] == "talk" and queued[0]["msg_id"] == "at-1a2b3c4d", queued
             ids, procs, inbox = talk_fixture(root)
             srvs.append(ids["srv"])
             os.environ["FAKE_TID"] = ids["R"]
@@ -4489,12 +4489,12 @@ def selftest_talk():
             wd = mk(W, "down")[0]
             assert wd["kind"] == "workflow" and wd["from"] == ids["wf"] and wd["text"] == "Do the check\n  indented\nend" and mk(W, "up")[0]["text"] == "checked", wd
             pe, ta = mk(main, kind="peer"), mk(main, kind="talk")
-            assert len(ta) == 1 and ta[0]["msg_id"] == "ar-1a2b3c4d" and ta[0]["by"] == "alice@PC" and ta[0]["text"] == "run the tests" and ta[0]["from"] == "상황실:alice@PC", ta
-            assert [m["text"] for m in pe] == ["please check the logs", "[상황실 톡 · alice@PC · ar-deadbeef]\napprove it"] and pe[0]["who"] == "abdev" and pe[0]["from"].startswith("uds:"), pe
+            assert len(ta) == 1 and ta[0]["msg_id"] == "at-1a2b3c4d" and ta[0]["by"] == "alice@PC" and ta[0]["text"] == "run the tests" and ta[0]["from"] == "agen-talk:alice@PC", ta
+            assert [m["text"] for m in pe] == ["please check the logs", "[Agen Talk · alice@PC · at-deadbeef]\napprove it"] and pe[0]["who"] == "abdev" and pe[0]["from"].startswith("uds:"), pe
             assert [(x["k"], x["x"]) for x in main["acts"] if x["k"] == "user"] == [("user", "please build")], main["acts"]   # no user act for a peer, a talk or an envelope
             assert not mk(main, kind="agent") and not any(m["dir"] == "up" for m in main["msgs"]), "a handback is shown on the subagent only"
             R, Cc = by_id[ids["R"]], by_id[ids["C"]]
-            assert [m["kind"] for m in R["msgs"]] == ["talk"] and R["msgs"][0]["msg_id"] == "ar-cafe0001" and R["msgs"][0]["text"] == "please continue", R["msgs"]
+            assert [m["kind"] for m in R["msgs"]] == ["talk"] and R["msgs"][0]["msg_id"] == "at-cafe0001" and R["msgs"][0]["text"] == "please continue", R["msgs"]
             assert not [x for x in R.get("acts", []) if x["k"] == "user"], R.get("acts")
             cd, cf, cu = mk(Cc, "down"), mk(Cc, "follow"), mk(Cc, "up")
             assert cd[0]["encrypted"] and cd[0]["text"] == "" and cd[0]["from"] == ids["R"] and cd[0]["role"] == "reviewer" and len(cf) == 1 and cf[0]["encrypted"], Cc["msgs"]
@@ -4527,15 +4527,15 @@ def selftest_talk():
             def sent():
                 time.sleep(0.3)
                 return len(inbox) - n0
-            out = talk_claude(sid, "hello\nworld", "alice@PC", "ar-00000001")
+            out = talk_claude(sid, "hello\nworld", "alice@PC", "at-00000001")
             assert out == ("held", None, None) and sent() == 1, out   # the transcript says bypass
             fr = json.loads(inbox[n0])
             assert set(fr) == {"type", "msgV", "msg_id", "session_id", "priority", "message"} and fr["priority"] == "next" and "from" not in fr and fr["session_id"] == sid, fr
-            assert fr["message"] == {"role": "user", "content": "[상황실 톡 · alice@PC · ar-00000001]\nhello\nworld"} and fr["type"] == "user" and fr["msgV"] == 1
+            assert fr["message"] == {"role": "user", "content": "[Agen Talk · alice@PC · at-00000001]\nhello\nworld"} and fr["type"] == "user" and fr["msgV"] == 1
             trp.write_text(trp.read_text().rsplit("\n", 2)[0] + "\n")   # drop the bypass line again
             assert claude_mode(trp, 1) == "prompting"
             n0 = len(inbox)
-            assert talk_claude(sid, "second", "alice@PC", "ar-00000002") == ("accepted", None, None) and sent() == 1
+            assert talk_claude(sid, "second", "alice@PC", "at-00000002") == ("accepted", None, None) and sent() == 1
             n0, other = len(inbox), talk_inbox(root / "run/cc-socks/other.sock")
             srvs.append(other[0])
             os.makedirs(str(root / "other"), exist_ok=True)
@@ -4547,20 +4547,20 @@ def selftest_talk():
             for name, kw, oc, why in cases:
                 put(**kw)
                 used.append(s0["messagingSocketPath"])
-                assert talk_claude(sid, "no", "alice@PC", "ar-00000003")[:2] == (oc, why), name
-            assert not other[1] and not len(inbox) - n0 and talk_claude("no-such-session", "no", "alice@PC", "ar-00000003")[:2] == ("unreachable", "gone")
+                assert talk_claude(sid, "no", "alice@PC", "at-00000003")[:2] == (oc, why), name
+            assert not other[1] and not len(inbox) - n0 and talk_claude("no-such-session", "no", "alice@PC", "at-00000003")[:2] == ("unreachable", "gone")
             put()
             os.environ["CLAUDE_CODE_MESSAGING_SOCKET"] = s0["messagingSocketPath"]
-            assert talk_claude(sid, "no", "alice@PC", "ar-00000003")[:2] == ("refused", "self") and not sent()
+            assert talk_claude(sid, "no", "alice@PC", "at-00000003")[:2] == ("refused", "self") and not sent()
             del os.environ["CLAUDE_CODE_MESSAGING_SOCKET"]
             (HOME / ".claude/settings.json").write_text('{"crossSessionInbound": "refuse"}')
-            assert talk_claude(sid, "no", "alice@PC", "ar-00000003")[:2] == ("refused", "inbound-off") and not sent()
+            assert talk_claude(sid, "no", "alice@PC", "at-00000003")[:2] == ("refused", "inbound-off") and not sent()
             (HOME / ".claude/settings.json").write_text('{"crossSessionInbound": "hold"}')
-            assert claude_cap(s0, set())["hold"] and talk_claude(sid, "held", "alice@PC", "ar-00000004")[0] == "held" and sent() == 1
+            assert claude_cap(s0, set())["hold"] and talk_claude(sid, "held", "alice@PC", "at-00000004")[0] == "held" and sent() == 1
             (HOME / ".claude/settings.json").unlink()
             ids["srv"].shutdown(socket.SHUT_RDWR)   # nobody listens any more (shutdown wakes the accept thread): the socket file stays
             ids["srv"].close()
-            assert talk_claude(sid, "no", "alice@PC", "ar-00000005")[:2] == ("unreachable", "no-listener")
+            assert talk_claude(sid, "no", "alice@PC", "at-00000005")[:2] == ("unreachable", "no-listener")
             assert all(os.path.realpath(u).startswith(str(root)) for u in used), used
             # --- 3. codex send (a fake `codex`; the daemon stand-in is the held thread's host) ---
             codex_sock = root / "codexd/hash.sock"
@@ -4577,7 +4577,7 @@ def selftest_talk():
                     log.unlink()
                 os.environ["FAKE_MODE"] = mode
                 t0 = time.time()
-                o = talk_codex(ids["R"], text, "alice@PC", "ar-00000006")
+                o = talk_codex(ids["R"], text, "alice@PC", "at-00000006")
                 recs = [json.loads(x) for x in log.read_text().splitlines()] if log.exists() else []
                 assert {x["method"] for x in recs if "method" in x} <= wl, recs
                 return o, recs, time.time() - t0
@@ -4589,7 +4589,7 @@ def selftest_talk():
             o, recs, _ = go("idle")
             tsx = [x for x in recs if x.get("method") == "turn/start"]
             assert o == ("accepted", None, None) and len(tsx) == 1 and set(tsx[0]["params"]) == {"threadId", "input"} and not [x for x in recs if x.get("method") == "turn/steer"], recs
-            assert tsx[0]["params"]["input"] == [{"type": "text", "text": "[상황실 톡 · alice@PC · ar-00000006]\nto codex", "text_elements": []}]
+            assert tsx[0]["params"]["input"] == [{"type": "text", "text": "[Agen Talk · alice@PC · at-00000006]\nto codex", "text_elements": []}]
             assert len([x for x in recs if x.get("method") == "thread/loaded/list"]) == 2   # paged
             o, recs, _ = go("active")
             st_ = [x for x in recs if x.get("method") == "turn/steer"]
@@ -4621,12 +4621,12 @@ def selftest_talk():
             o, recs, _ = go("idle")
             assert o[:2] == ("unreachable", "no-daemon") and not log.exists(), "no daemon socket: nothing is spawned"
             link.symlink_to(codex_sock)
-            assert talk_codex("01a00000-0000-7000-8000-0000000000ff", "x", "alice@PC", "ar-00000006")[:2] == ("unreachable", "no-daemon") and not log.exists()
-            assert talk_codex("not-an-id", "x", "alice@PC", "ar-00000006")[:2] == ("unreachable", "no-daemon") and not log.exists()
+            assert talk_codex("01a00000-0000-7000-8000-0000000000ff", "x", "alice@PC", "at-00000006")[:2] == ("unreachable", "no-daemon") and not log.exists()
+            assert talk_codex("not-an-id", "x", "alice@PC", "at-00000006")[:2] == ("unreachable", "no-daemon") and not log.exists()
             # --- 4. the pipe protocol, through BOOT in a fresh interpreter ---
-            src = bundle("agent_room.py").read_bytes()
-            pe_ = dict(os.environ, HOME=str(HOME), AR_TALK_ROOT=str(root))
-            assert pe_["AR_TALK_ROOT"] == str(root)
+            src = bundle("agen_talk.py").read_bytes()
+            pe_ = dict(os.environ, HOME=str(HOME), AT_TALK_ROOT=str(root))
+            assert pe_["AT_TALK_ROOT"] == str(root)
             pp = subprocess.Popen([sys.executable, "-I", "-c", BOOT], **popen_kw(stdin=subprocess.PIPE, stdout=subprocess.PIPE, env=pe_))
             def line(b):
                 pp.stdin.write(b)
@@ -4634,9 +4634,9 @@ def selftest_talk():
                 return json.loads(pp.stdout.readline())
             pp.stdin.write(b"%d\n" % len(src) + src)
             assert any(n["id"] == sid for n in line(b"\n")["agents"])
-            rq = lambda **kw: json.dumps(dict({"op": "talk", "msg_id": "ar-0000000a", "id": "no-such", "tool": "claude", "text": "hi", "by": "alice@PC"}, **kw)).encode() + b"\n"
-            rep_ = line(rq()); assert rep_ == {"re": "ar-0000000a", "outcome": "unreachable", "reason": "gone"}, rep_
-            r_ = line(b'{"op":"talk","msg_id":"ar-0000000b","id":"x","tool":"claude","text":"' + b"x" * 70000 + b'"}\n')
+            rq = lambda **kw: json.dumps(dict({"op": "talk", "msg_id": "at-0000000a", "id": "no-such", "tool": "claude", "text": "hi", "by": "alice@PC"}, **kw)).encode() + b"\n"
+            rep_ = line(rq()); assert rep_ == {"re": "at-0000000a", "outcome": "unreachable", "reason": "gone"}, rep_
+            r_ = line(b'{"op":"talk","msg_id":"at-0000000b","id":"x","tool":"claude","text":"' + b"x" * 70000 + b'"}\n')
             assert r_ == {"re": None, "outcome": "refused", "reason": "too-long"}, r_
             assert line(rq(op="nope"))["reason"] == "bad-op" and line(rq(msg_id="bad"))["re"] is None and line(rq(text=""))["reason"] == "empty"
             assert line(rq(text="x" * 4001))["reason"] == "too-long" and line(rq(tool="agy"))["reason"] == "bad-request" and line(rq(text="a\x07b"))["reason"] == "bad-request"
@@ -4648,7 +4648,7 @@ def selftest_talk():
             class H(logging.Handler):
                 def emit(self, rec):
                     logs.append(rec.getMessage())
-            lg = logging.getLogger("agent-room")
+            lg = logging.getLogger("agen-talk")
             h0, lv0 = H(), lg.level
             lg.addHandler(h0)
             lg.setLevel(logging.INFO)
@@ -4666,7 +4666,7 @@ def selftest_talk():
             try:
                 def req(method, path, body=None, hdr=None, raw=None):
                     c = http.client.HTTPConnection("127.0.0.1", port, timeout=60)
-                    hd = {"Content-Type": "application/json", "X-AR-Token": "tok-1", "Origin": "http://127.0.0.1:%d" % port}
+                    hd = {"Content-Type": "application/json", "X-AT-Token": "tok-1", "Origin": "http://127.0.0.1:%d" % port}
                     hd.update(hdr or {})
                     c.request(method, "/s3cr3t" + path, raw if raw is not None else json.dumps(body) if body is not None else None, {k: v for k, v in hd.items() if v is not None})
                     r = c.getresponse()
@@ -4685,9 +4685,9 @@ def selftest_talk():
                 else:
                     raise AssertionError("hub never served the fixture")
                 assert req("POST", "/api/talk", {"ch": "pc"}, hdr={"Origin": None})[0] == 403 and req("POST", "/api/talk", {}, hdr={"Origin": "http://evil.example"})[0] == 403
-                assert req("POST", "/api/talk", {}, hdr={"X-AR-Token": "bad"})[0] == 403 and req("POST", "/api/talk", {}, hdr={"Content-Type": "text/plain"})[0] == 400
+                assert req("POST", "/api/talk", {}, hdr={"X-AT-Token": "bad"})[0] == 403 and req("POST", "/api/talk", {}, hdr={"Content-Type": "text/plain"})[0] == 400
                 sk = socket.create_connection(("127.0.0.1", port))   # a 40 KB body is refused from its header alone
-                sk.sendall(("POST /s3cr3t/api/talk HTTP/1.1\r\nHost: 127.0.0.1:%d\r\nX-AR-Token: tok-1\r\nOrigin: http://127.0.0.1:%d\r\nContent-Type: application/json\r\nContent-Length: 40000\r\n\r\n" % (port, port)).encode())
+                sk.sendall(("POST /s3cr3t/api/talk HTTP/1.1\r\nHost: 127.0.0.1:%d\r\nX-AT-Token: tok-1\r\nOrigin: http://127.0.0.1:%d\r\nContent-Type: application/json\r\nContent-Length: 40000\r\n\r\n" % (port, port)).encode())
                 resp = b""
                 while True:   # HTTP/1.0: the server closes after its answer
                     b_ = sk.recv(4096)
@@ -4702,15 +4702,15 @@ def selftest_talk():
                 assert req("GET", "/api/app")[1]["talk_on"] is True and req("GET", "/api/app")[1]["talk_max"] == 4000
                 assert req("POST", "/api/talk/setting", {"on": False})[1] == {"on": False} and json.loads(cfg.read_text())["talk"] is False
                 c, b_, _r = talk()
-                assert b_["outcome"] == "refused" and b_["reason"] == "off" and b_["client_id"] == "c-1" and re.fullmatch(r"ar-[0-9a-f]{8}", b_["msg_id"]), b_
+                assert b_["outcome"] == "refused" and b_["reason"] == "off" and b_["client_id"] == "c-1" and re.fullmatch(r"at-[0-9a-f]{8}", b_["msg_id"]), b_
                 assert req("POST", "/api/talk/setting", {"on": "yes"})[0] == 400 and req("GET", "/api/app")[1]["talk_on"] is False
                 assert req("POST", "/api/talk/setting", {"on": True})[1] == {"on": True} and json.loads(cfg.read_text())["talk"] is True
                 n1 = len(inbox2)
                 c, b_, _r = talk("BODY-SENTINEL-77")
                 assert c == 200 and b_["outcome"] == "accepted" and b_["client_id"] == "c-1", b_
                 time.sleep(0.3)
-                assert len(inbox2) - n1 == 1 and "BODY-SENTINEL-77" in inbox2[-1] and json.loads(inbox2[-1])["message"]["content"].split("\n")[0].startswith("[상황실 톡 · "), inbox2
-                assert json.loads(inbox2[-1])["message"]["content"].split(" · ")[2].startswith("ar-" + b_["msg_id"][3:]), "the msg_id the hub answered is the one in the line"
+                assert len(inbox2) - n1 == 1 and "BODY-SENTINEL-77" in inbox2[-1] and json.loads(inbox2[-1])["message"]["content"].split("\n")[0].startswith("[Agen Talk · "), inbox2
+                assert json.loads(inbox2[-1])["message"]["content"].split(" · ")[2].startswith("at-" + b_["msg_id"][3:]), "the msg_id the hub answered is the one in the line"
                 assert talk("BODY-SENTINEL-77")[1]["reason"] == "duplicate"
                 c, b_, _r = talk("another text")
                 assert c == 429 and isinstance(b_["retry_after"], int) and 1 <= b_["retry_after"] <= 4, b_
@@ -4786,7 +4786,7 @@ if __name__ == "__main__":
     elif "--selftest" in sys.argv:
         selftest()
     elif sys.argv[1:2] == ["serve"]:
-        serve(sys.argv[2] if len(sys.argv) > 2 else str(HOME / ".cache/agent-room/sock"))
+        serve(sys.argv[2] if len(sys.argv) > 2 else str(HOME / ".cache/agen-talk/sock"))
     else:
         state = collect()
         if "--json" in sys.argv:

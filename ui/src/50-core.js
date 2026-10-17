@@ -190,17 +190,17 @@ const R = (() => {
     let left = 2000; const out = {};
     for (const k of Object.keys(A.rooms).sort((a, b) => (A.at[b] || 0) - (A.at[a] || 0))) { const it = A.rooms[k].slice(-Math.min(30, left)); if (!it.length) continue; left -= it.length; out[k] = { at: A.at[k] || 0, a: it.map(x => [x.t, x.k, x.x]) }; if (left <= 0) break; }
     store.set('room.acts', out); }, 400); };
-  // my 상황실 talks per room (TALK-UX §5.5): ring <= 50, 24 h. A talk still 'sending' after a restart can only be 'unknown'.
+  // my 에겐 톡 talks per room (TALK-UX §5.5): ring <= 50, 24 h. A talk still 'sending' after a restart can only be 'unknown'.
   const TSTATE = ['sending', 'delivered', 'held', 'refused', 'unreach', 'unknown'];
   const DIRS = ['down', 'follow', 'up'], MKINDS = ['agent', 'workflow', 'codex', 'agy', 'peer', 'talk'];
-  const validMsg = m => m && typeof m === 'object' && DIRS.includes(m.dir) && MKINDS.includes(m.kind) && /^[0-9a-f]{12}$/.test(m.id) && (m.msg_id === '' || /^ar-[0-9a-f]{8}$/.test(m.msg_id)) && typeof m.truncated === 'boolean' && typeof m.encrypted === 'boolean' && Number.isFinite(+m.t) && +m.t > Date.now() - 864e5 && typeof m.text === 'string';
+  const validMsg = m => m && typeof m === 'object' && DIRS.includes(m.dir) && MKINDS.includes(m.kind) && /^[0-9a-f]{12}$/.test(m.id) && (m.msg_id === '' || /^at-[0-9a-f]{8}$/.test(m.msg_id)) && typeof m.truncated === 'boolean' && typeof m.encrypted === 'boolean' && Number.isFinite(+m.t) && +m.t > Date.now() - 864e5 && typeof m.text === 'string';
   (function loadTalks() {
     const raw = store.get('room.talks', {}), min = Date.now() - 864e5;
     if (!raw || typeof raw !== 'object') return;
     for (const [k, v] of Object.entries(raw)) {
       if (!Array.isArray(v)) continue;
       const it = v.filter(e => e && typeof e === 'object' && /^[A-Za-z0-9_-]{1,64}$/.test(e.cid) && typeof e.text === 'string' && +e.t > min).slice(-50)
-        .map(e => ({ cid: e.cid, text: str(e.text, 4000), t: +e.t, st: e.st === 'sending' ? 'unknown' : TSTATE.includes(e.st) ? e.st : 'unknown', hat: num(e.hat) || null, mid: /^ar-[0-9a-f]{8}$/.test(e.mid) ? e.mid : '', why: str(e.why, 200) }));
+        .map(e => ({ cid: e.cid, text: str(e.text, 4000), t: +e.t, st: e.st === 'sending' ? 'unknown' : TSTATE.includes(e.st) ? e.st : 'unknown', hat: num(e.hat) || null, mid: /^at-[0-9a-f]{8}$/.test(e.mid) ? e.mid : '', why: str(e.why, 200) }));
       if (it.length) A.talks[str(k, 300)] = it;
     }
   })();
@@ -309,7 +309,7 @@ const R = (() => {
       if (!m || typeof m !== 'object' || !DIRS.includes(m.dir) || !MKINDS.includes(m.kind) || !/^[0-9a-f]{12}$/.test(String(m.id)) || !(+m.ts > 1e9 && +m.ts < 1e10) || (m.text != null && typeof m.text !== 'string')) continue;
       const tx = m.text || '';
       out.push({ id: m.id, dir: m.dir, kind: m.kind, ch, from: str(m.from, 300), to: str(m.to, 300), who: str(m.who, 80), t: Math.round(+m.ts * 1000 + skew), text: tx.length > 4000 ? tx.slice(0, 4000) : tx,
-        truncated: m.truncated === true || tx.length > 4000, n: num(m.n), encrypted: m.encrypted === true, role: str(m.role, 60), msg_id: /^ar-[0-9a-f]{8}$/.test(String(m.msg_id)) ? m.msg_id : '', by: str(m.by, 80) });
+        truncated: m.truncated === true || tx.length > 4000, n: num(m.n), encrypted: m.encrypted === true, role: str(m.role, 60), msg_id: /^at-[0-9a-f]{8}$/.test(String(m.msg_id)) ? m.msg_id : '', by: str(m.by, 80) });
     }
     return out;
   }
@@ -407,10 +407,10 @@ const R = (() => {
     let body = null; try { body = await r.json(); } catch { }
     return { ok: r.ok, status: r.status, body };
   }
-  const TOKEN = (document.querySelector('meta[name=ar-token]') || {}).content || '';
+  const TOKEN = (document.querySelector('meta[name=at-token]') || {}).content || '';
   // token-protected POST (relative path: the page lives under /<secret>/). body: object or an already-serialised JSON string
   async function apiPost(path, body) {
-    const r = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-AR-Token': TOKEN }, body: typeof body === 'string' ? body : JSON.stringify(body || {}) });
+    const r = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-AT-Token': TOKEN }, body: typeof body === 'string' ? body : JSON.stringify(body || {}) });
     let b = null; try { b = await r.json(); } catch { }
     return { ok: r.ok, status: r.status, body: b };
   }
@@ -505,7 +505,7 @@ const R = (() => {
   function updateTitle() {
     const n = M.counts.waiting || 0;
     const off = M.channels.filter(c => c.state === 'error').length;
-    document.title = (S.titleBadge && n ? '(' + n + ') ' : '') + '상황실' + (M.hubDown ? ' (허브 없음)' : off ? ' (채널 ' + off + '개 끊김)' : '') + (paused ? ' (일시정지)' : '');
+    document.title = (S.titleBadge && n ? '(' + n + ') ' : '') + '에겐 톡' + (M.hubDown ? ' (허브 없음)' : off ? ' (채널 ' + off + '개 끊김)' : '') + (paused ? ' (일시정지)' : '');
     try { window.pywebview && window.pywebview.api && window.pywebview.api.title && window.pywebview.api.title(document.title); } catch { }   // native window title (no-op in a browser)
   }
   on('model', updateTitle); on('settings', updateTitle); on('hubview', updateTitle);

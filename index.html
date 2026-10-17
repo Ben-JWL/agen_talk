@@ -4,11 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
-<meta name="ar-token" content="__AR_TOKEN__">
-<title>상황실</title>
+<meta name="at-token" content="__AT_TOKEN__">
+<title>에겐 톡</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='2' y='2' width='28' height='28' rx='7' fill='%231D1D1F'/%3E%3Crect x='7' y='8' width='9' height='3.5' rx='1.75' fill='%23F5F5F7'/%3E%3Ccircle cx='22.5' cy='9.75' r='2.75' fill='%23E5342B'/%3E%3Crect x='7' y='14.25' width='15' height='3.5' rx='1.75' fill='%2398989D'/%3E%3Crect x='7' y='20.5' width='12' height='3.5' rx='1.75' fill='%2398989D'/%3E%3C/svg%3E">
 <!--
-  상황실 (agent room) — single-file UI, assembled from ui-build/src by build.py (dev only).
+  에겐 톡 (Agen Talk) — single-file UI, assembled from ui-build/src by build.py (dev only).
   No external scripts or fonts. Every agent-derived string goes through textContent or esc().
   Design references: Filee (layout), Tremor (Apache-2.0/MIT, measurements only), uiverse.io kit (MIT —
   copied CSS fragments carry the notice below).
@@ -897,7 +897,7 @@ button.fk { border: 0; background: none; padding: 0; cursor: pointer; }
     <div id="chat" data-room="none">
       <aside id="list" aria-label="방 목록">
         <div class="lhead">
-          <div class="ltop"><h1 class="t-title">상황실</h1><span class="ibtn" id="poll" title="갱신 주기"><svg id="ring" viewBox="0 0 16 16" aria-hidden="true"><circle class="track" cx="8" cy="8" r="6"/><circle class="arc" cx="8" cy="8" r="6"/></svg><span id="pollsec">3초</span></span><button class="ibtn" id="pause" type="button" aria-keyshortcuts="p" title="일시정지 (p)" aria-pressed="false" aria-label="일시정지"><svg aria-hidden="true"><use class="pl" href="#i-pause"/><use class="pz" href="#i-play"/></svg></button></div>
+          <div class="ltop"><h1 class="t-title">에겐 톡</h1><span class="ibtn" id="poll" title="갱신 주기"><svg id="ring" viewBox="0 0 16 16" aria-hidden="true"><circle class="track" cx="8" cy="8" r="6"/><circle class="arc" cx="8" cy="8" r="6"/></svg><span id="pollsec">3초</span></span><button class="ibtn" id="pause" type="button" aria-keyshortcuts="p" title="일시정지 (p)" aria-pressed="false" aria-label="일시정지"><svg aria-hidden="true"><use class="pl" href="#i-pause"/><use class="pz" href="#i-play"/></svg></button></div>
           <label class="field" id="sfield"><svg class="ic" aria-hidden="true"><use href="#i-search"/></svg><input id="search" type="search" placeholder="검색" aria-label="방 검색" autocomplete="off" spellcheck="false" aria-keyshortcuts="/"><kbd>/</kbd></label>
           <div class="chips" id="chips" role="group" aria-label="채널"></div>
           <div class="sumline" id="sumline"><span class="sum" id="sumtxt" aria-live="polite"></span><span class="sortw" id="sortw"></span></div>
@@ -1108,17 +1108,17 @@ const R = (() => {
     let left = 2000; const out = {};
     for (const k of Object.keys(A.rooms).sort((a, b) => (A.at[b] || 0) - (A.at[a] || 0))) { const it = A.rooms[k].slice(-Math.min(30, left)); if (!it.length) continue; left -= it.length; out[k] = { at: A.at[k] || 0, a: it.map(x => [x.t, x.k, x.x]) }; if (left <= 0) break; }
     store.set('room.acts', out); }, 400); };
-  // my 상황실 talks per room (TALK-UX §5.5): ring <= 50, 24 h. A talk still 'sending' after a restart can only be 'unknown'.
+  // my 에겐 톡 talks per room (TALK-UX §5.5): ring <= 50, 24 h. A talk still 'sending' after a restart can only be 'unknown'.
   const TSTATE = ['sending', 'delivered', 'held', 'refused', 'unreach', 'unknown'];
   const DIRS = ['down', 'follow', 'up'], MKINDS = ['agent', 'workflow', 'codex', 'agy', 'peer', 'talk'];
-  const validMsg = m => m && typeof m === 'object' && DIRS.includes(m.dir) && MKINDS.includes(m.kind) && /^[0-9a-f]{12}$/.test(m.id) && (m.msg_id === '' || /^ar-[0-9a-f]{8}$/.test(m.msg_id)) && typeof m.truncated === 'boolean' && typeof m.encrypted === 'boolean' && Number.isFinite(+m.t) && +m.t > Date.now() - 864e5 && typeof m.text === 'string';
+  const validMsg = m => m && typeof m === 'object' && DIRS.includes(m.dir) && MKINDS.includes(m.kind) && /^[0-9a-f]{12}$/.test(m.id) && (m.msg_id === '' || /^at-[0-9a-f]{8}$/.test(m.msg_id)) && typeof m.truncated === 'boolean' && typeof m.encrypted === 'boolean' && Number.isFinite(+m.t) && +m.t > Date.now() - 864e5 && typeof m.text === 'string';
   (function loadTalks() {
     const raw = store.get('room.talks', {}), min = Date.now() - 864e5;
     if (!raw || typeof raw !== 'object') return;
     for (const [k, v] of Object.entries(raw)) {
       if (!Array.isArray(v)) continue;
       const it = v.filter(e => e && typeof e === 'object' && /^[A-Za-z0-9_-]{1,64}$/.test(e.cid) && typeof e.text === 'string' && +e.t > min).slice(-50)
-        .map(e => ({ cid: e.cid, text: str(e.text, 4000), t: +e.t, st: e.st === 'sending' ? 'unknown' : TSTATE.includes(e.st) ? e.st : 'unknown', hat: num(e.hat) || null, mid: /^ar-[0-9a-f]{8}$/.test(e.mid) ? e.mid : '', why: str(e.why, 200) }));
+        .map(e => ({ cid: e.cid, text: str(e.text, 4000), t: +e.t, st: e.st === 'sending' ? 'unknown' : TSTATE.includes(e.st) ? e.st : 'unknown', hat: num(e.hat) || null, mid: /^at-[0-9a-f]{8}$/.test(e.mid) ? e.mid : '', why: str(e.why, 200) }));
       if (it.length) A.talks[str(k, 300)] = it;
     }
   })();
@@ -1227,7 +1227,7 @@ const R = (() => {
       if (!m || typeof m !== 'object' || !DIRS.includes(m.dir) || !MKINDS.includes(m.kind) || !/^[0-9a-f]{12}$/.test(String(m.id)) || !(+m.ts > 1e9 && +m.ts < 1e10) || (m.text != null && typeof m.text !== 'string')) continue;
       const tx = m.text || '';
       out.push({ id: m.id, dir: m.dir, kind: m.kind, ch, from: str(m.from, 300), to: str(m.to, 300), who: str(m.who, 80), t: Math.round(+m.ts * 1000 + skew), text: tx.length > 4000 ? tx.slice(0, 4000) : tx,
-        truncated: m.truncated === true || tx.length > 4000, n: num(m.n), encrypted: m.encrypted === true, role: str(m.role, 60), msg_id: /^ar-[0-9a-f]{8}$/.test(String(m.msg_id)) ? m.msg_id : '', by: str(m.by, 80) });
+        truncated: m.truncated === true || tx.length > 4000, n: num(m.n), encrypted: m.encrypted === true, role: str(m.role, 60), msg_id: /^at-[0-9a-f]{8}$/.test(String(m.msg_id)) ? m.msg_id : '', by: str(m.by, 80) });
     }
     return out;
   }
@@ -1325,10 +1325,10 @@ const R = (() => {
     let body = null; try { body = await r.json(); } catch { }
     return { ok: r.ok, status: r.status, body };
   }
-  const TOKEN = (document.querySelector('meta[name=ar-token]') || {}).content || '';
+  const TOKEN = (document.querySelector('meta[name=at-token]') || {}).content || '';
   // token-protected POST (relative path: the page lives under /<secret>/). body: object or an already-serialised JSON string
   async function apiPost(path, body) {
-    const r = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-AR-Token': TOKEN }, body: typeof body === 'string' ? body : JSON.stringify(body || {}) });
+    const r = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-AT-Token': TOKEN }, body: typeof body === 'string' ? body : JSON.stringify(body || {}) });
     let b = null; try { b = await r.json(); } catch { }
     return { ok: r.ok, status: r.status, body: b };
   }
@@ -1423,7 +1423,7 @@ const R = (() => {
   function updateTitle() {
     const n = M.counts.waiting || 0;
     const off = M.channels.filter(c => c.state === 'error').length;
-    document.title = (S.titleBadge && n ? '(' + n + ') ' : '') + '상황실' + (M.hubDown ? ' (허브 없음)' : off ? ' (채널 ' + off + '개 끊김)' : '') + (paused ? ' (일시정지)' : '');
+    document.title = (S.titleBadge && n ? '(' + n + ') ' : '') + '에겐 톡' + (M.hubDown ? ' (허브 없음)' : off ? ' (채널 ' + off + '개 끊김)' : '') + (paused ? ' (일시정지)' : '');
     try { window.pywebview && window.pywebview.api && window.pywebview.api.title && window.pywebview.api.title(document.title); } catch { }   // native window title (no-op in a browser)
   }
   on('model', updateTitle); on('settings', updateTitle); on('hubview', updateTitle);
@@ -1585,7 +1585,7 @@ const C = (() => {
   const prefix = a => a.depth < 1 ? '' : a.depth === 1 ? '↳ ' : a.depth <= 3 ? '↳↳ ' : '↳×4 ';
   const actText = x => ({ user: '나: ' + x.x, say: x.x, tool: '⌘ ' + (p => (p.name ? p.name + ' ' : '') + p.obj)(parseAct(String(x.x).replace(/ ×\d+$/, ''))), spawn: '하위 시작 ' + x.x,
     ask: (isCmd(x.x) ? '승인 요청 ' : '질문 ') + x.x, done: '완료 · ' + x.x, err: '중단 · ' + x.x,
-    mdown: '부모 지시: ' + (x.enc ? '🔒 암호화됨' : x.x), mup: '보고: ' + (x.enc ? '🔒 암호화됨' : x.x), mtalk: '나 (상황실): ' + x.x, mpeer: '다른 세션: ' + x.x }[x.k] || x.x);
+    mdown: '부모 지시: ' + (x.enc ? '🔒 암호화됨' : x.x), mup: '보고: ' + (x.enc ? '🔒 암호화됨' : x.x), mtalk: '나 (에겐 톡): ' + x.x, mpeer: '다른 세션: ' + x.x }[x.k] || x.x);
   function preview(a) {
     if (R.LIVE.has(a.st)) { const nd = nowDoing(a); return '… ' + [nd.verb, nd.obj].filter(Boolean).join(' '); }
     if (a.kids.length >= 5) { const ks = a.kids.map(k => R.M.agents.get(k)).filter(Boolean), d = ks.filter(k => k.st === 'done').length, w = ks.filter(k => R.LIVE.has(k.st)).length; if (d + w) return '하위 ' + ks.length + '개 중 ' + d + '개 완료' + (w ? ' · ' + w + '개 작업 중' : ''); }
@@ -1768,7 +1768,7 @@ const ChatList = (() => {
     if (frun) frun.hidden = !show;
   }
   // WebView2 missing -> the page was opened in a browser app window (APP-UX §4)
-  const appBn = h('div.appbn', { hidden: true }, h('b', '브라우저 창으로 열렸습니다 — WebView2 가 설치되지 않았습니다'), h('p.meta', 'Microsoft Edge WebView2 런타임을 설치하면 다음부터 전용 창으로 열립니다 · 이 창을 닫으면 2분 뒤 상황실이 종료됩니다'),
+  const appBn = h('div.appbn', { hidden: true }, h('b', '브라우저 창으로 열렸습니다 — WebView2 가 설치되지 않았습니다'), h('p.meta', 'Microsoft Edge WebView2 런타임을 설치하면 다음부터 전용 창으로 열립니다 · 이 창을 닫으면 2분 뒤 에겐 톡이 종료됩니다'),
     h('div.acts', h('a.btn.sm', { href: 'https://developer.microsoft.com/microsoft-edge/webview2/', target: '_blank', rel: 'noopener' }, '설치 페이지 열기'), h('button.btn.link', { type: 'button', on: { click: () => { U.wv2Dismissed = true; R.save(); renderApp(); } } }, '닫기')));
   lscroll.insertBefore(appBn, lnote);
   function renderApp() { appBn.hidden = !(M.app && M.app.mode === 'browser' && !U.wv2Dismissed); }
@@ -1834,7 +1834,7 @@ const ChatList = (() => {
     const mode = M.hubDown ? 'down' : R.isPaused() ? 'pause' : 'ok';
     if (!sumtxt.firstChild) sumtxt.append(svgUse('g-dead', 'gl hubic'), h('span.sm'), h('button.btn.link.retry', { type: 'button', on: { click: () => R.refresh() } }, '다시 시도'));
     const [ic, sm, rb] = sumtxt.children; ic.style.display = mode === 'down' ? '' : 'none'; rb.hidden = mode !== 'down';
-    text(sm, mode === 'down' ? '허브에 연결할 수 없습니다 — agent-room 창이 열려 있는지 확인하세요' : mode === 'pause' ? '일시정지 — p로 재개' : M.loaded ? '채널 ' + ok + '/' + M.channels.length + ' 연결' + (bad.length ? ' · ' + bad.join(', ') + ' 끊김' : '') : '불러오는 중…');
+    text(sm, mode === 'down' ? '허브에 연결할 수 없습니다 — agen-talk 창이 열려 있는지 확인하세요' : mode === 'pause' ? '일시정지 — p로 재개' : M.loaded ? '채널 ' + ok + '/' + M.channels.length + ' 연결' + (bad.length ? ' · ' + bad.join(', ') + ' 끊김' : '') : '불러오는 중…');
     cls(sumtxt, 'strong', mode !== 'ok'); cls(sumtxt, 'down', mode === 'down'); attr(sumtxt, 'title', sm.textContent);
     sortw.hidden = mode === 'down'; text(sortBtn.firstChild, SORTS.find(s => s[0] === U.sort)[1] + ' ▾'); sortWrap.hidden = false;
     // collector warnings (never hidden) for the channels in view
@@ -2110,7 +2110,7 @@ const Flow = (() => {
   // text lines of a node: 나 (root's first prompt) · 지시 · 후속 · 보고
   function linesOf(key, root) {
     const o = [], ms = R.msgs(key), fl = ms.filter(m => m.dir === 'follow'), up = ms.filter(m => m.dir === 'up').pop(), d = ms.find(isDown);
-    if (root) { const u = R.acts(key).find(x => x.k === 'user' && !/^\[상황실 톡 · /.test(x.x)); if (u) o.push({ k: 'me', lab: '나', txt: u.x, id: 'u|' + key }); }
+    if (root) { const u = R.acts(key).find(x => x.k === 'user' && !/^\[Agen Talk · /.test(x.x)); if (u) o.push({ k: 'me', lab: '나', txt: u.x, id: 'u|' + key }); }
     const mk = (k, lab, m, pre) => ({ k, lab, id: m.id, enc: m.encrypted, txt: m.encrypted ? '암호화된 ' + (m.dir === 'up' ? '보고' : '지시') + (m.role ? ' · ' + m.role : '') : (pre || '') + m.text });
     if (d) o.push(mk('d', '지시', d));
     if (fl.length === 1) o.push(mk('f:' + fl[0].id, '후속', fl[0]));
@@ -2182,7 +2182,7 @@ const Talk = (() => {
     'no-daemon': 'codex가 --no-daemon으로 실행 중이라 받을 수 없습니다 · 다음부터 --no-daemon 없이 실행하면 여기서 보낼 수 있습니다',
     'no-socket': '이 claude 세션에는 메시지 소켓이 없습니다 — claude 2.1.300 이상에서 받을 수 있습니다',
     'not-interactive': '대화형 세션이 아니라 받을 수 없습니다 (claude -p)',
-    self: '상황실을 띄운 세션에는 보내지 않습니다',
+    self: '에겐 톡을 띄운 세션에는 보내지 않습니다',
     ended: '세션이 끝나서 보낼 수 없습니다',
     windows: '이 PC의 세션에는 아직 보낼 수 없습니다 — 서버 세션만 지원합니다',
   };
@@ -2244,7 +2244,7 @@ const Talk = (() => {
     for (const m of R.msgs(key)) {
       const id = 'm|' + m.id, at = get(m.ch + ':' + m.from);
       if (m.kind === 'talk') {
-        if (!mids.has(m.msg_id)) L.push({ id, t: m.t, kind: 'tmsg', m, spk: 'x:talk:' + m.id, nm: '상황실 톡', chip: '확인 안 됨', label: '톡', sr: '확인되지 않은 상황실 톡: ' });
+        if (!mids.has(m.msg_id)) L.push({ id, t: m.t, kind: 'tmsg', m, spk: 'x:talk:' + m.id, nm: '에겐 톡', chip: '확인 안 됨', label: '톡', sr: '확인되지 않은 에겐 톡: ' });
       }
       else if (m.kind === 'peer') L.push({ id, t: m.t, kind: 'tmsg', m, spk: at ? at.key : 'x:' + m.from, nm: peerName(m, at), chip: '다른 세션', label: '톡', sp: at, sr: '다른 세션의 톡: ' });
       else if (m.dir === 'up') { const par = a && get(a.parent), to = m.who || (par ? par.name : '부모'); L.push({ id, t: m.t, kind: 'tmsg', m, spk: key, label: '보고 → ' + to, sr: (a ? a.name : '') + '의 보고: ' }); }
@@ -2264,7 +2264,7 @@ const Talk = (() => {
       g.sort((p, q) => p.t - q.t); g.slice(1).forEach(x => drop.add(x));
       L.push({ id: 'fan|' + g[0].id, t: g[0].t + 1, kind: 'fan', x: '하위 ' + g.length + '개 시작 · 같은 지시 ' + (g.length - 1) + '개' });
     }
-    for (const x of L) if ((x.kind === 'done' && upKids.some(p => x.x.startsWith(p))) || (x.kind === 'user' && /^\[상황실 톡 · /.test(x.x))) drop.add(x);   // the report card replaces the done line; an envelope must never paint as my terminal prompt
+    for (const x of L) if ((x.kind === 'done' && upKids.some(p => x.x.startsWith(p))) || (x.kind === 'user' && /^\[Agen Talk · /.test(x.x))) drop.add(x);   // the report card replaces the done line; an envelope must never paint as my terminal prompt
     for (let i = L.length - 1; i >= 0; i--) if (drop.has(L[i])) L.splice(i, 1);
   }
 
@@ -2282,7 +2282,7 @@ const Talk = (() => {
     const k = it.kind, who = el.querySelector('.who');
     let label, body, enc = false, role = '', sr, foot = '', stt = null, kid = null, n = 12;
     if (k === 'talkme') {
-      const e = it.e; label = '상황실에서 보냄'; body = e.text; sr = '나 (상황실): ';
+      const e = it.e; label = '에겐 톡에서 보냄'; body = e.text; sr = '나 (에겐 톡): ';
       stt = stateOf(e);
     } else {
       const m = it.m; enc = m.encrypted; label = it.label; role = enc ? m.role : ''; n = 3; kid = it.kid; sr = it.sr;
@@ -2379,7 +2379,7 @@ const Talk = (() => {
       A.draft[key] = A.draft[key] || e.text; if (key === shown && !ta.value) { ta.value = e.text; grow(); }
       until[key] = Date.now() + Math.min(600, Math.max(1, Math.ceil(+b.retry_after) || 5)) * 1000; say('잠시 뒤에 보낼 수 있습니다');
     } else {
-      if (/^ar-[0-9a-f]{8}$/.test(String(b.msg_id))) e.mid = b.msg_id;
+      if (/^at-[0-9a-f]{8}$/.test(String(b.msg_id))) e.mid = b.msg_id;
       if (o === 'accepted') e.st = 'delivered';
       else if (o === 'held') { e.st = 'held'; e.hat = Date.now(); }
       else if (o === 'refused' || (r && !o && r.status >= 400)) { e.st = 'refused'; e.why = String((b.reason === 'codex-error' && b.detail ? 'codex-error: ' + b.detail : b.reason) || b.error || 'HTTP ' + r.status).slice(0, 200); }   // codex-error carries the message in detail
@@ -2539,7 +2539,7 @@ const Room = (() => {
     }
     if (k === 'user' || k === 'say' || k === 'done') text(el.querySelector('.tx'), it.x);
     else if (k === 'tool') { const n = toolN(it.x), p = C.parseAct(it.x.replace(/ ×\d+$/, '')); text(el.querySelector('.tnm'), p.name || '도구'); text(el.querySelector('.to'), p.obj); attr(el.querySelector('.to'), 'title', p.obj); const c = el.querySelector('.tcnt'); text(c, n > 1 ? '×' + n : ''); c.hidden = n < 2; }
-    else if (k === 'ask') { const cmd = C.isCmd(it.x), head = cmd || /승인/.test(it.x) ? '승인 요청' : '질문'; C.setAsk(el.querySelector('.ask'), { head, body: it.x, mono: cmd, cmd: cmd ? it.x.slice(2) : head === '승인 요청' ? it.x : '', meta: '터미널 창에서 답하세요 · 상황실은 읽기 전용입니다', resolved: it.resolved }); }
+    else if (k === 'ask') { const cmd = C.isCmd(it.x), head = cmd || /승인/.test(it.x) ? '승인 요청' : '질문'; C.setAsk(el.querySelector('.ask'), { head, body: it.x, mono: cmd, cmd: cmd ? it.x.slice(2) : head === '승인 요청' ? it.x : '', meta: '터미널 창에서 답하세요 · 에겐 톡은 읽기 전용입니다', resolved: it.resolved }); }
     else if (k === 'spawn') patchSpawn(el, it);
     else if (k === 'tmsg' || k === 'talkme') Talk.patch(el, it, key, a);
     else if (k === 'tail') patchTail(el);
@@ -3080,9 +3080,9 @@ window.Importer = (() => {
     about() {
       const a = R.M.app, web = !!a && a.mode === 'webview', sec_ = R.$('#set-about', this.main), nav = this.links[this.links.length - 1];
       sec_.hidden = !a; nav.hidden = !a;
-      text(this.chDesc, web ? '서버 추가는 이 PC에 전용 키를 만들어 등록합니다. 포트·키 파일 같은 고급 설정은 설정 폴더의 channels.json 에서 고친 뒤 상황실을 다시 시작하세요' : '서버 추가는 이 PC에 전용 키를 만들어 등록합니다. 포트·키 파일 같은 고급 설정은 channels.json(agent_room.py 옆)에서 고친 뒤 agent-room을 다시 시작하세요');
+      text(this.chDesc, web ? '서버 추가는 이 PC에 전용 키를 만들어 등록합니다. 포트·키 파일 같은 고급 설정은 설정 폴더의 channels.json 에서 고친 뒤 에겐 톡을 다시 시작하세요' : '서버 추가는 이 PC에 전용 키를 만들어 등록합니다. 포트·키 파일 같은 고급 설정은 channels.json(agen_talk.py 옆)에서 고친 뒤 agen-talk을 다시 시작하세요');
       if (!a) return;
-      text(this.ver, a.version ? '상황실 ' + a.version : '—');
+      text(this.ver, a.version ? '에겐 톡 ' + a.version : '—');
       const lr = this.logBtn.closest('.srow'); lr.hidden = !a.logdir; const note = lr.querySelector('.snote'); text(note, a.logdir); attr(note, 'title', a.logdir); this.logBtn.hidden = !web;
     },
     async openLog() {
@@ -3249,7 +3249,7 @@ window.Importer = (() => {
         h('div.sheet-h', h('span#sheet-t', '단축키'), h('button.ibtn', { type: 'button', 'aria-label': '닫기', on: { click: close } }, C.kbd('Esc'))),
         h('div.sheet-b', { tabindex: '-1' }, table().map(r => h('div.sheet-r', h('span', r.label), h('span.k', r.keys.map(k => C.kbd(k))))),
           h('div.sheet-g', '톡'), TALK_KEYS.map(([k, l]) => h('div.sheet-r', h('span', l), h('span.k', C.kbd(k)))),
-          h('div.sheet-leg', '■ 터미널에서 입력한 것 · □ 상황실에서 보낸 톡')));
+          h('div.sheet-leg', '■ 터미널에서 입력한 것 · □ 에겐 톡에서 보낸 메시지')));
       scrim.append(dlg); layer.append(scrim); dlg.querySelector('.sheet-b').focus({ preventScroll: true });   // the scroller holds focus so arrows/PageDown scroll
     }
     addEventListener('keydown', trap, true);
@@ -3372,26 +3372,26 @@ window.States = (() => {
    and is never kept by the page. Hub strings go through textContent only. ===== */
 window.AddServer = (() => {
   const { h, svgUse, text, attr, cls, M } = R;
-  const TOKEN = (document.querySelector('meta[name=ar-token]') || {}).content || '';
+  const TOKEN = (document.querySelector('meta[name=at-token]') || {}).content || '';
   const RE = { host: /^[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?$/, user: /^[A-Za-z_][A-Za-z0-9._-]{0,31}$/ };
   const STEPS = ['연결', '서버 확인', '키 등록', '접속 확인', '채널 등록'], GL = { pending: 'g-idle', active: 'g-work', user: 'g-user', done: 'g-done', error: 'g-dead' };
   const PH = { connecting: 0, confirm_hostkey: 1, installing_key: 2, verifying: 3 };
   const SUB = '주소, 계정, 비밀번호를 적으면 이 PC 전용 키를 서버에 등록합니다.';
-  const PRIV_S = '비밀번호는 디스크에 저장되지 않고 상황실을 닫으면 사라집니다';
+  const PRIV_S = '비밀번호는 디스크에 저장되지 않고 에겐 톡을 닫으면 사라집니다';
   // kind -> [title, plain-language sub, failed step (index) or fn(job), actions]; actions: [label, 'p'rimary | 'b'utton | 'l'ink, fn name]
   const ERR = {
     wrong_password: ['비밀번호가 맞지 않았습니다', '서버에 아무것도 바뀌지 않았습니다. 비밀번호를 확인하고 다시 입력하세요.', () => 0, [['다시 입력', 'p', 'retry'], ['계정 수정', 'l', 'user'], ['닫기', 'b', 'close']]],
     unreachable: ['서버에 닿지 않습니다', '주소·포트·네트워크(VPN)를 확인하세요. 다른 SSH 프로그램에서 접속되는 주소와 같은지 비교해 보세요.', () => 0, [['주소 수정', 'p', 'host'], ['다시 입력', 'l', 'retry'], ['닫기', 'b', 'close']]],
     host_key_changed: ['서버의 신원이 바뀌었습니다 — 등록을 중단했습니다', '이 서버의 호스트 키가 이 PC에 기록된 것과 다릅니다. 서버를 다시 설치했거나 주소가 다른 장비로 옮겨진 경우라면 정상입니다. 그렇지 않다면 중간에 다른 장비가 끼어들었을 수 있으니, 서버 관리자에게 확인하기 전에는 비밀번호를 입력하지 마세요.', () => 1, [['관리자에게 확인했습니다 — 기록을 지우고 다시 시도', 'b', 'forget'], ['닫기', 'p', 'close']]],
-    no_python3: ['서버에 python3 가 없습니다', '키는 등록되어 접속은 되지만, 상황실이 이 서버의 에이전트를 읽으려면 python3 가 필요합니다. 서버 관리자에게 설치를 요청하거나, python 명령 이름이 다르면 그 이름을 적고 다시 시도하세요.', () => 3, [['python 명령 바꾸기', 'p', 'py'], ['닫기', 'b', 'close']]],
-    key_rejected: ['서버가 키 로그인을 허용하지 않습니다', '키는 서버에 등록됐지만 키로는 접속되지 않습니다. 서버가 키 로그인을 막고 있거나 ~/.ssh 폴더 권한이 맞지 않을 수 있습니다. 서버 관리자에게 확인하거나, 이 세션 동안만 비밀번호로 연결할 수 있습니다 (비밀번호는 디스크에 저장되지 않고, 상황실을 닫으면 사라집니다).', () => 3, [['이 세션 동안만 비밀번호로 연결', 'p', 'session'], ['닫기', 'b', 'close']]],
+    no_python3: ['서버에 python3 가 없습니다', '키는 등록되어 접속은 되지만, 에겐 톡이 이 서버의 에이전트를 읽으려면 python3 가 필요합니다. 서버 관리자에게 설치를 요청하거나, python 명령 이름이 다르면 그 이름을 적고 다시 시도하세요.', () => 3, [['python 명령 바꾸기', 'p', 'py'], ['닫기', 'b', 'close']]],
+    key_rejected: ['서버가 키 로그인을 허용하지 않습니다', '키는 서버에 등록됐지만 키로는 접속되지 않습니다. 서버가 키 로그인을 막고 있거나 ~/.ssh 폴더 권한이 맞지 않을 수 있습니다. 서버 관리자에게 확인하거나, 이 세션 동안만 비밀번호로 연결할 수 있습니다 (비밀번호는 디스크에 저장되지 않고, 에겐 톡을 닫으면 사라집니다).', () => 3, [['이 세션 동안만 비밀번호로 연결', 'p', 'session'], ['닫기', 'b', 'close']]],
     cancelled: ['취소했습니다', '등록을 취소했습니다. 서버에는 아무것도 바뀌지 않았습니다.', (p, j) => PH[j.phase || p.phase] || 0, [['다시 입력', 'p', 'retry'], ['닫기', 'b', 'close']]],
-    hub_lost: ['허브가 응답하지 않습니다', '허브와의 연결이 끊겨 등록이 어디까지 진행됐는지 알 수 없습니다. 상황실을 다시 시작한 뒤 다시 시도하세요. 이미 비밀번호를 보냈다면 서버에 키가 등록됐을 수 있습니다 — 서버의 ~/.ssh/authorized_keys 에서 \'agent-room@PC이름\' 줄로 확인하세요.', (p, j) => PH[j.phase || p.phase] || 0, [['다시 입력', 'p', 'retry'], ['닫기', 'b', 'close']]],
-    other: ['등록하지 못했습니다', '아래 로그를 확인하세요. 같은 내용이 반복되면 상황실 로그 폴더의 로그와 함께 알려 주세요.', (p, j) => PH[j.phase || p.phase] || 0, [['다시 입력', 'p', 'retry'], ['계정 수정', 'l', 'user'], ['닫기', 'b', 'close']]],
+    hub_lost: ['허브가 응답하지 않습니다', '허브와의 연결이 끊겨 등록이 어디까지 진행됐는지 알 수 없습니다. 에겐 톡을 다시 시작한 뒤 다시 시도하세요. 이미 비밀번호를 보냈다면 서버에 키가 등록됐을 수 있습니다 — 서버의 ~/.ssh/authorized_keys 에서 \'agen-talk@PC이름\' 줄로 확인하세요.', (p, j) => PH[j.phase || p.phase] || 0, [['다시 입력', 'p', 'retry'], ['닫기', 'b', 'close']]],
+    other: ['등록하지 못했습니다', '아래 로그를 확인하세요. 같은 내용이 반복되면 에겐 톡 로그 폴더의 로그와 함께 알려 주세요.', (p, j) => PH[j.phase || p.phase] || 0, [['다시 입력', 'p', 'retry'], ['계정 수정', 'l', 'user'], ['닫기', 'b', 'close']]],
   };
   let dlg, E = {}, job = null, timer = 0, flashT = 0, opener = null, fix = null, fixName = '';
 
-  const api = (path, body) => fetch(path, body === undefined ? { cache: 'no-store' } : { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-AR-Token': TOKEN }, body: JSON.stringify(body) })
+  const api = (path, body) => fetch(path, body === undefined ? { cache: 'no-store' } : { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-AT-Token': TOKEN }, body: JSON.stringify(body) })
     .then(async r => ({ status: r.status, body: await r.json().catch(() => null) }));   // relative paths: the page lives under /<secret>/
   const parse = c => { const s = String(c.ssh || ''), i = s.lastIndexOf('@'), a = c.args || [], p = a.indexOf('-p'); return { user: i < 0 ? '' : s.slice(0, i), host: s.slice(i + 1), port: Number.isInteger(c.port) ? c.port : p >= 0 && /^\d+$/.test(a[p + 1]) ? +a[p + 1] : 22 }; };   // the channel's own port wins; 22 only when it has none
   const flash = (msg, ms) => { clearTimeout(flashT); text(E.flash, msg); E.flash.hidden = !msg; if (msg && ms) flashT = setTimeout(() => flash(''), ms); };
@@ -3418,8 +3418,8 @@ window.AddServer = (() => {
       h('div.frow', ...fld('pw', '비밀번호', { type: 'password', maxlength: 256, autocomplete: 'off', placeholder: '서버 로그인 비밀번호' }, eye)),
       h('div.frow.pair', ...fld('port', '포트', { type: 'text', inputmode: 'numeric', pattern: '\\d*', maxlength: 5 }), ...fld('name', '이름 (선택)', { maxlength: 40 })),
       E.pyrow = h('div.frow', { hidden: true }, ...fld('py', 'python 명령', { maxlength: 64, value: 'python3' })),
-      E.sessrow = h('label.sess', { hidden: true }, E.sess = h('input', { type: 'checkbox' }), h('span', '이 세션 동안만 비밀번호로 연결 (키를 쓰지 않고, 상황실을 닫으면 사라집니다)')),
-      h('p.meta.priv', svgUse('i-lock'), E.priv = h('span', '비밀번호는 저장하지 않습니다. 이 PC 전용 키가 ', h('code.mono.nw', '%APPDATA%\\AgentRoom'), ' 에 만들어지고 서버의 authorized_keys 에 한 줄 추가됩니다 (agent-room@PC이름).')),
+      E.sessrow = h('label.sess', { hidden: true }, E.sess = h('input', { type: 'checkbox' }), h('span', '이 세션 동안만 비밀번호로 연결 (키를 쓰지 않고, 에겐 톡을 닫으면 사라집니다)')),
+      h('p.meta.priv', svgUse('i-lock'), E.priv = h('span', '비밀번호는 저장하지 않습니다. 이 PC 전용 키가 ', h('code.mono.nw', '%APPDATA%\\AgenTalk'), ' 에 만들어지고 서버의 authorized_keys 에 한 줄 추가됩니다 (agen-talk@PC이름).')),
       h('div.acts.rev', E.go = h('button.btn.primary', { type: 'submit' }, '연결'), h('button.btn', { type: 'button', on: { click: () => tryClose() } }, '취소')));   // DOM order 등록 시작 → 취소 → × , shown reversed
     E.sess.addEventListener('change', () => { E.priv.hidden = false; if (E.sess.checked) { E.privAlt = E.privAlt || h('span', PRIV_S); E.priv.hidden = true; E.priv.after(E.privAlt); E.privAlt.hidden = false; } else if (E.privAlt) { E.privAlt.hidden = true; E.priv.hidden = false; } });
     E.host.addEventListener('input', e => {   // paste user@host or host:2222
@@ -3557,7 +3557,7 @@ window.AddServer = (() => {
       const c = j.channel || {}, nm = String(c.name || p.rq.name || p.rq.host);
       R.U.lastUser = p.rq.user; R.save(); R.loadPresets();
       text(E.okTitle, '연결 완료'); text(E.okLine, sess ? nm + '에 이 세션 동안만 비밀번호로 연결합니다.' : nm + '에 키로 접속합니다. 비밀번호는 더 이상 필요 없습니다.');
-      text(E.okNote, sess ? '상황실을 닫으면 비밀번호가 사라지고, 다시 열면 비밀번호를 한 번 더 물어봅니다.' : (key ? '키: ' + key + ' (이 PC만) · ' : '') + "서버의 ~/.ssh/authorized_keys 에서 '" + String(j.comment || 'agent-room@PC이름') + "' 줄을 지우면 접속이 끊깁니다. " + (fix ? '이 채널은 곧 다시 연결됩니다.' : "채널 칩에 '" + nm + "'가 생겼습니다."));
+      text(E.okNote, sess ? '에겐 톡을 닫으면 비밀번호가 사라지고, 다시 열면 비밀번호를 한 번 더 물어봅니다.' : (key ? '키: ' + key + ' (이 PC만) · ' : '') + "서버의 ~/.ssh/authorized_keys 에서 '" + String(j.comment || 'agen-talk@PC이름') + "' 줄을 지우면 접속이 끊깁니다. " + (fix ? '이 채널은 곧 다시 연결됩니다.' : "채널 칩에 '" + nm + "'가 생겼습니다."));
       E.open.onclick = () => { dlg.close(); R.openChannel(c.id || ''); };
       pane('done', sub); E.open.focus(); return;
     }
@@ -3578,9 +3578,9 @@ window.AddServer = (() => {
     const p = job, k = ERR[j.kind] ? j.kind : 'other', [title, why, at, acts] = ERR[k], bad = Math.min(4, at(p, j) ?? 0), key = String(j.key || '');
     steps(STEPS.map((_, i) => i < bad ? ['done', ''] : i === bad ? ['error', ''] : P));
     const late = k === 'cancelled' && (PH[j.phase || p.phase] || 0) >= PH.installing_key;
-    const cm = String(j.comment || 'agent-room@PC이름');
+    const cm = String(j.comment || 'agen-talk@PC이름');
     text(E.band.querySelector('.t'), k === 'wrong_password' && !p.rq.hadPw ? '비밀번호를 입력하세요' : title);
-    text(E.band.querySelector('.why'), late ? "취소했지만 공개키는 이미 서버에 등록됐을 수 있습니다. 서버의 ~/.ssh/authorized_keys 에서 '" + cm + "' 줄을 지우면 접속이 끊깁니다." : j.kind === 'cancelled' && j.message ? j.message : why.replace("'agent-room@PC이름'", "'" + cm + "'"));
+    text(E.band.querySelector('.why'), late ? "취소했지만 공개키는 이미 서버에 등록됐을 수 있습니다. 서버의 ~/.ssh/authorized_keys 에서 '" + cm + "' 줄을 지우면 접속이 끊깁니다." : j.kind === 'cancelled' && j.message ? j.message : why.replace("'agen-talk@PC이름'", "'" + cm + "'"));
     text(E.band.querySelector('.msg'), k === 'cancelled' || !j.message ? '' : R.sshErr(j.message));
     E.band.dataset.kind = k; E.band.hidden = false; E.confirm.hidden = true; E.pacts.hidden = true;
     const kh = E.band.querySelector('.kh'); kh.hidden = k !== 'host_key_changed' || !j.known_hosts; text(kh, kh.hidden ? '' : 'known_hosts: ' + String(j.known_hosts).slice(0, 200));
@@ -3595,7 +3595,7 @@ window.AddServer = (() => {
   async function forget() {
     const rq = job.rq; flash('');
     let r; try { r = await api('api/servers/forget-hostkey', { host: rq.host, port: rq.port }); } catch { r = { status: 0 }; }
-    if (r.status === 200 && r.body && r.body.ok) back('pw'); else flash('기록을 지우지 못했습니다 — 상황실을 다시 시작한 뒤 다시 시도하세요');
+    if (r.status === 200 && r.body && r.body.ok) back('pw'); else flash('기록을 지우지 못했습니다 — 에겐 톡을 다시 시작한 뒤 다시 시도하세요');
   }
   return { open };
 })();

@@ -1,19 +1,19 @@
 ﻿; Inno Setup 6 script. MUST stay UTF-8 with BOM (non-ASCII app name). Build from the repo root or anywhere:
 ;   iscc /DAppVersion=1.2.3 packaging\installer.iss
-; Expects the PyInstaller onedir at build\dist\AgentRoom and packaging\agent_room.ico (python packaging\make_icon.py).
-; Per-user install, no admin rights. Uninstall keeps %APPDATA%\AgentRoom (your servers and settings).
+; Expects the PyInstaller onedir at build\dist\AgenTalk and packaging\agen_talk.ico (python packaging\make_icon.py).
+; Per-user install, no admin rights. Uninstall keeps %APPDATA%\AgenTalk (your servers and settings).
 
 #ifndef AppVersion
   #define AppVersion "0.0.0"
 #endif
-#define AppName      "상황실 (Agent Room)"
-#define AppExe       "AgentRoom.exe"
-#define AppDirName   "AgentRoom"
-#define AppPublisher "Agent Room contributors"
+#define AppName      "에겐 톡 (Agen Talk)"
+#define AppExe       "AgenTalk.exe"
+#define AppDirName   "AgenTalk"
+#define AppPublisher "Agen Talk contributors"
 
 [Setup]
 ; Stable forever: changing it makes upgrades install side by side instead of over the old version.
-AppId={{4FC199D7-0773-43A4-B703-A5E6568B8CA9}
+AppId={{D0D6F7A5-CD43-4ACF-8FE9-CEE135DD4E34}
 AppName={#AppName}
 AppVersion={#AppVersion}
 AppVerName={#AppName} {#AppVersion}
@@ -25,12 +25,12 @@ DisableDirPage=auto
 ShowLanguageDialog=no
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
-SetupIconFile=agent_room.ico
+SetupIconFile=agen_talk.ico
 UninstallDisplayIcon={app}\{#AppExe}
 UninstallDisplayName={#AppName}
 LicenseFile=..\LICENSE
 OutputDir=..\release
-OutputBaseFilename=AgentRoom-Setup-{#AppVersion}
+OutputBaseFilename=AgenTalk-Setup-{#AppVersion}
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
@@ -66,4 +66,4 @@ Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; Tasks: desktopico
 [Run]
 Filename: "{app}\{#AppExe}"; Description: "{cm:LaunchApp}"; Flags: nowait postinstall skipifsilent
 
-; No [UninstallDelete] for %APPDATA%\AgentRoom or %LOCALAPPDATA%\AgentRoom: user data is kept on purpose.
+; No [UninstallDelete] for %APPDATA%\AgenTalk or %LOCALAPPDATA%\AgenTalk: user data is kept on purpose.

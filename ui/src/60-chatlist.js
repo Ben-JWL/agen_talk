@@ -83,7 +83,7 @@ const ChatList = (() => {
     if (frun) frun.hidden = !show;
   }
   // WebView2 missing -> the page was opened in a browser app window (APP-UX §4)
-  const appBn = h('div.appbn', { hidden: true }, h('b', '브라우저 창으로 열렸습니다 — WebView2 가 설치되지 않았습니다'), h('p.meta', 'Microsoft Edge WebView2 런타임을 설치하면 다음부터 전용 창으로 열립니다 · 이 창을 닫으면 2분 뒤 상황실이 종료됩니다'),
+  const appBn = h('div.appbn', { hidden: true }, h('b', '브라우저 창으로 열렸습니다 — WebView2 가 설치되지 않았습니다'), h('p.meta', 'Microsoft Edge WebView2 런타임을 설치하면 다음부터 전용 창으로 열립니다 · 이 창을 닫으면 2분 뒤 에겐 톡이 종료됩니다'),
     h('div.acts', h('a.btn.sm', { href: 'https://developer.microsoft.com/microsoft-edge/webview2/', target: '_blank', rel: 'noopener' }, '설치 페이지 열기'), h('button.btn.link', { type: 'button', on: { click: () => { U.wv2Dismissed = true; R.save(); renderApp(); } } }, '닫기')));
   lscroll.insertBefore(appBn, lnote);
   function renderApp() { appBn.hidden = !(M.app && M.app.mode === 'browser' && !U.wv2Dismissed); }
@@ -149,7 +149,7 @@ const ChatList = (() => {
     const mode = M.hubDown ? 'down' : R.isPaused() ? 'pause' : 'ok';
     if (!sumtxt.firstChild) sumtxt.append(svgUse('g-dead', 'gl hubic'), h('span.sm'), h('button.btn.link.retry', { type: 'button', on: { click: () => R.refresh() } }, '다시 시도'));
     const [ic, sm, rb] = sumtxt.children; ic.style.display = mode === 'down' ? '' : 'none'; rb.hidden = mode !== 'down';
-    text(sm, mode === 'down' ? '허브에 연결할 수 없습니다 — agent-room 창이 열려 있는지 확인하세요' : mode === 'pause' ? '일시정지 — p로 재개' : M.loaded ? '채널 ' + ok + '/' + M.channels.length + ' 연결' + (bad.length ? ' · ' + bad.join(', ') + ' 끊김' : '') : '불러오는 중…');
+    text(sm, mode === 'down' ? '허브에 연결할 수 없습니다 — agen-talk 창이 열려 있는지 확인하세요' : mode === 'pause' ? '일시정지 — p로 재개' : M.loaded ? '채널 ' + ok + '/' + M.channels.length + ' 연결' + (bad.length ? ' · ' + bad.join(', ') + ' 끊김' : '') : '불러오는 중…');
     cls(sumtxt, 'strong', mode !== 'ok'); cls(sumtxt, 'down', mode === 'down'); attr(sumtxt, 'title', sm.textContent);
     sortw.hidden = mode === 'down'; text(sortBtn.firstChild, SORTS.find(s => s[0] === U.sort)[1] + ' ▾'); sortWrap.hidden = false;
     // collector warnings (never hidden) for the channels in view

@@ -3,9 +3,9 @@
 ```
  Windows PC                                        Linux server (nothing installed)
 +--------------------------------------------+    +-----------------------------------+
-| AgentRoom.exe (app.py, PyInstaller)        |    |                                   |
-|  - pywebview window -> WebView2            |    |  python3 -c <agent_room.py>       |
-|  - hub (agent_room.py, in process)  ---ssh stdin/stdout--->  collector ("pipe" mode) |
+| AgenTalk.exe (app.py, PyInstaller)        |    |                                   |
+|  - pywebview window -> WebView2            |    |  python3 -c <agen_talk.py>       |
+|  - hub (agen_talk.py, in process)  ---ssh stdin/stdout--->  collector ("pipe" mode) |
 |      127.0.0.1:<port>/<secret>/  (UI + API)|    |  reads /proc, ~/.codex, ~/.claude, |
 |  - local channel: reads this PC's agents   |    |  ~/.gemini  (read-only)           |
 +--------------------------------------------+    +-----------------------------------+
@@ -13,10 +13,10 @@
 
 ## Pieces
 
-- `agent_room.py`: stdlib-only, Python 3.8+. It is the collector (runs anywhere), the hub (HTTP server, channel threads), and the CLI. The same file is streamed to servers, so it must stay dependency-free.
+- `agen_talk.py`: stdlib-only, Python 3.8+. It is the collector (runs anywhere), the hub (HTTP server, channel threads), and the CLI. The same file is streamed to servers, so it must stay dependency-free.
 - `app.py`: the Windows entry point. Starts the hub in process, opens a pywebview window, enforces a single instance, stops everything when the window closes. Falls back to a Chrome/Edge `--app` window when WebView2 is absent.
 - `index.html`: the whole UI in one file with no external requests. It is built from `ui/src/*` by `ui/build.py` (files concatenated in name order) and the built file is committed; CI fails if they differ.
-- `channels.example.json`: starter config (the local channel, no servers). The real file lives in `%APPDATA%\AgentRoom\channels.json`.
+- `channels.example.json`: starter config (the local channel, no servers). The real file lives in `%APPDATA%\AgenTalk\channels.json`.
 
 ## Channels
 

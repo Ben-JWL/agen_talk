@@ -121,7 +121,7 @@ const C = (() => {
   const prefix = a => a.depth < 1 ? '' : a.depth === 1 ? '↳ ' : a.depth <= 3 ? '↳↳ ' : '↳×4 ';
   const actText = x => ({ user: '나: ' + x.x, say: x.x, tool: '⌘ ' + (p => (p.name ? p.name + ' ' : '') + p.obj)(parseAct(String(x.x).replace(/ ×\d+$/, ''))), spawn: '하위 시작 ' + x.x,
     ask: (isCmd(x.x) ? '승인 요청 ' : '질문 ') + x.x, done: '완료 · ' + x.x, err: '중단 · ' + x.x,
-    mdown: '부모 지시: ' + (x.enc ? '🔒 암호화됨' : x.x), mup: '보고: ' + (x.enc ? '🔒 암호화됨' : x.x), mtalk: '나 (상황실): ' + x.x, mpeer: '다른 세션: ' + x.x }[x.k] || x.x);
+    mdown: '부모 지시: ' + (x.enc ? '🔒 암호화됨' : x.x), mup: '보고: ' + (x.enc ? '🔒 암호화됨' : x.x), mtalk: '나 (에겐 톡): ' + x.x, mpeer: '다른 세션: ' + x.x }[x.k] || x.x);
   function preview(a) {
     if (R.LIVE.has(a.st)) { const nd = nowDoing(a); return '… ' + [nd.verb, nd.obj].filter(Boolean).join(' '); }
     if (a.kids.length >= 5) { const ks = a.kids.map(k => R.M.agents.get(k)).filter(Boolean), d = ks.filter(k => k.st === 'done').length, w = ks.filter(k => R.LIVE.has(k.st)).length; if (d + w) return '하위 ' + ks.length + '개 중 ' + d + '개 완료' + (w ? ' · ' + w + '개 작업 중' : ''); }

@@ -54,8 +54,8 @@ dist/
 release/
 ui/dist/
 *.spec.bak
-packaging/agent_room.ico
-packaging/agent_room_256.png
+packaging/agen_talk.ico
+packaging/agen_talk_256.png
 packaging/version_info.txt
 
 # python

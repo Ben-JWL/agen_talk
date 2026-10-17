@@ -57,7 +57,7 @@ const Flow = (() => {
   // text lines of a node: 나 (root's first prompt) · 지시 · 후속 · 보고
   function linesOf(key, root) {
     const o = [], ms = R.msgs(key), fl = ms.filter(m => m.dir === 'follow'), up = ms.filter(m => m.dir === 'up').pop(), d = ms.find(isDown);
-    if (root) { const u = R.acts(key).find(x => x.k === 'user' && !/^\[상황실 톡 · /.test(x.x)); if (u) o.push({ k: 'me', lab: '나', txt: u.x, id: 'u|' + key }); }
+    if (root) { const u = R.acts(key).find(x => x.k === 'user' && !/^\[Agen Talk · /.test(x.x)); if (u) o.push({ k: 'me', lab: '나', txt: u.x, id: 'u|' + key }); }
     const mk = (k, lab, m, pre) => ({ k, lab, id: m.id, enc: m.encrypted, txt: m.encrypted ? '암호화된 ' + (m.dir === 'up' ? '보고' : '지시') + (m.role ? ' · ' + m.role : '') : (pre || '') + m.text });
     if (d) o.push(mk('d', '지시', d));
     if (fl.length === 1) o.push(mk('f:' + fl[0].id, '후속', fl[0]));

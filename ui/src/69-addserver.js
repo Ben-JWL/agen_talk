@@ -3,26 +3,26 @@
    and is never kept by the page. Hub strings go through textContent only. ===== */
 window.AddServer = (() => {
   const { h, svgUse, text, attr, cls, M } = R;
-  const TOKEN = (document.querySelector('meta[name=ar-token]') || {}).content || '';
+  const TOKEN = (document.querySelector('meta[name=at-token]') || {}).content || '';
   const RE = { host: /^[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?$/, user: /^[A-Za-z_][A-Za-z0-9._-]{0,31}$/ };
   const STEPS = ['연결', '서버 확인', '키 등록', '접속 확인', '채널 등록'], GL = { pending: 'g-idle', active: 'g-work', user: 'g-user', done: 'g-done', error: 'g-dead' };
   const PH = { connecting: 0, confirm_hostkey: 1, installing_key: 2, verifying: 3 };
   const SUB = '주소, 계정, 비밀번호를 적으면 이 PC 전용 키를 서버에 등록합니다.';
-  const PRIV_S = '비밀번호는 디스크에 저장되지 않고 상황실을 닫으면 사라집니다';
+  const PRIV_S = '비밀번호는 디스크에 저장되지 않고 에겐 톡을 닫으면 사라집니다';
   // kind -> [title, plain-language sub, failed step (index) or fn(job), actions]; actions: [label, 'p'rimary | 'b'utton | 'l'ink, fn name]
   const ERR = {
     wrong_password: ['비밀번호가 맞지 않았습니다', '서버에 아무것도 바뀌지 않았습니다. 비밀번호를 확인하고 다시 입력하세요.', () => 0, [['다시 입력', 'p', 'retry'], ['계정 수정', 'l', 'user'], ['닫기', 'b', 'close']]],
     unreachable: ['서버에 닿지 않습니다', '주소·포트·네트워크(VPN)를 확인하세요. 다른 SSH 프로그램에서 접속되는 주소와 같은지 비교해 보세요.', () => 0, [['주소 수정', 'p', 'host'], ['다시 입력', 'l', 'retry'], ['닫기', 'b', 'close']]],
     host_key_changed: ['서버의 신원이 바뀌었습니다 — 등록을 중단했습니다', '이 서버의 호스트 키가 이 PC에 기록된 것과 다릅니다. 서버를 다시 설치했거나 주소가 다른 장비로 옮겨진 경우라면 정상입니다. 그렇지 않다면 중간에 다른 장비가 끼어들었을 수 있으니, 서버 관리자에게 확인하기 전에는 비밀번호를 입력하지 마세요.', () => 1, [['관리자에게 확인했습니다 — 기록을 지우고 다시 시도', 'b', 'forget'], ['닫기', 'p', 'close']]],
-    no_python3: ['서버에 python3 가 없습니다', '키는 등록되어 접속은 되지만, 상황실이 이 서버의 에이전트를 읽으려면 python3 가 필요합니다. 서버 관리자에게 설치를 요청하거나, python 명령 이름이 다르면 그 이름을 적고 다시 시도하세요.', () => 3, [['python 명령 바꾸기', 'p', 'py'], ['닫기', 'b', 'close']]],
-    key_rejected: ['서버가 키 로그인을 허용하지 않습니다', '키는 서버에 등록됐지만 키로는 접속되지 않습니다. 서버가 키 로그인을 막고 있거나 ~/.ssh 폴더 권한이 맞지 않을 수 있습니다. 서버 관리자에게 확인하거나, 이 세션 동안만 비밀번호로 연결할 수 있습니다 (비밀번호는 디스크에 저장되지 않고, 상황실을 닫으면 사라집니다).', () => 3, [['이 세션 동안만 비밀번호로 연결', 'p', 'session'], ['닫기', 'b', 'close']]],
+    no_python3: ['서버에 python3 가 없습니다', '키는 등록되어 접속은 되지만, 에겐 톡이 이 서버의 에이전트를 읽으려면 python3 가 필요합니다. 서버 관리자에게 설치를 요청하거나, python 명령 이름이 다르면 그 이름을 적고 다시 시도하세요.', () => 3, [['python 명령 바꾸기', 'p', 'py'], ['닫기', 'b', 'close']]],
+    key_rejected: ['서버가 키 로그인을 허용하지 않습니다', '키는 서버에 등록됐지만 키로는 접속되지 않습니다. 서버가 키 로그인을 막고 있거나 ~/.ssh 폴더 권한이 맞지 않을 수 있습니다. 서버 관리자에게 확인하거나, 이 세션 동안만 비밀번호로 연결할 수 있습니다 (비밀번호는 디스크에 저장되지 않고, 에겐 톡을 닫으면 사라집니다).', () => 3, [['이 세션 동안만 비밀번호로 연결', 'p', 'session'], ['닫기', 'b', 'close']]],
     cancelled: ['취소했습니다', '등록을 취소했습니다. 서버에는 아무것도 바뀌지 않았습니다.', (p, j) => PH[j.phase || p.phase] || 0, [['다시 입력', 'p', 'retry'], ['닫기', 'b', 'close']]],
-    hub_lost: ['허브가 응답하지 않습니다', '허브와의 연결이 끊겨 등록이 어디까지 진행됐는지 알 수 없습니다. 상황실을 다시 시작한 뒤 다시 시도하세요. 이미 비밀번호를 보냈다면 서버에 키가 등록됐을 수 있습니다 — 서버의 ~/.ssh/authorized_keys 에서 \'agent-room@PC이름\' 줄로 확인하세요.', (p, j) => PH[j.phase || p.phase] || 0, [['다시 입력', 'p', 'retry'], ['닫기', 'b', 'close']]],
-    other: ['등록하지 못했습니다', '아래 로그를 확인하세요. 같은 내용이 반복되면 상황실 로그 폴더의 로그와 함께 알려 주세요.', (p, j) => PH[j.phase || p.phase] || 0, [['다시 입력', 'p', 'retry'], ['계정 수정', 'l', 'user'], ['닫기', 'b', 'close']]],
+    hub_lost: ['허브가 응답하지 않습니다', '허브와의 연결이 끊겨 등록이 어디까지 진행됐는지 알 수 없습니다. 에겐 톡을 다시 시작한 뒤 다시 시도하세요. 이미 비밀번호를 보냈다면 서버에 키가 등록됐을 수 있습니다 — 서버의 ~/.ssh/authorized_keys 에서 \'agen-talk@PC이름\' 줄로 확인하세요.', (p, j) => PH[j.phase || p.phase] || 0, [['다시 입력', 'p', 'retry'], ['닫기', 'b', 'close']]],
+    other: ['등록하지 못했습니다', '아래 로그를 확인하세요. 같은 내용이 반복되면 에겐 톡 로그 폴더의 로그와 함께 알려 주세요.', (p, j) => PH[j.phase || p.phase] || 0, [['다시 입력', 'p', 'retry'], ['계정 수정', 'l', 'user'], ['닫기', 'b', 'close']]],
   };
   let dlg, E = {}, job = null, timer = 0, flashT = 0, opener = null, fix = null, fixName = '';
 
-  const api = (path, body) => fetch(path, body === undefined ? { cache: 'no-store' } : { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-AR-Token': TOKEN }, body: JSON.stringify(body) })
+  const api = (path, body) => fetch(path, body === undefined ? { cache: 'no-store' } : { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-AT-Token': TOKEN }, body: JSON.stringify(body) })
     .then(async r => ({ status: r.status, body: await r.json().catch(() => null) }));   // relative paths: the page lives under /<secret>/
   const parse = c => { const s = String(c.ssh || ''), i = s.lastIndexOf('@'), a = c.args || [], p = a.indexOf('-p'); return { user: i < 0 ? '' : s.slice(0, i), host: s.slice(i + 1), port: Number.isInteger(c.port) ? c.port : p >= 0 && /^\d+$/.test(a[p + 1]) ? +a[p + 1] : 22 }; };   // the channel's own port wins; 22 only when it has none
   const flash = (msg, ms) => { clearTimeout(flashT); text(E.flash, msg); E.flash.hidden = !msg; if (msg && ms) flashT = setTimeout(() => flash(''), ms); };
@@ -49,8 +49,8 @@ window.AddServer = (() => {
       h('div.frow', ...fld('pw', '비밀번호', { type: 'password', maxlength: 256, autocomplete: 'off', placeholder: '서버 로그인 비밀번호' }, eye)),
       h('div.frow.pair', ...fld('port', '포트', { type: 'text', inputmode: 'numeric', pattern: '\\d*', maxlength: 5 }), ...fld('name', '이름 (선택)', { maxlength: 40 })),
       E.pyrow = h('div.frow', { hidden: true }, ...fld('py', 'python 명령', { maxlength: 64, value: 'python3' })),
-      E.sessrow = h('label.sess', { hidden: true }, E.sess = h('input', { type: 'checkbox' }), h('span', '이 세션 동안만 비밀번호로 연결 (키를 쓰지 않고, 상황실을 닫으면 사라집니다)')),
-      h('p.meta.priv', svgUse('i-lock'), E.priv = h('span', '비밀번호는 저장하지 않습니다. 이 PC 전용 키가 ', h('code.mono.nw', '%APPDATA%\\AgentRoom'), ' 에 만들어지고 서버의 authorized_keys 에 한 줄 추가됩니다 (agent-room@PC이름).')),
+      E.sessrow = h('label.sess', { hidden: true }, E.sess = h('input', { type: 'checkbox' }), h('span', '이 세션 동안만 비밀번호로 연결 (키를 쓰지 않고, 에겐 톡을 닫으면 사라집니다)')),
+      h('p.meta.priv', svgUse('i-lock'), E.priv = h('span', '비밀번호는 저장하지 않습니다. 이 PC 전용 키가 ', h('code.mono.nw', '%APPDATA%\\AgenTalk'), ' 에 만들어지고 서버의 authorized_keys 에 한 줄 추가됩니다 (agen-talk@PC이름).')),
       h('div.acts.rev', E.go = h('button.btn.primary', { type: 'submit' }, '연결'), h('button.btn', { type: 'button', on: { click: () => tryClose() } }, '취소')));   // DOM order 등록 시작 → 취소 → × , shown reversed
     E.sess.addEventListener('change', () => { E.priv.hidden = false; if (E.sess.checked) { E.privAlt = E.privAlt || h('span', PRIV_S); E.priv.hidden = true; E.priv.after(E.privAlt); E.privAlt.hidden = false; } else if (E.privAlt) { E.privAlt.hidden = true; E.priv.hidden = false; } });
     E.host.addEventListener('input', e => {   // paste user@host or host:2222
@@ -188,7 +188,7 @@ window.AddServer = (() => {
       const c = j.channel || {}, nm = String(c.name || p.rq.name || p.rq.host);
       R.U.lastUser = p.rq.user; R.save(); R.loadPresets();
       text(E.okTitle, '연결 완료'); text(E.okLine, sess ? nm + '에 이 세션 동안만 비밀번호로 연결합니다.' : nm + '에 키로 접속합니다. 비밀번호는 더 이상 필요 없습니다.');
-      text(E.okNote, sess ? '상황실을 닫으면 비밀번호가 사라지고, 다시 열면 비밀번호를 한 번 더 물어봅니다.' : (key ? '키: ' + key + ' (이 PC만) · ' : '') + "서버의 ~/.ssh/authorized_keys 에서 '" + String(j.comment || 'agent-room@PC이름') + "' 줄을 지우면 접속이 끊깁니다. " + (fix ? '이 채널은 곧 다시 연결됩니다.' : "채널 칩에 '" + nm + "'가 생겼습니다."));
+      text(E.okNote, sess ? '에겐 톡을 닫으면 비밀번호가 사라지고, 다시 열면 비밀번호를 한 번 더 물어봅니다.' : (key ? '키: ' + key + ' (이 PC만) · ' : '') + "서버의 ~/.ssh/authorized_keys 에서 '" + String(j.comment || 'agen-talk@PC이름') + "' 줄을 지우면 접속이 끊깁니다. " + (fix ? '이 채널은 곧 다시 연결됩니다.' : "채널 칩에 '" + nm + "'가 생겼습니다."));
       E.open.onclick = () => { dlg.close(); R.openChannel(c.id || ''); };
       pane('done', sub); E.open.focus(); return;
     }
@@ -209,9 +209,9 @@ window.AddServer = (() => {
     const p = job, k = ERR[j.kind] ? j.kind : 'other', [title, why, at, acts] = ERR[k], bad = Math.min(4, at(p, j) ?? 0), key = String(j.key || '');
     steps(STEPS.map((_, i) => i < bad ? ['done', ''] : i === bad ? ['error', ''] : P));
     const late = k === 'cancelled' && (PH[j.phase || p.phase] || 0) >= PH.installing_key;
-    const cm = String(j.comment || 'agent-room@PC이름');
+    const cm = String(j.comment || 'agen-talk@PC이름');
     text(E.band.querySelector('.t'), k === 'wrong_password' && !p.rq.hadPw ? '비밀번호를 입력하세요' : title);
-    text(E.band.querySelector('.why'), late ? "취소했지만 공개키는 이미 서버에 등록됐을 수 있습니다. 서버의 ~/.ssh/authorized_keys 에서 '" + cm + "' 줄을 지우면 접속이 끊깁니다." : j.kind === 'cancelled' && j.message ? j.message : why.replace("'agent-room@PC이름'", "'" + cm + "'"));
+    text(E.band.querySelector('.why'), late ? "취소했지만 공개키는 이미 서버에 등록됐을 수 있습니다. 서버의 ~/.ssh/authorized_keys 에서 '" + cm + "' 줄을 지우면 접속이 끊깁니다." : j.kind === 'cancelled' && j.message ? j.message : why.replace("'agen-talk@PC이름'", "'" + cm + "'"));
     text(E.band.querySelector('.msg'), k === 'cancelled' || !j.message ? '' : R.sshErr(j.message));
     E.band.dataset.kind = k; E.band.hidden = false; E.confirm.hidden = true; E.pacts.hidden = true;
     const kh = E.band.querySelector('.kh'); kh.hidden = k !== 'host_key_changed' || !j.known_hosts; text(kh, kh.hidden ? '' : 'known_hosts: ' + String(j.known_hosts).slice(0, 200));
@@ -226,7 +226,7 @@ window.AddServer = (() => {
   async function forget() {
     const rq = job.rq; flash('');
     let r; try { r = await api('api/servers/forget-hostkey', { host: rq.host, port: rq.port }); } catch { r = { status: 0 }; }
-    if (r.status === 200 && r.body && r.body.ok) back('pw'); else flash('기록을 지우지 못했습니다 — 상황실을 다시 시작한 뒤 다시 시도하세요');
+    if (r.status === 200 && r.body && r.body.ok) back('pw'); else flash('기록을 지우지 못했습니다 — 에겐 톡을 다시 시작한 뒤 다시 시도하세요');
   }
   return { open };
 })();

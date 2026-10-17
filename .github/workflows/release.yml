@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 env:
-  APP_FILE: AgentRoom   # exe / installer base name; keep in sync with NAME in packaging/agent_room.spec and AppDirName in installer.iss
+  APP_FILE: AgenTalk   # exe / installer base name; keep in sync with NAME in packaging/agen_talk.spec and AppDirName in installer.iss
 
 jobs:
   build:
@@ -34,9 +34,9 @@ jobs:
         run: |
           if [ "$REF_TYPE" = tag ]; then
             [[ "$REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.]+)?$ ]] || { echo "bad tag: $REF_NAME"; exit 1; }
-            echo "AR_VERSION=${REF_NAME#v}" >> "$GITHUB_ENV"
+            echo "AT_VERSION=${REF_NAME#v}" >> "$GITHUB_ENV"
           else
-            echo "AR_VERSION=0.0.0-dev.$RUN_NUMBER" >> "$GITHUB_ENV"
+            echo "AT_VERSION=0.0.0-dev.$RUN_NUMBER" >> "$GITHUB_ENV"
           fi
 
       - name: Install build tools
@@ -46,7 +46,7 @@ jobs:
         run: python tools/check_ui.py
 
       - name: Selftest (source)
-        run: python agent_room.py --selftest
+        run: python agen_talk.py --selftest
 
       - name: Hygiene scan
         run: python tools/scan.py
@@ -55,7 +55,7 @@ jobs:
         run: python packaging/make_icon.py
 
       - name: PyInstaller
-        run: pyinstaller packaging/agent_room.spec --noconfirm --distpath build/dist --workpath build/work
+        run: pyinstaller packaging/agen_talk.spec --noconfirm --distpath build/dist --workpath build/work
 
       # ---- Code signing: OFF by default. To enable, add repo secrets SIGN_CERT (base64 .pfx) and SIGN_PASS,
       # ---- uncomment, and do the same for the Setup.exe after the Inno step.
@@ -73,29 +73,29 @@ jobs:
       - name: Smoke test built exe (selftest)
         shell: pwsh
         env:
-          AR_VERSION: ${{ env.AR_VERSION }}
+          AT_VERSION: ${{ env.AT_VERSION }}
         run: |
           $exe = "build\dist\$env:APP_FILE\$env:APP_FILE.exe"
           $p = Start-Process $exe -ArgumentList "--selftest" -PassThru
           if (-not $p.WaitForExit(120000)) { $p.Kill(); throw "selftest timed out" }
-          Get-Content "$env:LOCALAPPDATA\AgentRoom\agent-room.log" -Tail 40 -ErrorAction SilentlyContinue
+          Get-Content "$env:LOCALAPPDATA\AgenTalk\agen-talk.log" -Tail 40 -ErrorAction SilentlyContinue
           if ($p.ExitCode -ne 0) { throw "selftest exit code $($p.ExitCode)" }
 
       - name: Smoke test built GUI
         shell: pwsh
         env:
-          AR_VERSION: ${{ env.AR_VERSION }}
+          AT_VERSION: ${{ env.AT_VERSION }}
         run: |
           $p = Start-Process "build\dist\$env:APP_FILE\$env:APP_FILE.exe" -ArgumentList "--smoke-gui" -PassThru
           if (-not $p.WaitForExit(60000)) { $p.Kill(); throw "GUI smoke timed out" }
-          Get-Content "$env:LOCALAPPDATA\AgentRoom\agent-room.log" -Tail 40 -ErrorAction SilentlyContinue
+          Get-Content "$env:LOCALAPPDATA\AgenTalk\agen-talk.log" -Tail 40 -ErrorAction SilentlyContinue
           if ($p.ExitCode -ne 0) { throw "GUI smoke exit code $($p.ExitCode)" }
 
       - name: Portable zip
         shell: bash
         run: |
           mkdir -p release
-          (cd build/dist && python -m zipfile -c "../../release/$APP_FILE-$AR_VERSION-portable.zip" "$APP_FILE")
+          (cd build/dist && python -m zipfile -c "../../release/$APP_FILE-$AT_VERSION-portable.zip" "$APP_FILE")
 
       - name: Inno Setup
         shell: pwsh
@@ -106,36 +106,36 @@ jobs:
             choco install innosetup -y --no-progress
             $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           }
-          & $iscc "/DAppVersion=$env:AR_VERSION" packaging\installer.iss
+          & $iscc "/DAppVersion=$env:AT_VERSION" packaging\installer.iss
           if ($LASTEXITCODE -ne 0) { throw "iscc failed" }
 
       - name: Smoke test installer (silent install, selftest, uninstall)
         shell: pwsh
         env:
-          AR_VERSION: ${{ env.AR_VERSION }}
+          AT_VERSION: ${{ env.AT_VERSION }}
         run: |
           $dir = "$env:RUNNER_TEMP\ar-install"
-          $setup = "release\$env:APP_FILE-Setup-$env:AR_VERSION.exe"
+          $setup = "release\$env:APP_FILE-Setup-$env:AT_VERSION.exe"
           $p = Start-Process $setup -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART","/CURRENTUSER","/DIR=$dir" -PassThru -Wait
           if ($p.ExitCode -ne 0) { throw "install exit code $($p.ExitCode)" }
           $app = Start-Process "$dir\$env:APP_FILE.exe" -ArgumentList "--selftest" -PassThru
           if (-not $app.WaitForExit(120000)) { $app.Kill(); throw "installed selftest timed out" }
-          Get-Content "$env:LOCALAPPDATA\AgentRoom\agent-room.log" -Tail 40 -ErrorAction SilentlyContinue
+          Get-Content "$env:LOCALAPPDATA\AgenTalk\agen-talk.log" -Tail 40 -ErrorAction SilentlyContinue
           if ($app.ExitCode -ne 0) { throw "installed selftest exit code $($app.ExitCode)" }
           $gui = Start-Process "$dir\$env:APP_FILE.exe" -ArgumentList "--smoke-gui" -PassThru
           if (-not $gui.WaitForExit(60000)) { $gui.Kill(); throw "installed GUI smoke timed out" }
-          Get-Content "$env:LOCALAPPDATA\AgentRoom\agent-room.log" -Tail 40 -ErrorAction SilentlyContinue
+          Get-Content "$env:LOCALAPPDATA\AgenTalk\agen-talk.log" -Tail 40 -ErrorAction SilentlyContinue
           if ($gui.ExitCode -ne 0) { throw "installed GUI smoke exit code $($gui.ExitCode)" }
           $u = Start-Process "$dir\unins000.exe" -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART" -PassThru -Wait
           if ($u.ExitCode -ne 0) { throw "uninstall exit code $($u.ExitCode)" }
 
-      # - name: Sign Setup.exe   (same signtool command as above, on release\$env:APP_FILE-Setup-$env:AR_VERSION.exe)
+      # - name: Sign Setup.exe   (same signtool command as above, on release\$env:APP_FILE-Setup-$env:AT_VERSION.exe)
 
       - name: SHA256SUMS
         shell: bash
         run: |
           cd release
-          sha256sum "$APP_FILE-Setup-$AR_VERSION.exe" "$APP_FILE-$AR_VERSION-portable.zip" > SHA256SUMS
+          sha256sum "$APP_FILE-Setup-$AT_VERSION.exe" "$APP_FILE-$AT_VERSION-portable.zip" > SHA256SUMS
           cat SHA256SUMS
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

@@ -52,14 +52,14 @@
     A(!document.querySelector('#views script, #views img'), 'no injected elements');
     A(R.isWaiting({ st: 'dead', age: 10 }) && !R.isWaiting({ st: 'dead', age: 9999 }) && R.isWaiting({ st: 'stall', age: 9999 }), 'isWaiting');
     // talk (TALK-UX §10): previews, msgs normalisation, spawn/down merge, done/up dedupe, fan-out, my talk matched by msg_id, 5-minute hold expiry
-    A(C.actText({ k: 'mdown', x: 'CDR' }) === '부모 지시: CDR' && C.actText({ k: 'mdown', x: '', enc: true }) === '부모 지시: 🔒 암호화됨' && C.actText({ k: 'mup', x: '끝' }) === '보고: 끝' && C.actText({ k: 'mtalk', x: '안녕' }) === '나 (상황실): 안녕' && C.actText({ k: 'mpeer', x: 'hi' }) === '다른 세션: hi', 'actText talk cases');
+    A(C.actText({ k: 'mdown', x: 'CDR' }) === '부모 지시: CDR' && C.actText({ k: 'mdown', x: '', enc: true }) === '부모 지시: 🔒 암호화됨' && C.actText({ k: 'mup', x: '끝' }) === '보고: 끝' && C.actText({ k: 'mtalk', x: '안녕' }) === '나 (에겐 톡): 안녕' && C.actText({ k: 'mpeer', x: 'hi' }) === '다른 세션: hi', 'actText talk cases');
     const mg = (id, dir, kind, from, to, ts, text, o) => Object.assign({ id: id.padStart(12, '0'), dir, kind, from, to, who: 'w', ts, text }, o || {});
-    const tr = { id: 'P', name: 'parent', talk: { ok: true }, msgs: [mg('b1', 'down', 'talk', '상황실:alice@PC', 'P', 1.7e9 + 20, 'hello', { msg_id: 'ar-1a2b3c4d' }), mg('zz', 'down', 'agent', 'x', 'P', 1.7e9, 'bad id is dropped')],
+    const tr = { id: 'P', name: 'parent', talk: { ok: true }, msgs: [mg('b1', 'down', 'talk', 'agen-talk:alice@PC', 'P', 1.7e9 + 20, 'hello', { msg_id: 'at-1a2b3c4d' }), mg('zz', 'down', 'agent', 'x', 'P', 1.7e9, 'bad id is dropped')],
       kids: [{ id: 'K1', name: 'kid', msgs: [mg('a1', 'down', 'agent', 'P', 'K1', 1.7e9 + 5, 'do it'), mg('a2', 'up', 'agent', 'K1', 'P', 1.7e9 + 9, 'done it'), mg('a3', 'follow', 'codex', 'P', 'K1', 1.7e9 + 7, '', { encrypted: true })] }, { id: 'K2', name: 'kid2', msgs: [mg('a4', 'down', 'agent', 'P', 'K2', 1.7e9 + 6, 'x'.repeat(4001))] }] };
     const tm = new Map(), tp = R.normalize('tt', tr, null, 0, tm, 0, 0), ks = [...tm.values()];
     A(tp.msgs.length === 1 && tp.msgs[0].kind === 'talk', 'normMsgs drops an entry with a bad id'); A(tm.get('tt:K2').msgs[0].truncated && tm.get('tt:K2').msgs[0].text.length === 4000, 'normMsgs re-caps at 4000');
     for (const k of ks) { R.M.agents.set(k.key, k); R.mergeMsgs(k); }
-    R.A.talks['tt:P'] = [{ cid: 'c1', text: 'hello', t: 1.7e12, st: 'held', hat: Date.now(), mid: 'ar-1a2b3c4d', why: '' }];
+    R.A.talks['tt:P'] = [{ cid: 'c1', text: 'hello', t: 1.7e12, st: 'held', hat: Date.now(), mid: 'at-1a2b3c4d', why: '' }];
     A(!Talk.lines({ st: 'user', why: '답변 끝남 · 완료', talk: {} }, 'x').some(x => x[1].includes('승인을 기다리는 중')), 'calm user session has no approval confirm line');
     const savedMsg = (id, text) => ({ id, dir: 'down', kind: 'agent', from: 'p', to: 'n', who: 'w', t: Date.now(), text, truncated: false, encrypted: false, msg_id: '' });
     R.A.mg['tt:save'] = new Map([['000000000001', savedMsg('000000000001', 'persist me')]]); R.saveMsgs(true);
@@ -81,18 +81,18 @@
     A(Room.noHistory([], []) && !Room.noHistory([], [{}]) && !Room.noHistory([{}], []) && !Room.noHistory([], [], [{ kind: 'tmsg' }]), 'activity note is suppressed by talk and agy message cards');
     A(Talk.sendGuard(Date.now() - 1000) && !Talk.sendGuard(Date.now() - 2100) && Talk.guardMessage === '잠시 뒤에 보낼 수 있습니다', 'same-room send guard announces its wait');
     A(Talk.guardWait(10000, 0, 10000) === 2000 && Talk.guardWait(10000, 15000, 10000) === 5000, 'button wait uses the send guard and server 429 deadline');
-    const L = [{ id: 's1', t: 1.7e12 + 5100, kind: 'spawn', x: 'kid' }, { id: 'd1', t: 1.7e12 + 9500, kind: 'done', x: 'kid: done it' }, { id: 'u1', t: 1.7e12 + 20000, kind: 'user', x: '[상황실 톡 · alice@PC · ar-1a2b3c4d]' }, { id: 'u2', t: 1.7e12 + 21000, kind: 'user', x: 'my terminal prompt' }];
+    const L = [{ id: 's1', t: 1.7e12 + 5100, kind: 'spawn', x: 'kid' }, { id: 'd1', t: 1.7e12 + 9500, kind: 'done', x: 'kid: done it' }, { id: 'u1', t: 1.7e12 + 20000, kind: 'user', x: '[Agen Talk · alice@PC · at-1a2b3c4d]' }, { id: 'u2', t: 1.7e12 + 21000, kind: 'user', x: 'my terminal prompt' }];
     Talk.collect('tt:P', tp, L);
     A(L.find(x => x.id === 's1').msg.text === 'do it', 'a spawn act absorbs the child down message');
     A(!L.some(x => x.kind === 'done') && L.some(x => x.kind === 'tmsg' && x.label === '보고' && x.chip === '하위' && x.spk === 'tt:K1'), 'the report card replaces the done act');
-    A(!L.some(x => x.id === 'u1') && L.some(x => x.id === 'u2'), 'a 상황실 envelope never becomes my terminal prompt');
+    A(!L.some(x => x.id === 'u1') && L.some(x => x.id === 'u2'), 'a 에겐 톡 envelope never becomes my terminal prompt');
     A(L.some(x => x.label === '후속 지시 → kid'), 'follow-up seen from the parent');
     A(L.filter(x => x.kind === 'talkme').length === 1 && R.A.talks['tt:P'][0].st === 'delivered', 'my talk matched by msg_id: one bubble, delivered');
     tp.msgs[0] = { ...tp.msgs[0], text: 'h', truncated: true, n: 9000 }; R.mergeMsgs(tp);
     A(R.msgs('tt:P').find(x => x.id === tp.msgs[0].id).text === 'hello', 'short truncated poll keeps the stored message text');
-    tp.msgs.push({ ...tp.msgs[0], id: '000000000099', msg_id: 'ar-ffffffff', text: 'unverified' }); R.mergeMsgs(tp);
+    tp.msgs.push({ ...tp.msgs[0], id: '000000000099', msg_id: 'at-ffffffff', text: 'unverified' }); R.mergeMsgs(tp);
     const L4 = []; Talk.collect('tt:P', tp, L4);
-    A(L4.some(x => x.kind === 'tmsg' && x.label === '톡' && x.nm === '상황실 톡' && x.chip === '확인 안 됨' && x.sr === '확인되지 않은 상황실 톡: ' && x.spk.startsWith('x:talk:')), 'unmatched talk is a labeled unverified peer card');
+    A(L4.some(x => x.kind === 'tmsg' && x.label === '톡' && x.nm === '에겐 톡' && x.chip === '확인 안 됨' && x.sr === '확인되지 않은 에겐 톡: ' && x.spk.startsWith('x:talk:')), 'unmatched talk is a labeled unverified peer card');
     const L2 = []; Talk.collect('tt:K1', tm.get('tt:K1'), L2);
     A(L2.some(x => x.label === '지시' && x.chip === '부모' && x.spk === 'tt:P') && L2.some(x => x.label === '보고 → w') && L2.some(x => x.m && x.m.encrypted), 'child room: parent instruction + follow-up + report');
     const fan = { id: 'F', name: 'fan', kids: [1, 2, 3, 4, 5].map(i => ({ id: 'f' + i, name: 'w' + i, msgs: [mg('c' + i, 'down', 'agent', 'F', 'f' + i, 1.7e9 + i, '같은 지시')] })) }, fm = new Map(), fp = R.normalize('tt', fan, null, 0, fm, 0, 0);

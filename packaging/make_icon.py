@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Writes agent_room.ico (16, 24, 32, 48, 256) and agent_room_256.png next to this file. Needs Pillow only.
+"""Writes agen_talk.ico (16, 24, 32, 48, 256) and agen_talk_256.png next to this file. Needs Pillow only.
 Mark: a dark tile with three chat rows; the top row is bright with a red badge (the room waiting for you).
 16 and 24 px are drawn on their own pixel grid, not resized."""
 import pathlib
@@ -45,9 +45,9 @@ def main():
     b = big()
     icons = {s: b.resize((s, s), Image.LANCZOS) for s in (256, 48, 32)}
     icons[24], icons[16] = px24(), px16()
-    icons[256].save(HERE / "agent_room.ico", sizes=[(s, s) for s in icons], append_images=[icons[s] for s in (48, 32, 24, 16)])
-    icons[256].save(HERE / "agent_room_256.png")
-    print("wrote agent_room.ico", sorted(icons), "and agent_room_256.png in", HERE)
+    icons[256].save(HERE / "agen_talk.ico", sizes=[(s, s) for s in icons], append_images=[icons[s] for s in (48, 32, 24, 16)])
+    icons[256].save(HERE / "agen_talk_256.png")
+    print("wrote agen_talk.ico", sorted(icons), "and agen_talk_256.png in", HERE)
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
 # Third-party notices
 
-Agent Room itself is MIT-licensed (see `LICENSE`). The installer and the portable
+Agen Talk itself is MIT-licensed (see `LICENSE`). The installer and the portable
 zip additionally contain or were produced with the components below. Each keeps
 its own license; this file is a summary, not a replacement for their texts.
 
@@ -9,7 +9,7 @@ its own license; this file is a summary, not a replacement for their texts.
 | UI snippets from [uiverse.io](https://uiverse.io) | `ui/src/*.css` (a few copied and adapted CSS effects) | MIT (uiverse.io content is published under the MIT license by its authors) |
 | [pywebview](https://github.com/r0x0r/pywebview) | bundled in the Windows app | BSD-3-Clause |
 | [Python](https://www.python.org/) runtime | bundled in the Windows app | PSF License Version 2 |
-| [PyInstaller](https://pyinstaller.org/) bootloader | `AgentRoom.exe` is built on it | GPL-2.0-or-later **with a special exception** that permits distributing the bootloader inside programs under any license; PyInstaller itself is not bundled |
+| [PyInstaller](https://pyinstaller.org/) bootloader | `AgenTalk.exe` is built on it | GPL-2.0-or-later **with a special exception** that permits distributing the bootloader inside programs under any license; PyInstaller itself is not bundled |
 | pywebview's Windows dependencies (pythonnet, proxy_tools, bottle, typing_extensions, ...) | bundled in the Windows app | MIT / BSD-style; license texts are in `_internal/licenses/` |
 | [paramiko](https://www.paramiko.org/) | bundled as replaceable Python source files in `_internal/paramiko` | LGPL-2.1-or-later; source is at https://github.com/paramiko/paramiko |
 | [cryptography](https://cryptography.io/) | bundled (paramiko dependency) | Apache-2.0 OR BSD-3-Clause |

@@ -119,7 +119,7 @@ const Room = (() => {
     }
     if (k === 'user' || k === 'say' || k === 'done') text(el.querySelector('.tx'), it.x);
     else if (k === 'tool') { const n = toolN(it.x), p = C.parseAct(it.x.replace(/ ×\d+$/, '')); text(el.querySelector('.tnm'), p.name || '도구'); text(el.querySelector('.to'), p.obj); attr(el.querySelector('.to'), 'title', p.obj); const c = el.querySelector('.tcnt'); text(c, n > 1 ? '×' + n : ''); c.hidden = n < 2; }
-    else if (k === 'ask') { const cmd = C.isCmd(it.x), head = cmd || /승인/.test(it.x) ? '승인 요청' : '질문'; C.setAsk(el.querySelector('.ask'), { head, body: it.x, mono: cmd, cmd: cmd ? it.x.slice(2) : head === '승인 요청' ? it.x : '', meta: '터미널 창에서 답하세요 · 상황실은 읽기 전용입니다', resolved: it.resolved }); }
+    else if (k === 'ask') { const cmd = C.isCmd(it.x), head = cmd || /승인/.test(it.x) ? '승인 요청' : '질문'; C.setAsk(el.querySelector('.ask'), { head, body: it.x, mono: cmd, cmd: cmd ? it.x.slice(2) : head === '승인 요청' ? it.x : '', meta: '터미널 창에서 답하세요 · 에겐 톡은 읽기 전용입니다', resolved: it.resolved }); }
     else if (k === 'spawn') patchSpawn(el, it);
     else if (k === 'tmsg' || k === 'talkme') Talk.patch(el, it, key, a);
     else if (k === 'tail') patchTail(el);

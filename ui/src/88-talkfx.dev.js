@@ -31,7 +31,7 @@
   // 2. Claude root, prompting; foreign talk + peer from a known room
   const MM = nd('cl-mmseqs', 'claude', 'mmseqs 결과 파싱', 'tool', 'Bash 실행 중 3m', 2, 190, { now: 'Bash: python parse.py --all results/', meta: 'pid 51022 · ~/work/msa · claude-opus-4', talk: TOK,
     acts: acts([900, 'user', 'results/ 의 mmseqs 결과를 전부 파싱해서 TSV 로 합쳐 줘.'], [880, 'say', '결과 파일 240개를 읽는 중입니다.'], [800, 'tool', 'Read: results/batch_01.m8'], [190, 'tool', 'Bash: python parse.py --all results/']),
-    msgs: [M_('down', 'talk', '상황실:alice@OTHER-PC', 'cl-mmseqs', '상황실', 500, '파싱 끝나면 요약 표도 같이 만들어 주세요.', { msg_id: 'ar-0badf00d', by: 'alice@OTHER-PC' }), M_('down', 'peer', 'cl-cdr', 'cl-mmseqs', '항체 CDR 라이브러리 정리', 300, 'CDR 쪽 결과 위치는 ~/work/cdr/results 야.')] });
+    msgs: [M_('down', 'talk', 'agen-talk:alice@OTHER-PC', 'cl-mmseqs', '에겐 톡', 500, '파싱 끝나면 요약 표도 같이 만들어 주세요.', { msg_id: 'at-0badf00d', by: 'alice@OTHER-PC' }), M_('down', 'peer', 'cl-cdr', 'cl-mmseqs', '항체 CDR 라이브러리 정리', 300, 'CDR 쪽 결과 위치는 ~/work/cdr/results 야.')] });
   // 3. bypass room with every delivery state seeded
   const BY = nd('cl-bypass', 'claude', '서열 정렬 점검', 'user', '답변 끝남 · 입력 기다림', 60, null, { meta: 'pid 51100 · ~/work/align · claude-opus-4 · --dangerously-skip-permissions', talk: { ok: true, hold: true, max: 4000 }, acts: acts([4000, 'user', '정렬 결과를 점검해 줘.'], [3900, 'say', '정렬 결과 12개를 점검했고 이상은 없습니다.']) });
   // 4. waiting for approval (confirm card adds the line)
@@ -41,7 +41,7 @@
   const CN = nd('cx-nodaemon', 'codex', '스키마 마이그레이션', 'idle', '답변 끝남', 500, null, { meta: 'pid 48310 · ~/work/db · gpt-5.1', talk: { ok: false, reason: 'no-daemon' }, acts: acts([900, 'user', '마이그레이션 스크립트를 검토해 줘.'], [800, 'say', '검토했고 두 곳을 고치면 됩니다.']) });
   // 6. the other disabled reasons
   const dis = (id, tool, name, reason, st = 'idle', extra = {}) => nd(id, tool, name, st, '답변 끝남', 300, null, { meta: 'pid 40000 · ~/work/x · ' + (tool === 'agy' ? '14 steps' : 'claude-opus-4'), talk: { ok: false, reason }, acts: acts([600, 'user', '확인해 줘.'], [500, 'say', '확인했습니다.']), ...extra });
-  const D = [dis('cl-nosock', 'claude', '구버전 세션', 'no-socket'), dis('cl-print', 'claude', 'claude -p 배치', 'not-interactive'), dis('cl-self', 'claude', '상황실을 띄운 세션', 'self'), dis('cl-ended', 'claude', '끝난 세션', 'ended', 'done')];
+  const D = [dis('cl-nosock', 'claude', '구버전 세션', 'no-socket'), dis('cl-print', 'claude', 'claude -p 배치', 'not-interactive'), dis('cl-self', 'claude', '에겐 톡을 띄운 세션', 'self'), dis('cl-ended', 'claude', '끝난 세션', 'ended', 'done')];
   const AG = dis('agy-main', 'agy', '문헌 요약 (agy)', 'unsupported', 'idle', { acts: [], last: '초록 12편 중 9편을 요약했습니다.' });
   AG.kids = [nd('agy-sub', 'agy', 'literature_scan', 'done', '완료', 200, null, { meta: '6 steps', msgs: [M_('down', 'agy', 'agy-main', 'agy-sub', '문헌 요약 (agy)', 900, '최근 2년 항체 CDR 설계 논문 12편의 초록을 읽고 핵심 주장을 한 줄씩 정리해 줘.'), M_('up', 'agy', 'agy-sub', 'agy-main', '문헌 요약 (agy)', 400, '12편 중 9편을 정리했습니다. 3편은 초록이 없어 건너뛰었습니다.')] })];
   // 7. 20+ node tree
@@ -70,7 +70,7 @@
   const aged = (list, dt) => list.map(n => ({ ...n, age: n.age == null ? null : n.age + dt, since: n.since == null ? null : n.since + dt, kids: aged(n.kids, dt) }));
   const find = (id, list = Object.values(ROOTS).flat()) => { for (const n of list) { if (n.id === id) return n; const r = find(id, n.kids); if (r) return r; } return null; };
   const fx = window.__fx = { down: false, nodes: ROOTS, talkOn: true, posts: [], find,
-    deliver(key) { const [ch, id] = [key.slice(0, key.indexOf(':')), key.slice(key.indexOf(':') + 1)], n = find(id), e = (R.A.talks[key] || []).slice().reverse().find(x => x.mid); if (!n || !e) return false; n.msgs = [...n.msgs, M_('down', 'talk', '상황실:alice@PC', id, '상황실', 1, e.text, { msg_id: e.mid, by: 'alice@PC' })]; return true; } };
+    deliver(key) { const [ch, id] = [key.slice(0, key.indexOf(':')), key.slice(key.indexOf(':') + 1)], n = find(id), e = (R.A.talks[key] || []).slice().reverse().find(x => x.mid); if (!n || !e) return false; n.msgs = [...n.msgs, M_('down', 'talk', 'agen-talk:alice@PC', id, '에겐 톡', 1, e.text, { msg_id: e.mid, by: 'alice@PC' })]; return true; } };
   const j = (code, body, wait = 0) => new Promise(r => setTimeout(() => r(new Response(JSON.stringify(body), { status: code, headers: { 'Content-Type': 'application/json' } })), wait));
   window.fetch = (url, opts) => {
     const u = new URL(String(url), location.href), p = u.pathname.replace(/^.*\/(api\/.*)$/, '$1');
@@ -81,7 +81,7 @@
     if (p === 'api/presets') return j(200, []);
     if (p === 'api/talk/setting') { const b = JSON.parse(opts.body); fx.talkOn = !!b.on; return j(200, { on: fx.talkOn }); }
     if (p === 'api/talk') {
-      const b = JSON.parse(opts.body); fx.posts.push(b); const t = b.text, mid = 'ar-' + Math.random().toString(16).slice(2, 10).padEnd(8, '0'), wait = /#slow/.test(t) ? 4000 : 150;
+      const b = JSON.parse(opts.body); fx.posts.push(b); const t = b.text, mid = 'at-' + Math.random().toString(16).slice(2, 10).padEnd(8, '0'), wait = /#slow/.test(t) ? 4000 : 150;
       if (/#429/.test(t)) return j(429, { retry_after: 12 }, wait);
       if (/#refused/.test(t)) return j(200, { outcome: 'refused', reason: 'inbound-off', client_id: b.client_id }, wait);
       if (/#dup/.test(t)) return j(200, { outcome: 'refused', reason: 'duplicate', client_id: b.client_id }, wait);
@@ -94,10 +94,10 @@
   };
   // every delivery state, seeded in the bypass room (memory only until something is sent)
   const T = (ago, text, o) => ({ cid: 'seed' + (++seq), text, t: Date.now() - ago * 1000, st: 'delivered', hat: null, mid: '', why: '', ...o });
-  R.A.talks['s232:cl-bypass'] = [T(900, '통계 요약이 끝나면 build/ 는 지우지 말고 두세요.', { mid: 'ar-00000001' }),
-    T(840, '정렬 결과 12개 중 오래된 3개는 archive/ 로 옮겨 주세요.', { st: 'held', hat: Date.now() - 400000, mid: 'ar-00000003' }),   // held 6+ min ago -> 만료됨
+  R.A.talks['s232:cl-bypass'] = [T(900, '통계 요약이 끝나면 build/ 는 지우지 말고 두세요.', { mid: 'at-00000001' }),
+    T(840, '정렬 결과 12개 중 오래된 3개는 archive/ 로 옮겨 주세요.', { st: 'held', hat: Date.now() - 400000, mid: 'at-00000003' }),   // held 6+ min ago -> 만료됨
     T(700, '다음 점검은 내일 아침에 이어서 해 주세요.', { st: 'refused', why: 'inbound-off' }), T(600, '결과 파일 이름 규칙을 README 에 적어 주세요.', { st: 'unreach' }), T(500, '점검이 끝나면 한 줄로 알려 주세요.', { st: 'unknown' }),
-    T(120, 'results/ 의 표를 CSV 로도 저장해 주세요.', { st: 'held', hat: Date.now() - 120000, mid: 'ar-00000002' }), T(10, '이 톡은 방금 보내는 중입니다.', { st: 'sending' })];
-  R.A.talks['s232:cl-mmseqs'] = [T(300, '파싱 끝나면 결과 TSV 경로를 알려 주세요.', { mid: 'ar-00000004' })];
-  MM.msgs.push(M_('down', 'talk', '상황실:alice@PC', 'cl-mmseqs', '상황실', 290, '파싱 끝나면 결과 TSV 경로를 알려 주세요.', { msg_id: 'ar-00000004', by: 'alice@PC' }));   // the transcript record that matches the local bubble: no second bubble
+    T(120, 'results/ 의 표를 CSV 로도 저장해 주세요.', { st: 'held', hat: Date.now() - 120000, mid: 'at-00000002' }), T(10, '이 톡은 방금 보내는 중입니다.', { st: 'sending' })];
+  R.A.talks['s232:cl-mmseqs'] = [T(300, '파싱 끝나면 결과 TSV 경로를 알려 주세요.', { mid: 'at-00000004' })];
+  MM.msgs.push(M_('down', 'talk', 'agen-talk:alice@PC', 'cl-mmseqs', '에겐 톡', 290, '파싱 끝나면 결과 TSV 경로를 알려 주세요.', { msg_id: 'at-00000004', by: 'alice@PC' }));   // the transcript record that matches the local bubble: no second bubble
 })();

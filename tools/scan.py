@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Public-repo hygiene scan: private IPs, home paths, emails, keys, tokens in every non-ignored file.
 Exit 1 on any hit. Site-specific words (company, host, user names) never live in this repo: pass them
-in the environment, e.g.  AR_SCAN_EXTRA='acme|myhost|myname' python tools/scan.py"""
+in the environment, e.g.  AT_SCAN_EXTRA='acme|myhost|myname' python tools/scan.py"""
 import os, pathlib, re, subprocess, sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -17,7 +17,7 @@ PATTERNS = {
     "token": re.compile(r"ghp_\w{20,}|gho_\w{20,}|github_pat_\w{20,}|AKIA[0-9A-Z]{16}|xox[baprs]-\w+|sk-[A-Za-z0-9]{20,}"),
 }
 BAD_NAMES = re.compile(r"(\.pem|\.pfx|\.p12|_ed25519|_rsa|authorized_keys|known_hosts|channels\.json|presets\.json)$")
-extra = os.environ.get("AR_SCAN_EXTRA")
+extra = os.environ.get("AT_SCAN_EXTRA")
 if extra:
     PATTERNS["site-specific"] = re.compile(extra, re.I)
 

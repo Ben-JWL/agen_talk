@@ -1,6 +1,6 @@
-# agen-talk
+# agen_talk
 
-**상황실 (Agent Room)** 은 내 PC와 SSH로 접속하는 리눅스 서버에서 돌아가는 AI 코딩 에이전트(Codex, Claude Code, Antigravity CLI)를
+**에겐 톡 (Agen Talk)** 은 내 PC와 SSH로 접속하는 리눅스 서버에서 돌아가는 AI 코딩 에이전트(Codex, Claude Code, Antigravity CLI)를
 한 화면에서 보는 데스크톱 대시보드입니다. 에이전트마다 채팅방이 하나씩 생기고, 무엇을 위한 작업인지, 지금 무엇을 하는지,
 정말 일하고 있는지 보여 줍니다. 나를 기다리는 방(승인·질문·멈춤)은 맨 위에 빨간 배지로 고정되고, Windows 알림으로도 알려 줍니다.
 
@@ -12,24 +12,24 @@ Windows 10/11, 관리자 권한 불필요, 서버에는 아무것도 설치하�
 
 ## 설치
 
-1. [Releases](../../releases) 페이지에서 `AgentRoom-Setup-<버전>.exe` 를 받습니다.
-2. 실행하면 사용자 계정에만 설치됩니다(`%LOCALAPPDATA%\Programs\AgentRoom`). 시작 메뉴에 등록되고 바탕 화면 바로 가기는 선택입니다.
+1. [Releases](../../releases) 페이지에서 `AgenTalk-Setup-<버전>.exe` 를 받습니다.
+2. 실행하면 사용자 계정에만 설치됩니다(`%LOCALAPPDATA%\Programs\AgenTalk`). 시작 메뉴에 등록되고 바탕 화면 바로 가기는 선택입니다.
 3. 같은 릴리스의 `SHA256SUMS` 와 비교해 확인할 수 있습니다(`certutil -hashfile <파일> SHA256`).
 
 **SmartScreen 안내.** 설치 파일은 아직 코드 서명이 없어서 "Windows의 PC 보호" 창이 뜹니다.
 **추가 정보** 를 누른 뒤 **실행** 을 누르세요.
 
 **회사 정책으로 막히면?** 서명 없는 앱을 막는 회사가 있습니다. 이 경우:
-- **포터블 zip**(`AgentRoom-<버전>-portable.zip`)을 아무 폴더에 풀고 `AgentRoom.exe` 를 실행하거나(이것도 막힐 수 있음),
+- **포터블 zip**(`AgenTalk-<버전>-portable.zip`)을 아무 폴더에 풀고 `AgenTalk.exe` 를 실행하거나(이것도 막힐 수 있음),
 - **소스로 실행**: Python 3.8 이상에서 `python app.py` (창을 쓰려면 `pip install pywebview`, 없으면 Chrome/Edge 앱 창으로 열립니다. SSH는 OpenSSH 대체 경로를 사용하며 콘솔에서 지문 확인과 비밀번호 입력을 요청할 수 있습니다).
 
 창은 Microsoft Edge WebView2 를 씁니다. 최신 Windows 10/11 에는 들어 있고, 없으면 Chrome/Edge 창으로 대신 열면서 설치 방법을 알려 줍니다.
 
 ## 처음 실행
 
-1. **상황실 (Agent Room)** 을 시작합니다. 내 PC는 이미 목록에 있습니다.
+1. **에겐 톡 (Agen Talk)** 을 시작합니다. 내 PC는 이미 목록에 있습니다.
 2. **서버 추가** 를 눌러 서버 주소, 계정, 비밀번호를 앱에 입력합니다. 처음 연결할 때는 화면에 표시된 서버 지문이
-   관리자가 알려 준 값과 같은지 확인한 뒤 승인하세요. 앱은 `%APPDATA%\AgentRoom` 아래에 전용 키와 신뢰 저장소
+   관리자가 알려 준 값과 같은지 확인한 뒤 승인하세요. 앱은 `%APPDATA%\AgenTalk` 아래에 전용 키와 신뢰 저장소
    (`id_ed25519`, `known_hosts`)를 만들고 서버에 키를 등록하므로 이후에는 비밀번호를 다시 묻지 않습니다. 서버가 키 로그인을
    허용하지 않으면 세션 비밀번호 옵션을 선택할 수 있으며, 비밀번호는 앱을 닫을 때까지만 메모리에 남습니다.
 3. 회사나 팀에서 서버 목록(`presets.json`)을 공유받았다면 **서버 목록 가져오기** 로 그 파일을 고르세요.
@@ -74,7 +74,7 @@ Codex는 지시 본문을 암호화하므로 해당 카드는 잠금(🔒)으로
 
 ## 서버 쪽은 어떻게 동작하나요
 
-서버에는 아무것도 설치하지 않습니다. 앱이 서버마다 `ssh` 를 열어, 수집기(`agent_room.py`, 파이썬 표준 라이브러리만 사용)를
+서버에는 아무것도 설치하지 않습니다. 앱이 서버마다 `ssh` 를 열어, 수집기(`agen_talk.py`, 파이썬 표준 라이브러리만 사용)를
 SSH 세션으로 흘려 보내 `python3 -c` 로 실행합니다. 수집기는 에이전트 상태를 읽기 전용으로 읽고(`/proc`, `~/.codex`, `~/.claude`, `~/.gemini`)
 요청마다 JSON 한 줄을 돌려줍니다. 창을 닫거나 연결이 끊기면 세션이 끝나면서 수집기도 함께 끝납니다.
 서버 조건: `python3` 3.8 이상.
@@ -87,30 +87,30 @@ SSH 세션으로 흘려 보내 `python3 -c` 로 실행합니다. 수집기는 �
 - 변경 요청에는 실행마다 다른 토큰과 일치하는 `Host`가 필요합니다. `Origin` 헤더를 보내면 값이 일치해야 하며, 톡 엔드포인트에는 필수입니다.
 - 내가 추가한 서버로 가는 내 SSH 연결 말고는 데이터가 PC 밖으로 나가지 않습니다. 원격 측정, 계정, 클라우드 서비스가 없습니다.
 - 서버 비밀번호는 앱에서 입력하며 등록 작업 동안에만 메모리에 보관합니다. 세션 비밀번호 옵션도 앱을 닫으면 사라집니다. 처음 보는 서버 지문은 확인을 받아야 하며, 기록된 지문이 바뀌면 연결을 거부합니다.
-- 전용 키와 서버 지문은 `%APPDATA%\AgentRoom\id_ed25519`, `%APPDATA%\AgentRoom\known_hosts` 에 있습니다.
-- 설정은 `%APPDATA%\AgentRoom\channels.json`, 로그는 `%LOCALAPPDATA%\AgentRoom\agent-room.log` 에 있습니다.
+- 전용 키와 서버 지문은 `%APPDATA%\AgenTalk\id_ed25519`, `%APPDATA%\AgenTalk\known_hosts` 에 있습니다.
+- 설정은 `%APPDATA%\AgenTalk\channels.json`, 로그는 `%LOCALAPPDATA%\AgenTalk\agen-talk.log` 에 있습니다.
 
 ## 제거
 
-설정 > 앱 > 설치된 앱 > 상황실 (Agent Room) > 제거. `%APPDATA%\AgentRoom` 의 서버 목록과 설정은 남습니다(완전히 지우려면 그 폴더를 직접 삭제).
+설정 > 앱 > 설치된 앱 > 에겐 톡 (Agen Talk) > 제거. `%APPDATA%\AgenTalk` 의 서버 목록과 설정은 남습니다(완전히 지우려면 그 폴더를 직접 삭제).
 
-접속 권한까지 없애려면 각 서버의 `~/.ssh/authorized_keys` 에서 `agent-room@<내 PC 이름>` 으로 끝나는 줄을 지운 뒤,
-내 PC의 `%APPDATA%\AgentRoom\id_ed25519`, `id_ed25519.pub`, `known_hosts` 파일을 지웁니다.
+접속 권한까지 없애려면 각 서버의 `~/.ssh/authorized_keys` 에서 `agen-talk@<내 PC 이름>` 으로 끝나는 줄을 지운 뒤,
+내 PC의 `%APPDATA%\AgenTalk\id_ed25519`, `id_ed25519.pub`, `known_hosts` 파일을 지웁니다.
 
 ## 소스에서 빌드
 
 ```
 python ui/build.py                      # ui/src -> ui/dist/index.html (UI를 고쳤으면 index.html 에 덮어쓰기)
-python agent_room.py --selftest
+python agen_talk.py --selftest
 python app.py --selftest
 pip install -r packaging/requirements-build.txt
 python packaging/make_icon.py
-pyinstaller packaging/agent_room.spec --noconfirm --distpath build/dist --workpath build/work
+pyinstaller packaging/agen_talk.spec --noconfirm --distpath build/dist --workpath build/work
 iscc /DAppVersion=0.1.0 packaging\installer.iss     # Inno Setup 6 필요
 ```
 
 릴리스는 `v*` 태그를 푸시하면 `.github/workflows/release.yml` 이 빌드합니다. 구조는 `docs/ARCHITECTURE.md` 를 보세요.
-앱 없이 대시보드만: `python agent_room.py hub` (Python 3.8 이상, 표준 라이브러리만).
+앱 없이 대시보드만: `python agen_talk.py hub` (Python 3.8 이상, 표준 라이브러리만).
 
 ## 라이선스
 

@@ -142,7 +142,7 @@
         h('div.sheet-h', h('span#sheet-t', '단축키'), h('button.ibtn', { type: 'button', 'aria-label': '닫기', on: { click: close } }, C.kbd('Esc'))),
         h('div.sheet-b', { tabindex: '-1' }, table().map(r => h('div.sheet-r', h('span', r.label), h('span.k', r.keys.map(k => C.kbd(k))))),
           h('div.sheet-g', '톡'), TALK_KEYS.map(([k, l]) => h('div.sheet-r', h('span', l), h('span.k', C.kbd(k)))),
-          h('div.sheet-leg', '■ 터미널에서 입력한 것 · □ 상황실에서 보낸 톡')));
+          h('div.sheet-leg', '■ 터미널에서 입력한 것 · □ 에겐 톡에서 보낸 메시지')));
       scrim.append(dlg); layer.append(scrim); dlg.querySelector('.sheet-b').focus({ preventScroll: true });   // the scroller holds focus so arrows/PageDown scroll
     }
     addEventListener('keydown', trap, true);

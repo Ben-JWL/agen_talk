@@ -1,13 +1,13 @@
 # -*- mode: python ; coding: utf-8 -*-
 # PyInstaller spec: onedir, windowed. Run from the repo root:
-#   AR_VERSION=1.2.3 pyinstaller packaging/agent_room.spec --noconfirm --distpath build/dist --workpath build/work
-# Result: build/dist/AgentRoom/AgentRoom.exe (+ _internal/ with agent_room.py and index.html as data).
+#   AT_VERSION=1.2.3 pyinstaller packaging/agen_talk.spec --noconfirm --distpath build/dist --workpath build/work
+# Result: build/dist/AgenTalk/AgenTalk.exe (+ _internal/ with agen_talk.py and index.html as data).
 import os, re, sys
 from pathlib import Path
 
 ROOT = Path(SPECPATH).resolve().parent          # SPECPATH = this file's directory
-VERSION = os.environ.get("AR_VERSION", "0.0.0")  # from the git tag, set by the release workflow
-NAME = "AgentRoom"
+VERSION = os.environ.get("AT_VERSION", "0.0.0")  # from the git tag, set by the release workflow
+NAME = "AgenTalk"
 
 # Windows "Details" tab: numeric 4-tuple from the leading digits of the version.
 nums = [int(x) for x in re.match(r"\d+(?:\.\d+)*", VERSION).group(0).split(".")][:4] if re.match(r"\d", VERSION) else [0]
@@ -19,18 +19,18 @@ if sys.platform == "win32":
         "VSVersionInfo(\n"
         "  ffi=FixedFileInfo(filevers=%r, prodvers=%r, mask=0x3f, flags=0x0, OS=0x40004, fileType=0x1, subtype=0x0, date=(0, 0)),\n"
         "  kids=[StringFileInfo([StringTable('040904B0', [\n"
-        "    StringStruct('CompanyName', 'Agent Room contributors'),\n"
-        "    StringStruct('FileDescription', 'Agent Room'),\n"
+        "    StringStruct('CompanyName', 'Agen Talk contributors'),\n"
+        "    StringStruct('FileDescription', 'Agen Talk'),\n"
         "    StringStruct('FileVersion', %r),\n"
-        "    StringStruct('InternalName', 'AgentRoom'),\n"
-        "    StringStruct('OriginalFilename', 'AgentRoom.exe'),\n"
-        "    StringStruct('ProductName', 'Agent Room'),\n"
+        "    StringStruct('InternalName', 'AgenTalk'),\n"
+        "    StringStruct('OriginalFilename', 'AgenTalk.exe'),\n"
+        "    StringStruct('ProductName', 'Agen Talk'),\n"
         "    StringStruct('ProductVersion', %r)])]),\n"
         "  VarFileInfo([VarStruct('Translation', [1033, 1200])])])\n"
         % (tuple(nums), tuple(nums), VERSION, VERSION), encoding="utf-8")
 
-icon = ROOT / "packaging" / "agent_room.ico"   # made by packaging/make_icon.py
-datas = [(str(ROOT / "agent_room.py"), "."), (str(ROOT / "index.html"), ".")]   # SRC_PATH / index.html live in sys._MEIPASS
+icon = ROOT / "packaging" / "agen_talk.ico"   # made by packaging/make_icon.py
+datas = [(str(ROOT / "agen_talk.py"), "."), (str(ROOT / "index.html"), ".")]   # SRC_PATH / index.html live in sys._MEIPASS
 version_path = ROOT / "build" / "VERSION"
 version_path.parent.mkdir(parents=True, exist_ok=True)
 version_path.write_text(VERSION + "\n", encoding="utf-8")
@@ -60,7 +60,7 @@ a = Analysis(
     pathex=[str(ROOT)],
     binaries=wv_bins,
     datas=datas + wv_datas,
-    hiddenimports=["agent_room", "paramiko", "cryptography", "bcrypt", "nacl", "nacl.bindings"] + wv_hidden,   # in-app SSH is imported lazily by agent_room
+    hiddenimports=["agen_talk", "paramiko", "cryptography", "bcrypt", "nacl", "nacl.bindings"] + wv_hidden,   # in-app SSH is imported lazily by agen_talk
     module_collection_mode={"paramiko": "py"},
     excludes=["tkinter", "_tkinter", "turtle", "turtledemo", "idlelib", "lib2to3", "unittest", "test", "tests",
               "setuptools", "pip", "pydoc_data", "xmlrpc", "PIL", "numpy"],

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""상황실 (Agent Room) desktop app: the hub in-process + a native window (pywebview / WebView2).
+"""에겐 톡 (Agen Talk) desktop app: the hub in-process + a native window (pywebview / WebView2).
 
   app.py                 start (or raise the running instance)
-  app.py --selftest      agent_room selftest + bundled files + lifecycle with a mocked window; exit 0 = ok
+  app.py --selftest      agen_talk selftest + bundled files + lifecycle with a mocked window; exit 0 = ok
   app.py keyinstall ...  internal: the password console the hub opens (the frozen exe is its own keyinstall)
 
 Windowed PyInstaller build (--onedir): there is no console, so stdout/stderr go to the rotating log in the state folder.
@@ -19,9 +19,9 @@ except Exception:   # ImportError, or a GUI backend that fails to load
 
 if not getattr(sys, "frozen", False):   # python -I does not put the script folder on sys.path
     sys.path.insert(0, str(Path(__file__).resolve().parent))
-import agent_room as ar
+import agen_talk as ar
 
-TITLE = "상황실"
+TITLE = "에겐 톡"
 IDLE_SECONDS = 120   # fallback mode: no /api request for this long -> exit
 
 
@@ -51,10 +51,10 @@ def setup_logging(state):
     """Rotating log (~1 MB x 3); stdout/stderr (None in a windowed exe) are sent to it too."""
     state = Path(state)
     state.mkdir(parents=True, exist_ok=True)
-    log = logging.getLogger("agent-room")
+    log = logging.getLogger("agen-talk")
     log.setLevel(logging.INFO)
     if not log.handlers:
-        h = logging.handlers.RotatingFileHandler(str(state / "agent-room.log"), maxBytes=1 << 20, backupCount=3, encoding="utf-8")
+        h = logging.handlers.RotatingFileHandler(str(state / "agen-talk.log"), maxBytes=1 << 20, backupCount=3, encoding="utf-8")
         h.setFormatter(logging.Formatter("%(asctime)s %(message)s"))
         log.addHandler(h)
 
@@ -84,7 +84,7 @@ def other_instance(state, timeout=2):
         d = json.load(urlopen(base + "channels", timeout=timeout))
         if not isinstance(d, list):
             return False
-        r = urlopen(Request(base + "show", data=b"{}", method="POST", headers={"Content-Type": "application/json", "X-AR-Token": run["token"]}), timeout=timeout)
+        r = urlopen(Request(base + "show", data=b"{}", method="POST", headers={"Content-Type": "application/json", "X-AT-Token": run["token"]}), timeout=timeout)
         return r.status == 200 and json.load(r).get("ok") is True   # only OUR hub (secret + token) answers like this: a stranger on a reused port does not
     except (OSError, ValueError, AttributeError):
         return False   # stale run.json: the old process is gone (or the port now belongs to someone else)
@@ -136,7 +136,7 @@ def save_geometry(cfg, win):
     try:
         write_private(Path(cfg) / "ui.json", {"width": int(win.width), "height": int(win.height), "x": int(win.x), "y": int(win.y)})
     except Exception as e:   # a closing window may already be gone
-        logging.getLogger("agent-room").info("ui.json not saved: %s", e)
+        logging.getLogger("agen-talk").info("ui.json not saved: %s", e)
 
 
 def notice_once(state, name, text):
@@ -160,7 +160,7 @@ def acquire_single(state):
     Returns a handle to keep alive, or None when another instance holds it."""
     if ar.WIN:
         import ctypes
-        h = ctypes.windll.kernel32.CreateMutexW(None, False, "Local\\AgentRoomHub")
+        h = ctypes.windll.kernel32.CreateMutexW(None, False, "Local\\AgenTalkHub")
         if ctypes.windll.kernel32.GetLastError() == 183:   # ERROR_ALREADY_EXISTS
             return None
         return h
@@ -220,7 +220,7 @@ class Api:
             try:
                 w.set_title(t)
             except Exception as e:
-                logging.getLogger("agent-room").info("title: %s", e)
+                logging.getLogger("agen-talk").info("title: %s", e)
 
 
 # ---------- the app ----------
@@ -283,7 +283,7 @@ def run_app(cfg_dir=None, state_dir=None, port=None, win_mod="default", idle=IDL
                 if smoke_gui:
                     def page_loaded(*args):
                         try:
-                            smoke["ok"] = getattr(wv, "renderer", None) == "edgechromium" and win.evaluate_js("document.readyState === 'complete' && /^(\\(\\d+\\) )?상황실/.test(document.title) && typeof window.pywebview.api.title === 'function'") is True
+                            smoke["ok"] = getattr(wv, "renderer", None) == "edgechromium" and win.evaluate_js("document.readyState === 'complete' && /^(\\(\\d+\\) )?에겐 톡/.test(document.title) && typeof window.pywebview.api.title === 'function'") is True
                         except Exception as e:
                             log.error("GUI smoke JavaScript failed: %s", e)
                         win.destroy()
@@ -305,7 +305,7 @@ def run_app(cfg_dir=None, state_dir=None, port=None, win_mod="default", idle=IDL
             code = 0 if shown and smoke["ok"] else 1
         elif not shown:
             ar.APP_INFO["mode"] = "browser"
-            notice_once(state, "webview2-notice", "상황실 창을 띄우려면 Microsoft Edge WebView2 런타임이 필요합니다. 지금은 브라우저 창으로 열었습니다 "
+            notice_once(state, "webview2-notice", "에겐 톡 창을 띄우려면 Microsoft Edge WebView2 런타임이 필요합니다. 지금은 브라우저 창으로 열었습니다 "
                         "(https://developer.microsoft.com/microsoft-edge/webview2 에서 설치).")
             ar.open_app(url, quiet=True)   # quiet: the printed URL would put the secret in the log
             while time.time() - ar.HUB_SEEN[0] < idle:   # the browser window cannot tell us it closed: no /api request = gone
@@ -328,14 +328,14 @@ def run_app(cfg_dir=None, state_dir=None, port=None, win_mod="default", idle=IDL
 def selftest():
     import tempfile
     ar.selftest()   # the collector/hub selftest (prints ok)
-    for n in ("agent_room.py", "index.html"):
+    for n in ("agen_talk.py", "index.html"):
         assert ar.bundle(n).is_file(), "missing bundled file: " + n
-    assert b"__AR_TOKEN__" in ar.bundle("index.html").read_bytes()
+    assert b"__AT_TOKEN__" in ar.bundle("index.html").read_bytes()
     if getattr(sys, "frozen", False):   # the installed app must carry paramiko (in-app SSH); a source run without it uses OpenSSH
         assert ar.pm_mod() is not None, "paramiko is not bundled"
         if ar.WIN:
             assert webview is not None, "pywebview is not bundled"
-        want = os.environ.get("AR_VERSION")
+        want = os.environ.get("AT_VERSION")
         assert not want or ar.APP_VERSION == want, (ar.APP_VERSION, want)
     if getattr(sys, "frozen", False) and not ar.WIN:
         print("app lifecycle selftest skipped on non-Windows frozen build")
@@ -394,7 +394,7 @@ def mock_lifecycle(cfg, state, poke=None):
             run = read_json(Path(state) / "run.json")
             out["run"] = dict(run)
             out["second_launch_showed"] = other_instance(state) and _wait(lambda: win.shown >= 1)
-            out["page_ok"] = b"ar-token" in urlopen(out["url"], timeout=3).read()
+            out["page_ok"] = b"at-token" in urlopen(out["url"], timeout=3).read()
             if poke:
                 poke(out, run)
     code = run_app(cfg, state, port=0, win_mod=FakeWV())

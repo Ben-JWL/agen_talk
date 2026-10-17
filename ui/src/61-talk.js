@@ -11,7 +11,7 @@ const Talk = (() => {
     'no-daemon': 'codex가 --no-daemon으로 실행 중이라 받을 수 없습니다 · 다음부터 --no-daemon 없이 실행하면 여기서 보낼 수 있습니다',
     'no-socket': '이 claude 세션에는 메시지 소켓이 없습니다 — claude 2.1.300 이상에서 받을 수 있습니다',
     'not-interactive': '대화형 세션이 아니라 받을 수 없습니다 (claude -p)',
-    self: '상황실을 띄운 세션에는 보내지 않습니다',
+    self: '에겐 톡을 띄운 세션에는 보내지 않습니다',
     ended: '세션이 끝나서 보낼 수 없습니다',
     windows: '이 PC의 세션에는 아직 보낼 수 없습니다 — 서버 세션만 지원합니다',
   };
@@ -73,7 +73,7 @@ const Talk = (() => {
     for (const m of R.msgs(key)) {
       const id = 'm|' + m.id, at = get(m.ch + ':' + m.from);
       if (m.kind === 'talk') {
-        if (!mids.has(m.msg_id)) L.push({ id, t: m.t, kind: 'tmsg', m, spk: 'x:talk:' + m.id, nm: '상황실 톡', chip: '확인 안 됨', label: '톡', sr: '확인되지 않은 상황실 톡: ' });
+        if (!mids.has(m.msg_id)) L.push({ id, t: m.t, kind: 'tmsg', m, spk: 'x:talk:' + m.id, nm: '에겐 톡', chip: '확인 안 됨', label: '톡', sr: '확인되지 않은 에겐 톡: ' });
       }
       else if (m.kind === 'peer') L.push({ id, t: m.t, kind: 'tmsg', m, spk: at ? at.key : 'x:' + m.from, nm: peerName(m, at), chip: '다른 세션', label: '톡', sp: at, sr: '다른 세션의 톡: ' });
       else if (m.dir === 'up') { const par = a && get(a.parent), to = m.who || (par ? par.name : '부모'); L.push({ id, t: m.t, kind: 'tmsg', m, spk: key, label: '보고 → ' + to, sr: (a ? a.name : '') + '의 보고: ' }); }
@@ -93,7 +93,7 @@ const Talk = (() => {
       g.sort((p, q) => p.t - q.t); g.slice(1).forEach(x => drop.add(x));
       L.push({ id: 'fan|' + g[0].id, t: g[0].t + 1, kind: 'fan', x: '하위 ' + g.length + '개 시작 · 같은 지시 ' + (g.length - 1) + '개' });
     }
-    for (const x of L) if ((x.kind === 'done' && upKids.some(p => x.x.startsWith(p))) || (x.kind === 'user' && /^\[상황실 톡 · /.test(x.x))) drop.add(x);   // the report card replaces the done line; an envelope must never paint as my terminal prompt
+    for (const x of L) if ((x.kind === 'done' && upKids.some(p => x.x.startsWith(p))) || (x.kind === 'user' && /^\[Agen Talk · /.test(x.x))) drop.add(x);   // the report card replaces the done line; an envelope must never paint as my terminal prompt
     for (let i = L.length - 1; i >= 0; i--) if (drop.has(L[i])) L.splice(i, 1);
   }
 
@@ -111,7 +111,7 @@ const Talk = (() => {
     const k = it.kind, who = el.querySelector('.who');
     let label, body, enc = false, role = '', sr, foot = '', stt = null, kid = null, n = 12;
     if (k === 'talkme') {
-      const e = it.e; label = '상황실에서 보냄'; body = e.text; sr = '나 (상황실): ';
+      const e = it.e; label = '에겐 톡에서 보냄'; body = e.text; sr = '나 (에겐 톡): ';
       stt = stateOf(e);
     } else {
       const m = it.m; enc = m.encrypted; label = it.label; role = enc ? m.role : ''; n = 3; kid = it.kid; sr = it.sr;
@@ -208,7 +208,7 @@ const Talk = (() => {
       A.draft[key] = A.draft[key] || e.text; if (key === shown && !ta.value) { ta.value = e.text; grow(); }
       until[key] = Date.now() + Math.min(600, Math.max(1, Math.ceil(+b.retry_after) || 5)) * 1000; say('잠시 뒤에 보낼 수 있습니다');
     } else {
-      if (/^ar-[0-9a-f]{8}$/.test(String(b.msg_id))) e.mid = b.msg_id;
+      if (/^at-[0-9a-f]{8}$/.test(String(b.msg_id))) e.mid = b.msg_id;
       if (o === 'accepted') e.st = 'delivered';
       else if (o === 'held') { e.st = 'held'; e.hat = Date.now(); }
       else if (o === 'refused' || (r && !o && r.status >= 400)) { e.st = 'refused'; e.why = String((b.reason === 'codex-error' && b.detail ? 'codex-error: ' + b.detail : b.reason) || b.error || 'HTTP ' + r.status).slice(0, 200); }   // codex-error carries the message in detail

@@ -32,9 +32,9 @@ jobs:
         with:
           python-version: ${{ matrix.py }}
       - name: Compile
-        run: python -m py_compile agent_room.py app.py ui/build.py tools/scan.py tools/check_ui.py packaging/make_icon.py
-      - name: agent_room selftest
-        run: python agent_room.py --selftest
+        run: python -m py_compile agen_talk.py app.py ui/build.py tools/scan.py tools/check_ui.py packaging/make_icon.py
+      - name: agen_talk selftest
+        run: python agen_talk.py --selftest
       - name: app selftest (pywebview absent is fine)
         if: matrix.py == '3.12'
         run: python app.py --selftest
