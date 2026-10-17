@@ -1,0 +1,164 @@
+name: Release
+
+# Tag vX.Y.Z -> build, test, publish a GitHub Release. Manual run -> build + test only (artifacts, no release).
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  APP_FILE: AgentRoom   # exe / installer base name; keep in sync with NAME in packaging/agent_room.spec and AppDirName in installer.iss
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Version
+        shell: bash
+        env:
+          REF_NAME: ${{ github.ref_name }}
+          REF_TYPE: ${{ github.ref_type }}
+          RUN_NUMBER: ${{ github.run_number }}
+        run: |
+          if [ "$REF_TYPE" = tag ]; then
+            [[ "$REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.]+)?$ ]] || { echo "bad tag: $REF_NAME"; exit 1; }
+            echo "AR_VERSION=${REF_NAME#v}" >> "$GITHUB_ENV"
+          else
+            echo "AR_VERSION=0.0.0-dev.$RUN_NUMBER" >> "$GITHUB_ENV"
+          fi
+
+      - name: Install build tools
+        run: python -m pip install -r packaging/requirements-build.txt
+
+      - name: UI build equals committed index.html
+        run: python tools/check_ui.py
+
+      - name: Selftest (source)
+        run: python agent_room.py --selftest
+
+      - name: Hygiene scan
+        run: python tools/scan.py
+
+      - name: Icon
+        run: python packaging/make_icon.py
+
+      - name: PyInstaller
+        run: pyinstaller packaging/agent_room.spec --noconfirm --distpath build/dist --workpath build/work
+
+      # ---- Code signing: OFF by default. To enable, add repo secrets SIGN_CERT (base64 .pfx) and SIGN_PASS,
+      # ---- uncomment, and do the same for the Setup.exe after the Inno step.
+      # - name: Sign exe
+      #   shell: pwsh
+      #   env:
+      #     SIGN_CERT: ${{ secrets.SIGN_CERT }}
+      #     SIGN_PASS: ${{ secrets.SIGN_PASS }}
+      #   run: |
+      #     [IO.File]::WriteAllBytes("$env:RUNNER_TEMP\sign.pfx", [Convert]::FromBase64String($env:SIGN_CERT))
+      #     $st = (Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" | Sort-Object FullName | Select-Object -Last 1).FullName
+      #     & $st sign /f "$env:RUNNER_TEMP\sign.pfx" /p $env:SIGN_PASS /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 "build\dist\$env:APP_FILE\$env:APP_FILE.exe"
+      #     Remove-Item "$env:RUNNER_TEMP\sign.pfx"
+
+      - name: Smoke test built exe (selftest)
+        shell: pwsh
+        env:
+          AR_VERSION: ${{ env.AR_VERSION }}
+        run: |
+          $exe = "build\dist\$env:APP_FILE\$env:APP_FILE.exe"
+          $p = Start-Process $exe -ArgumentList "--selftest" -PassThru
+          if (-not $p.WaitForExit(120000)) { $p.Kill(); throw "selftest timed out" }
+          Get-Content "$env:LOCALAPPDATA\AgentRoom\agent-room.log" -Tail 40 -ErrorAction SilentlyContinue
+          if ($p.ExitCode -ne 0) { throw "selftest exit code $($p.ExitCode)" }
+
+      - name: Smoke test built GUI
+        shell: pwsh
+        env:
+          AR_VERSION: ${{ env.AR_VERSION }}
+        run: |
+          $p = Start-Process "build\dist\$env:APP_FILE\$env:APP_FILE.exe" -ArgumentList "--smoke-gui" -PassThru
+          if (-not $p.WaitForExit(60000)) { $p.Kill(); throw "GUI smoke timed out" }
+          Get-Content "$env:LOCALAPPDATA\AgentRoom\agent-room.log" -Tail 40 -ErrorAction SilentlyContinue
+          if ($p.ExitCode -ne 0) { throw "GUI smoke exit code $($p.ExitCode)" }
+
+      - name: Portable zip
+        shell: bash
+        run: |
+          mkdir -p release
+          (cd build/dist && python -m zipfile -c "../../release/$APP_FILE-$AR_VERSION-portable.zip" "$APP_FILE")
+
+      - name: Inno Setup
+        shell: pwsh
+        run: |
+          $iscc = (Get-Command iscc -ErrorAction SilentlyContinue).Source
+          if (-not $iscc) { $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" }
+          if (-not (Test-Path $iscc)) {
+            choco install innosetup -y --no-progress
+            $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          }
+          & $iscc "/DAppVersion=$env:AR_VERSION" packaging\installer.iss
+          if ($LASTEXITCODE -ne 0) { throw "iscc failed" }
+
+      - name: Smoke test installer (silent install, selftest, uninstall)
+        shell: pwsh
+        env:
+          AR_VERSION: ${{ env.AR_VERSION }}
+        run: |
+          $dir = "$env:RUNNER_TEMP\ar-install"
+          $setup = "release\$env:APP_FILE-Setup-$env:AR_VERSION.exe"
+          $p = Start-Process $setup -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART","/CURRENTUSER","/DIR=$dir" -PassThru -Wait
+          if ($p.ExitCode -ne 0) { throw "install exit code $($p.ExitCode)" }
+          $app = Start-Process "$dir\$env:APP_FILE.exe" -ArgumentList "--selftest" -PassThru
+          if (-not $app.WaitForExit(120000)) { $app.Kill(); throw "installed selftest timed out" }
+          Get-Content "$env:LOCALAPPDATA\AgentRoom\agent-room.log" -Tail 40 -ErrorAction SilentlyContinue
+          if ($app.ExitCode -ne 0) { throw "installed selftest exit code $($app.ExitCode)" }
+          $gui = Start-Process "$dir\$env:APP_FILE.exe" -ArgumentList "--smoke-gui" -PassThru
+          if (-not $gui.WaitForExit(60000)) { $gui.Kill(); throw "installed GUI smoke timed out" }
+          Get-Content "$env:LOCALAPPDATA\AgentRoom\agent-room.log" -Tail 40 -ErrorAction SilentlyContinue
+          if ($gui.ExitCode -ne 0) { throw "installed GUI smoke exit code $($gui.ExitCode)" }
+          $u = Start-Process "$dir\unins000.exe" -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART" -PassThru -Wait
+          if ($u.ExitCode -ne 0) { throw "uninstall exit code $($u.ExitCode)" }
+
+      # - name: Sign Setup.exe   (same signtool command as above, on release\$env:APP_FILE-Setup-$env:AR_VERSION.exe)
+
+      - name: SHA256SUMS
+        shell: bash
+        run: |
+          cd release
+          sha256sum "$APP_FILE-Setup-$AR_VERSION.exe" "$APP_FILE-$AR_VERSION-portable.zip" > SHA256SUMS
+          cat SHA256SUMS
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release
+          path: release/*
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    if: github.event_name == 'push' && github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # only this job can create the release
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release
+          path: release
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          pre=""; case "$REF_NAME" in *-*) pre="--prerelease";; esac
+          gh release create "$REF_NAME" release/* --repo "$GITHUB_REPOSITORY" --verify-tag --generate-notes --title "$REF_NAME" $pre

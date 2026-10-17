@@ -1,0 +1,54 @@
+/* ===== 36-settings.css — 설정 as inset groups (CHAT-UX §8): surface groups, 44 px rows, hairlines inset 16 px. ===== */
+.slayout { display: grid; grid-template-columns: 160px minmax(0, 720px); gap: 24px; align-items: start; }
+.snav { position: sticky; top: 0; display: flex; flex-direction: column; gap: 2px; padding: 4px; background: none; border: 0; }
+.snav a { display: block; padding: 6px 12px; border-radius: var(--r-btn); color: var(--ink-2); text-decoration: none; font-weight: 500; }
+.snav a:hover { background: var(--surface); color: var(--ink); }
+.snav a[aria-current=true] { background: var(--surface); color: var(--ink); }
+.smain { display: flex; flex-direction: column; gap: 24px; background: none; border: 0; }
+.ssec { scroll-margin-top: 8px; }
+.ssec > h2, .shd > h2 { margin: 0 0 8px 4px; }
+.ssec > .srow, .ssec > .snote { background: var(--surface); }
+.ssec > .srow:first-of-type { border-top-left-radius: var(--r-card); border-top-right-radius: var(--r-card); }
+.ssec > .srow:last-child, .ssec > .clist { border-bottom-left-radius: var(--r-card); border-bottom-right-radius: var(--r-card); }
+.srow { display: flex; align-items: center; justify-content: space-between; gap: 24px; min-height: 44px; padding: 8px 16px; position: relative; }
+.srow + .srow::before, .srow + .snote + .srow::before { content: ""; position: absolute; left: 16px; right: 0; top: 0; border-top: 1px solid var(--line); }
+.slab label, .slab > span { font-weight: 500; }
+.snote { font-size: 12.5px; line-height: 18px; color: var(--ink-2); margin-top: 2px; }
+.snote.warn { color: var(--warn); margin: 0; padding: 4px 16px 8px; font-weight: 500; }
+.sctl { flex: none; display: flex; align-items: center; min-height: 32px; }
+.seg button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.shd { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.shd + p.meta { margin: 0 0 8px 4px; }
+.ssec > p.meta { margin: 0 0 8px 4px; }
+.clist { background: var(--surface); border-radius: var(--r-card); padding: 0 16px; }
+.crow { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; gap: 12px; align-items: start; padding: 12px 0; }
+.crow + .crow { border-top: 1px solid var(--line); }
+.clist > .meta { padding: 12px 0; }
+.cic { width: 20px; height: 20px; fill: var(--ink-2); margin-top: 1px; }
+.cname b { font-weight: 600; }
+.cname b a { color: inherit; text-decoration: none; } .cname b a:hover { text-decoration: underline; }
+.verdict { font-size: 13px; line-height: 20px; color: var(--ink-2); overflow-wrap: anywhere; }
+.verdict.error { color: var(--ink); font-weight: 600; }
+.cwarn { color: var(--warn); font-weight: 500; overflow-wrap: anywhere; }
+.cacts { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.klist { display: grid; grid-template-columns: 1fr; padding: 0 16px; background: var(--surface); border-radius: var(--r-card); }
+.krow { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 40px; border-bottom: 1px solid var(--line); }
+.krow:last-child { border-bottom: 0; }
+.kk { display: inline-flex; gap: 4px; flex: none; }
+.sver { margin: 0 0 0 4px; }
+@media (max-width: 1000px) { .slayout { grid-template-columns: minmax(0, 1fr); gap: 12px; } .snav { position: static; flex-direction: row; flex-wrap: wrap; } }
+@media (max-width: 700px) { .srow { flex-direction: column; align-items: flex-start; gap: 8px; } }
+.cbp { display: grid; gap: 4px; margin-top: 6px; padding: 10px 12px; border-radius: var(--r-btn); background: var(--canvas); }
+.cbp .bpt { font-weight: 600; }
+.cbp p { margin: 0; }
+.plist { background: var(--surface); border-radius: var(--r-card); padding: 0 16px; margin-top: 12px; }
+.plist .crow + .crow { border-top: 1px solid var(--line); }
+.plist .crow { align-items: center; }
+.plist[hidden] { display: none; }
+.plist .cname { display: flex; gap: 6px; min-width: 0; align-items: baseline; }
+.plist .cname b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.plist .cname .tgt { flex: none; }
+.shbtns { display: inline-flex; gap: 8px; align-items: center; }
+.ssec > .implin { margin: 0 0 8px 4px; }
+.sel-text { user-select: text; }
+.snote.mono { font-family: var(--mono); font-size: 12px; word-break: break-all; }

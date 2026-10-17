@@ -1,0 +1,30 @@
+/* ===== 33-board.css — 보드: unboxed lanes on the canvas, cards = list rows (CHAT-UX §8). ===== */
+.bsel { display: inline-flex; align-items: center; gap: 10px; }
+.btool { display: flex; align-items: center; gap: 12px; justify-content: space-between; padding-bottom: 16px; }
+.board { display: grid; grid-template-columns: repeat(4, minmax(260px, 1fr)); gap: 16px; align-items: start; overflow-x: auto; padding-bottom: 8px; }
+@media (min-width: 1001px) { .board.dc { grid-template-columns: repeat(3, minmax(0, 1fr)) 200px; } }
+.lane { min-width: 0; }
+.lh { display: flex; align-items: baseline; gap: 8px; margin: 0 2px 8px; font-size: 12.5px; line-height: 18px; font-weight: 600; color: var(--ink-2); }
+.lane[data-lane=wait] .lt { color: var(--signal-text); }
+.lane .tog { width: 100%; }
+.lane .none { margin: 4px 2px; color: var(--ink-2); font-size: 12.5px; }
+.lbody { display: flex; flex-direction: column; gap: 8px; }
+.lane .tog + .none, .lane .tog + .lbody { margin-top: 8px; }
+.room.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-card); --disc: var(--surface); overflow: hidden; }
+.room.card::after { display: none; }
+.room.card:hover { background: var(--surface); }
+.room.card[aria-current=true] { border-color: var(--ink); }
+.room.card .rrow { padding: 10px 12px; min-height: 56px; }
+.room.card.waiting { background: var(--surface); }
+.room.card .ask { margin: 0 12px 10px; }
+.room.card .rt { font-size: 14px; }
+.room.card.k-done { opacity: .75; }
+.room.card:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.cfoot { padding: 0 12px 10px; }
+.room.card.gone { opacity: .6; }
+.bcard.k-sum { margin: -4px 0 0 12px; cursor: default; border-style: dashed; display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; background: var(--surface); border: 1px dashed var(--line); border-radius: var(--r-card); }
+.bcard.k-sum .name { font-weight: 600; }
+.bcard.k-sum .l3 { color: var(--ink-2); font-size: 12.5px; }
+.bcard.k-sum .act { align-self: flex-start; }
+@media (max-width: 1000px) { .board, .board.dc { overflow: visible; grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 640px) { .board, .board.dc { grid-template-columns: minmax(0, 1fr); } }

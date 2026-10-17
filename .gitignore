@@ -1,0 +1,39 @@
+# local config and secrets: never commit
+channels.json
+presets.json
+*.pem
+*.key
+*_ed25519
+*_ed25519.pub
+authorized_keys
+known_hosts
+*.pfx
+*.p12
+.env
+
+# logs, state
+*.log
+run.json
+ui.json
+
+# build outputs
+build/
+dist/
+release/
+ui/dist/
+*.spec.bak
+packaging/agent_room.ico
+packaging/agent_room_256.png
+packaging/version_info.txt
+
+# python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

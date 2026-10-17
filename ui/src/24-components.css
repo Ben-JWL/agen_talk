@@ -1,0 +1,93 @@
+/* ===== 24-components.css — shared primitives (CHAT-UX §2, §8). Tokens only; no hover lift; focus ring = ink. ===== */
+.gl { width: 16px; height: 16px; flex: none; color: var(--ink-2); vertical-align: -3px; }
+.gl.st-work, .gl.st-tool, .gl.st-child { color: var(--st-work); }
+.gl.st-user { color: var(--st-user); }
+.gl.st-stall { color: var(--st-stall); }
+.gl.st-dead { color: var(--st-dead); }
+.gl.lg { width: 24px; height: 24px; }
+.gl.off { width: 12px; height: 12px; margin-right: 4px; vertical-align: -1px; }
+
+/* avatar: 36 px tile, tool shape, status glyph on a disc (the real status shape — like an online dot) */
+.av { position: relative; display: grid; place-items: center; flex: none; width: 36px; height: 36px; border-radius: var(--r-av); background: var(--tile); color: var(--ink); }
+.av .amk { width: 20px; height: 20px; fill: currentColor; }
+.av .avs { position: absolute; right: -4px; bottom: -4px; display: grid; place-items: center; width: 16px; height: 16px; border-radius: 50%; background: var(--disc, var(--surface)); }
+.av .avs .gl { width: 12px; height: 12px; vertical-align: 0; }
+.av.kid { box-shadow: 0 0 0 2px var(--line); }
+
+.tool { display: inline-flex; align-items: center; gap: 5px; height: 20px; padding: 0 6px; border-radius: var(--r-chip); background: var(--canvas); color: var(--ink-2); font-size: 12px; line-height: 20px; font-weight: 500; white-space: nowrap; flex: none; }
+.tool svg { width: 9px; height: 9px; fill: currentColor; }
+.tool .model { font-family: var(--mono); font-size: 11px; }
+.chip { display: inline-flex; align-items: center; gap: 4px; padding: 0 6px; border-radius: var(--r-chip); background: var(--canvas); color: var(--ink-2); font-size: 12px; line-height: 18px; white-space: nowrap; }
+.kbd, kbd { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; padding: 0 5px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 5px; background: var(--surface); color: var(--ink-2); font: 500 11.5px/18px var(--font); }
+.ibtn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 28px; min-width: 28px; padding: 0 6px; border: 0; border-radius: var(--r-btn); background: none; color: var(--ink-2); }
+.ibtn:hover { background: var(--canvas); color: var(--ink); }
+.ibtn svg { width: 16px; height: 16px; fill: currentColor; }
+.ibtn[aria-pressed=true] { background: var(--canvas); color: var(--ink); }
+
+/* buttons: primary = ink fill; never red */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 32px; padding: 0 14px; border: 1px solid var(--line); border-radius: var(--r-btn); background: var(--surface); color: var(--ink); font-weight: 500; white-space: nowrap; transition: background var(--dur-fast); }
+.btn:hover { background: var(--canvas); }
+.btn:disabled { opacity: .5; cursor: default; }
+.btn.primary { background: var(--ink); border-color: var(--ink); color: var(--on-ink); }
+.btn.primary:hover { background: color-mix(in srgb, var(--ink) 86%, var(--surface)); }
+.btn.sm { height: 28px; padding: 0 10px; font-size: 12.5px; }
+.btn.link { border: 0; background: none; color: var(--ink); padding: 0 4px; height: auto; font-weight: 500; }
+.btn.link:hover { text-decoration: underline; background: none; }
+.btn svg { width: 14px; height: 14px; fill: currentColor; }
+.lnk { border: 0; background: none; padding: 0; color: var(--ink-2); font: inherit; font-size: 12.5px; cursor: pointer; text-decoration: none; }
+.lnk:hover { color: var(--ink); text-decoration: underline; }
+
+/* inputs: canvas fill, no border */
+.field { display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 10px; border-radius: var(--r-btn); background: var(--canvas); color: var(--ink-2); }
+.field input { flex: 1; min-width: 0; border: 0; background: none; color: var(--ink); outline: none; }
+.field input::placeholder { color: var(--ink-2); }
+.field:focus-within { outline: 2px solid var(--ink); outline-offset: 2px; }
+.field .ic { width: 16px; height: 16px; fill: currentColor; flex: none; }
+.field:focus-within kbd { display: none; }
+select.sel { height: 32px; padding: 0 28px 0 10px; border: 0; border-radius: var(--r-btn); background-color: var(--canvas); appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='gray'%3E%3Cpath d='M4 6l4 4 4-4'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 8px center; background-size: 14px; }
+.seg { display: inline-flex; padding: 3px; border-radius: var(--r-btn); background: var(--canvas); gap: 2px; }
+.seg button { height: 28px; padding: 0 12px; border: 1px solid transparent; border-radius: 6px; background: none; color: var(--ink-2); font-weight: 500; }
+.seg button[aria-pressed=true], .seg button[aria-checked=true] { background: var(--surface); color: var(--ink); border-color: var(--line); }
+.sw { position: relative; display: inline-block; width: 40px; height: 22px; flex: none; }
+.sw input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; z-index: 1; }
+.sw i { position: absolute; inset: 0; border-radius: 999px; background: var(--line); transition: background var(--dur-mid); }
+.sw i::before { content: ""; position: absolute; width: 16px; height: 16px; left: 3px; top: 3px; border-radius: 50%; background: var(--surface); box-shadow: 0 1px 2px rgba(0,0,0,.25); transition: transform var(--dur-mid); }
+.sw input:checked + i { background: var(--ink); }
+.sw input:checked + i::before { transform: translateX(18px); background: var(--on-ink); }
+.sw input:focus-visible + i { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+/* ask bubble: the one saturated thing on screen. Signal border + header, tinted fill. */
+.ask { display: flex; flex-direction: column; gap: 2px; padding: 8px 12px; border: 1.5px solid var(--signal); border-radius: var(--r-card); border-top-left-radius: 4px; background: var(--tint-signal); min-width: 0; text-align: left; }
+.ask .ah { font-size: 12.5px; line-height: 18px; font-weight: 600; color: var(--signal-text); }
+.ask .ab { font-size: 14px; line-height: 21px; color: var(--ink); }
+.ask .abt.mono { font-family: var(--mono); font-size: 13px; line-height: 19px; word-break: normal; overflow-wrap: anywhere; }
+.ask .abw { color: var(--ink-2); }
+.ask .abw { white-space: nowrap; margin-left: 4px; }
+.ask .abw:empty { display: none; }
+.ask .abw.zero { color: var(--warn); font-weight: 600; }
+.ask .am { font-size: 12.5px; line-height: 18px; color: var(--ink-2); }
+.ask .af { display: flex; justify-content: flex-end; margin-top: 4px; }
+.ask .abx { white-space: normal; }
+.ask .ah { display: block; }
+.ask .ab { display: block; }
+/* compact (list row, board card): header is a 600 prefix on the body's first line, body clamps to 2 lines, 명령 복사 sits right of line 1 */
+.ask.compact { position: relative; padding: 5px 10px; }
+.ask.compact .abx { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.ask.compact.hascmd .abx { padding-right: 84px; }
+.ask.compact .ah, .ask.compact .ab { display: inline; font-size: 13px; line-height: 19px; }
+.ask.compact .ah { margin-right: 4px; }
+.ask.compact .ah::after { content: " ·"; }
+.ask.compact .abt.mono { font-size: 12.5px; }
+.ask.compact .af { position: absolute; top: 5px; right: 8px; margin: 0; }
+.ask.compact .af .btn { height: 24px; padding: 0 8px; }
+.ask.resolved { background: var(--surface); border: 1px solid var(--line); }
+.ask.resolved .ah { color: var(--ink-2); }
+
+/* process row */
+.prow { display: grid; grid-template-columns: 16px minmax(0, 1fr) auto auto; column-gap: 8px; align-items: center; min-height: 28px; padding: 2px 0; }
+.prow .cmd { font-family: var(--mono); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.prow .el, .prow .cpu { text-align: right; color: var(--ink-2); white-space: nowrap; font-size: 12.5px; }
+.prow .cpu.zero { color: var(--warn); font-weight: 600; }
+.prow .bg { color: var(--ink-2); font-size: 11.5px; margin-left: 6px; }
+.inset { font-family: var(--mono); font-size: 12.5px; line-height: 18px; background: var(--canvas); border-radius: var(--r-btn); padding: 10px 12px; white-space: pre-wrap; word-break: break-all; margin: 6px 0; }
+.mono { word-break: break-all; }

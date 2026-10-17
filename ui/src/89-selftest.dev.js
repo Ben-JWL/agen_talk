@@ -1,0 +1,111 @@
+/* ===== 89-selftest.dev.js — dev build only (".dev." files are skipped by build.py without --dev) (build.py --dev). Runs with ?selftest=1; dev/check.sh greps the console. ===== */
+(() => {
+  if (!new URLSearchParams(location.search).has('selftest')) return;
+  const A = (c, m) => { if (!c) throw new Error('selftest: ' + m); };
+  try {
+    const hasRule = (sel, prop, value) => [...document.styleSheets].some(s => { try { return [...s.cssRules].some(r => r.selectorText === sel && r.style.getPropertyValue(prop).trim() === value); } catch { return false; } });
+    A(R.esc('<b a="1">&\'') === '&lt;b a=&quot;1&quot;&gt;&amp;&#39;', 'esc');
+    A(R.fmtDur(5) === '5초' && R.fmtDur(300) === '5분' && R.fmtDur(4320) === '1시간 12분' && R.fmtDur(90000) === '1일 1시간', 'fmtDur ' + R.fmtDur(4320));
+    A(R.fmtLive(3) === '방금' && R.fmtLive(720) === '12분째' && R.fmtAgo(130) === '2분 전', 'fmtLive/ago');
+    A(R.koDur('25m 동안 신호 없음 · Bash 실행 중') === '25분 동안 신호 없음 · Bash 실행 중' && R.koDur('Bash 실행 중 3m') === 'Bash 실행 중 3분' && R.koDur('exec 실행 중 1h12m') === 'exec 실행 중 1시간 12분' && R.koDur('gpt-5.1 2h 30s') === 'gpt-5.1 2시간 30초', 'koDur');
+    const cyc = new Map(); R.normalize('c', { id: 'A', kids: [{ id: 'B', kids: [{ id: 'A' }] }] }, null, 0, cyc, 0);
+    A(cyc.size === 2 && cyc.get('c:B').kids.length === 0, 'duplicate id dropped (no parent cycle)');
+    // keyed: reuse, reorder without re-creation, focus kept
+    const box = R.h('div'); document.body.append(box);
+    const mk = items => R.keyed(box, items, { key: x => x.k, create: x => R.h('button', { tabindex: '0' }, x.k), update: (el, x) => R.text(el, x.k + x.v) });
+    mk([{ k: 'a', v: 1 }, { k: 'b', v: 1 }, { k: 'c', v: 1 }]);
+    const a = box.children[0], b = box.children[1]; b.focus();
+    mk([{ k: 'c', v: 2 }, { k: 'a', v: 2 }]);
+    A(box.children[0].textContent === 'c2' && box.children[1] === a && a.textContent === 'a2', 'keyed reorder reuses nodes');
+    A(b.isConnected && b.classList.contains('gone'), 'focused row kept as .gone');
+    b.blur(); mk([{ k: 'a', v: 3 }]); A(!b.isConnected && box.children.length === 1, 'gone row removed once unfocused');
+    // focus survives a poll that moves another row across the focused one
+    const bx = R.h('div'); document.body.append(bx);
+    const mk2 = items => R.keyed(bx, items, { key: x => x, create: x => R.h('button', { tabindex: '0' }, x), update: () => 0 });
+    mk2(['a', 'b', 'c']); bx.children[1].focus(); const fb = bx.children[1];
+    mk2(['b', 'c', 'a']); A(document.activeElement === fb, 'keyed keeps focus when a row moves past the focused one');
+    mk2(['a', 'b', 'c']); A(document.activeElement === fb, 'keyed keeps focus (2)'); bx.remove();
+    A(R.fmtDur(720) === '12분', 'dur'); 
+    box.remove();
+    // nowDoing parsing
+    const nd = C.nowDoing({ st: 'tool', now: 'Bash: pytest -q', why: '', kids: [] });
+    A(nd.verb === 'Bash 실행 중' && nd.obj === 'pytest -q', 'nowDoing bash');
+    A(C.nowDoing({ st: 'user', why: '명령 승인 대기', kids: [] }).reason === true, 'nowDoing reason');
+    A(C.meta({ meta: 'pid 48213 · ~/work/cdr · gpt-5.1 · worker' }).model === 'gpt-5.1', 'meta parse');
+    // chat: acts normalisation, ring dedupe + merged-tool growth, parseAct, badge, ask component
+    const out = new Map(), ag = R.normalize('t', { id: 'Z', acts: [{ t: 1.7e9, k: 'tool', x: 'Bash: ls ×2' }, { t: 1.7e9 + 1, k: 'nope', x: 'x' }, { t: 'x', k: 'say', x: 'y' }, { t: 1.7e9 + 2, k: 'say', x: 'a\nb' }] }, null, 0, out, 0);
+    A(ag.acts.length === 2 && ag.acts[0].t === 1.7e12 && ag.acts[1].x === 'a', 'acts normalised (unknown kind / bad t dropped, first line only)');
+    R.accumulate(ag, 1); R.accumulate(ag, 2);
+    A(R.acts('t:Z').length === 2, 'ring dedupes identical acts across polls');
+    ag.acts = [{ t: 1.7e12, k: 'tool', x: 'Bash: ls ×3' }]; R.accumulate(ag, 3);
+    A(R.acts('t:Z').length === 2 && R.acts('t:Z')[0].x === 'Bash: ls ×3', 'merged tool x grows in place');
+    const ag2 = R.normalize('t', { id: 'Y', acts: [{ t: 1.7e9, k: 'tool', x: 'Bash: ls ×2' }] }, null, 0, new Map(), 0); R.accumulate(ag2, 1);
+    ag2.acts = [{ t: 1.7e12, k: 'tool', x: 'Bash: ls ×3' }]; R.accumulate(ag2, 2);
+    A(R.acts('t:Y').length === 1 && R.acts('t:Y')[0].x.endsWith('×3'), 'a folded ×N run keeps its first t; x updates in place');
+    const ag3 = R.normalize('t', { id: 'X', acts: [{ t: 1.7e9, k: 'say', x: 'a' }, { t: 1.7e9, k: 'say', x: 'a' }] }, null, 0, new Map(), 0); R.accumulate(ag3, 1); R.accumulate(ag3, 2);
+    A(R.acts('t:X').length === 2, 'two identical server acts stay two entries (one-to-one match), and do not multiply');
+    const pa = C.parseAct('Read: a.py'); A(pa.name === 'Read' && pa.obj === 'a.py' && C.parseAct('$ make').name === 'Bash' && C.parseAct('hello').prose, 'parseAct');
+    const bd = R.h('span'); C.badge(bd, { red: true, n: 0 }); A(bd.textContent === '1' && bd.classList.contains('red'), 'red badge min 1'); C.badge(bd, null); A(bd.textContent === '' && !bd.classList.contains('on'), 'badge off');
+    const ab = C.askBubble(true); C.setAsk(ab, { head: '승인 요청', body: '$ x', mono: true, cmd: 'x' }); A(ab.querySelector('.ah').textContent === '승인 요청' && !ab.querySelector('.af').hidden, 'ask bubble');
+    const wi = C.waitInfo({ st: 'stall', age: 1500, procs: [{ cpu: 0 }], why: '' }); A(wi.head === '응답 없음' && wi.warn === 'CPU 0 %' && wi.zero, 'stall evidence');
+    // model: HTML in agent text never becomes markup
+    A(!document.querySelector('#views script, #views img'), 'no injected elements');
+    A(R.isWaiting({ st: 'dead', age: 10 }) && !R.isWaiting({ st: 'dead', age: 9999 }) && R.isWaiting({ st: 'stall', age: 9999 }), 'isWaiting');
+    // talk (TALK-UX §10): previews, msgs normalisation, spawn/down merge, done/up dedupe, fan-out, my talk matched by msg_id, 5-minute hold expiry
+    A(C.actText({ k: 'mdown', x: 'CDR' }) === '부모 지시: CDR' && C.actText({ k: 'mdown', x: '', enc: true }) === '부모 지시: 🔒 암호화됨' && C.actText({ k: 'mup', x: '끝' }) === '보고: 끝' && C.actText({ k: 'mtalk', x: '안녕' }) === '나 (상황실): 안녕' && C.actText({ k: 'mpeer', x: 'hi' }) === '다른 세션: hi', 'actText talk cases');
+    const mg = (id, dir, kind, from, to, ts, text, o) => Object.assign({ id: id.padStart(12, '0'), dir, kind, from, to, who: 'w', ts, text }, o || {});
+    const tr = { id: 'P', name: 'parent', talk: { ok: true }, msgs: [mg('b1', 'down', 'talk', '상황실:alice@PC', 'P', 1.7e9 + 20, 'hello', { msg_id: 'ar-1a2b3c4d' }), mg('zz', 'down', 'agent', 'x', 'P', 1.7e9, 'bad id is dropped')],
+      kids: [{ id: 'K1', name: 'kid', msgs: [mg('a1', 'down', 'agent', 'P', 'K1', 1.7e9 + 5, 'do it'), mg('a2', 'up', 'agent', 'K1', 'P', 1.7e9 + 9, 'done it'), mg('a3', 'follow', 'codex', 'P', 'K1', 1.7e9 + 7, '', { encrypted: true })] }, { id: 'K2', name: 'kid2', msgs: [mg('a4', 'down', 'agent', 'P', 'K2', 1.7e9 + 6, 'x'.repeat(4001))] }] };
+    const tm = new Map(), tp = R.normalize('tt', tr, null, 0, tm, 0, 0), ks = [...tm.values()];
+    A(tp.msgs.length === 1 && tp.msgs[0].kind === 'talk', 'normMsgs drops an entry with a bad id'); A(tm.get('tt:K2').msgs[0].truncated && tm.get('tt:K2').msgs[0].text.length === 4000, 'normMsgs re-caps at 4000');
+    for (const k of ks) { R.M.agents.set(k.key, k); R.mergeMsgs(k); }
+    R.A.talks['tt:P'] = [{ cid: 'c1', text: 'hello', t: 1.7e12, st: 'held', hat: Date.now(), mid: 'ar-1a2b3c4d', why: '' }];
+    A(!Talk.lines({ st: 'user', why: '답변 끝남 · 완료', talk: {} }, 'x').some(x => x[1].includes('승인을 기다리는 중')), 'calm user session has no approval confirm line');
+    const savedMsg = (id, text) => ({ id, dir: 'down', kind: 'agent', from: 'p', to: 'n', who: 'w', t: Date.now(), text, truncated: false, encrypted: false, msg_id: '' });
+    R.A.mg['tt:save'] = new Map([['000000000001', savedMsg('000000000001', 'persist me')]]); R.saveMsgs(true);
+    A(R.store.get('room.msgs', {})['tt:save'][0].text === 'persist me', 'message ring persists with room.msgs'); delete R.A.mg['tt:save']; R.saveMsgs(true);
+    A(R.validMsg(savedMsg('000000000002', 'valid')) && !R.validMsg({ ...savedMsg('000000000002', 'bad'), dir: 'sideways' }) && !R.validMsg({ ...savedMsg('000000000002', 'bad'), encrypted: 1 }) && !R.validMsg({ ...savedMsg('000000000002', 'bad'), msg_id: 'forged' }), 'persisted message shape rejects bad enums, ids and flags');
+    const oldRoomMsgs = localStorage.getItem('room.msgs'), oldMgBeforeLoad = R.A.mg; R.A.mg = {};
+    R.store.set('room.msgs', { 'selftest:reload': [savedMsg('000000000003', 'seeded')] }); R.loadMsgs();
+    const loaded = R.msgs('selftest:reload').some(m => m.text === 'seeded'); R.A.mg = oldMgBeforeLoad;
+    if (oldRoomMsgs == null) localStorage.removeItem('room.msgs'); else localStorage.setItem('room.msgs', oldRoomMsgs);
+    A(loaded && document.querySelector('#app'), 'persisted messages load after boot with app shell');
+    A(hasRule('.tn.fn .tg', 'align-self', 'start') && hasRule('.tn.fn .tg', 'margin-top', '14px'), 'flow tree chevron aligns to multiline row start');
+    A(hasRule('.msg.me', 'align-self', 'stretch') && hasRule('.msg.me .col', 'width', 'fit-content') && hasRule('.msg.me .col', 'max-width', 'min(72%, 640px)'), 'all right-side bubbles fit content and cap at 72%');
+    const row = R.h('div.msg.me', { style: 'position:fixed;left:-10000px;top:0;width:600px' }), col = R.h('div.col'), bub = R.h('div.bub.talk.talkme'), short = R.h('div.tb', '짧은 톡'), stamp = R.h('span.tm'); bub.append(short); col.append(bub); row.append(col, stamp); document.body.append(row);
+    const shortH = short.getBoundingClientRect().height, shortW = bub.getBoundingClientRect().width; short.textContent = '긴 톡'.repeat(1000); const colBox = col.getBoundingClientRect(), tmBox = stamp.getBoundingClientRect();
+    A(shortH <= 22 && shortW < colBox.width * 0.5 && colBox.width <= 432 && tmBox.left < colBox.left, 'short talk fits content, long talk caps at 72%, timestamp stays left'); row.remove();
+    A(Detail.sumKids([{ st: 'done' }]).includes('완료\u00a01'), 'flow status label and count stay together');
+    A(hasRule('body.room-composer #toasts', 'bottom', 'calc(var(--foot-h, 108px) + 16px)'), 'toast offset tracks the footer height');
+    A(Room.heldCopy === ' · 톡 승인 대기 — 터미널에서 승인하세요', 'held status copy does not name the agent');
+    A(Room.noHistory([], []) && !Room.noHistory([], [{}]) && !Room.noHistory([{}], []) && !Room.noHistory([], [], [{ kind: 'tmsg' }]), 'activity note is suppressed by talk and agy message cards');
+    A(Talk.sendGuard(Date.now() - 1000) && !Talk.sendGuard(Date.now() - 2100) && Talk.guardMessage === '잠시 뒤에 보낼 수 있습니다', 'same-room send guard announces its wait');
+    A(Talk.guardWait(10000, 0, 10000) === 2000 && Talk.guardWait(10000, 15000, 10000) === 5000, 'button wait uses the send guard and server 429 deadline');
+    const L = [{ id: 's1', t: 1.7e12 + 5100, kind: 'spawn', x: 'kid' }, { id: 'd1', t: 1.7e12 + 9500, kind: 'done', x: 'kid: done it' }, { id: 'u1', t: 1.7e12 + 20000, kind: 'user', x: '[상황실 톡 · alice@PC · ar-1a2b3c4d]' }, { id: 'u2', t: 1.7e12 + 21000, kind: 'user', x: 'my terminal prompt' }];
+    Talk.collect('tt:P', tp, L);
+    A(L.find(x => x.id === 's1').msg.text === 'do it', 'a spawn act absorbs the child down message');
+    A(!L.some(x => x.kind === 'done') && L.some(x => x.kind === 'tmsg' && x.label === '보고' && x.chip === '하위' && x.spk === 'tt:K1'), 'the report card replaces the done act');
+    A(!L.some(x => x.id === 'u1') && L.some(x => x.id === 'u2'), 'a 상황실 envelope never becomes my terminal prompt');
+    A(L.some(x => x.label === '후속 지시 → kid'), 'follow-up seen from the parent');
+    A(L.filter(x => x.kind === 'talkme').length === 1 && R.A.talks['tt:P'][0].st === 'delivered', 'my talk matched by msg_id: one bubble, delivered');
+    tp.msgs[0] = { ...tp.msgs[0], text: 'h', truncated: true, n: 9000 }; R.mergeMsgs(tp);
+    A(R.msgs('tt:P').find(x => x.id === tp.msgs[0].id).text === 'hello', 'short truncated poll keeps the stored message text');
+    tp.msgs.push({ ...tp.msgs[0], id: '000000000099', msg_id: 'ar-ffffffff', text: 'unverified' }); R.mergeMsgs(tp);
+    const L4 = []; Talk.collect('tt:P', tp, L4);
+    A(L4.some(x => x.kind === 'tmsg' && x.label === '톡' && x.nm === '상황실 톡' && x.chip === '확인 안 됨' && x.sr === '확인되지 않은 상황실 톡: ' && x.spk.startsWith('x:talk:')), 'unmatched talk is a labeled unverified peer card');
+    const L2 = []; Talk.collect('tt:K1', tm.get('tt:K1'), L2);
+    A(L2.some(x => x.label === '지시' && x.chip === '부모' && x.spk === 'tt:P') && L2.some(x => x.label === '보고 → w') && L2.some(x => x.m && x.m.encrypted), 'child room: parent instruction + follow-up + report');
+    const fan = { id: 'F', name: 'fan', kids: [1, 2, 3, 4, 5].map(i => ({ id: 'f' + i, name: 'w' + i, msgs: [mg('c' + i, 'down', 'agent', 'F', 'f' + i, 1.7e9 + i, '같은 지시')] })) }, fm = new Map(), fp = R.normalize('tt', fan, null, 0, fm, 0, 0);
+    for (const k of fm.values()) { R.M.agents.set(k.key, k); R.mergeMsgs(k); }
+    const L3 = [1, 2, 3, 4, 5].map(i => ({ id: 'sp' + i, t: 1.7e12 + i * 1000 + 100, kind: 'spawn', x: 'w' + i })); Talk.collect('tt:F', fp, L3);
+    A(L3.filter(x => x.kind === 'spawn').length === 1 && L3.filter(x => x.kind === 'fan').length === 1 && /같은 지시 4개/.test(L3.find(x => x.kind === 'fan').x), 'fan-out: first spawn card + one line');
+    const oldMg = R.A.mg; R.A.mg = {};
+    for (let i = 0; i < 34; i++) R.A.mg['budget:' + i] = new Map(Array.from({ length: 8 }, (_, j) => { const m = savedMsg((i * 8 + j).toString(16).padStart(12, '0'), 'x'.repeat(4000)); return [m.id, m]; }));
+    R.saveMsgs(true); const saved = R.store.get('room.msgs', {}), chars = Object.values(saved).flat().reduce((n, m) => n + m.text.length, 0);
+    A(chars > 1e6 && chars <= 1032000 && Object.keys(saved).length < 34, 'saved message text stops around one million characters');
+    R.A.mg = oldMg; R.saveMsgs(true);
+    for (const k of [...tm.values(), ...fm.values()]) { R.M.agents.delete(k.key); delete R.A.mg[k.key]; } delete R.A.talks['tt:P']; R.saveTalks();
+    A(Talk.stateOf({ st: 'held', hat: Date.now() - 301000 }).k === 'exp' && Talk.stateOf({ st: 'held', hat: Date.now() - 1000 }).k === 'held' && Talk.stateOf({ st: 'refused', why: 'duplicate' }).t.includes('같은 내용'), 'held expires after 5 min (UI timer)');
+    console.log('SELFTEST ok'); document.title = 'SELFTEST ok';
+  } catch (e) { console.log('SELFTEST FAIL ' + e.message); document.title = 'SELFTEST FAIL'; }
+})();

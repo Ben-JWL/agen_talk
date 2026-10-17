@@ -1,0 +1,6 @@
+# LF everywhere so the UI build check is byte-stable on Windows runners.
+* text=auto eol=lf
+*.ico binary
+*.png binary
+# Inno Setup 6 needs a UTF-8 BOM to read non-ASCII text; keep it byte-exact.
+*.iss -text

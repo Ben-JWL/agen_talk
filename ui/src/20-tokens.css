@@ -1,0 +1,53 @@
+/* ===== 20-tokens.css — CHAT-UX §2. Neutral surfaces, one signal colour (needs me), one evidence hue (stall). Hex lives ONLY here. ===== */
+:root {
+  --canvas: #F2F2F5; --surface: #FFFFFF; --line: #E3E3E8;
+  --ink: #1D1D1F; --ink-2: #6E6E73; --on-ink: #FFFFFF;
+  --signal: #E5342B; --signal-text: #C4261E; --on-signal: #FFFFFF; --warn: #9E4F00;
+  --tint-signal: color-mix(in srgb, var(--signal) 8%, var(--surface));
+  --tile: var(--canvas);
+  --shadow-float: 0 8px 32px rgba(0,0,0,.14);
+  --scrim: rgba(0,0,0,.3);
+  /* status colours: shape carries the state, colour only echoes it */
+  --st-work: var(--ink-2); --st-tool: var(--ink-2); --st-child: var(--ink-2); --st-user: var(--signal); --st-stall: var(--warn);
+  --st-idle: var(--ink-2); --st-done: var(--ink-2); --st-stopped: var(--ink-2); --st-dead: var(--ink);
+  --font: "Apple SD Gothic Neo", "Pretendard", "Malgun Gothic", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --mono: "Cascadia Mono", "D2Coding", Consolas, "Noto Sans Mono CJK KR", ui-monospace, monospace;
+  --r-bubble: 16px; --r-av: 12px; --r-btn: 8px; --r-card: 12px; --r-dlg: 16px; --r-chip: 6px;
+  --dur-fast: 120ms; --dur-mid: 160ms;
+  color-scheme: light;
+}
+html[data-theme=dark] { color-scheme: dark; }
+@media (prefers-color-scheme: dark) { html:not([data-theme=light]) { color-scheme: dark; } }
+html[data-theme=dark], html.dark {
+  --canvas: #1C1C1E; --surface: #2C2C2E; --line: #3A3A3C;
+  --ink: #F5F5F7; --ink-2: #98989D; --on-ink: #1D1D1F;
+  --signal: #FF5A4F; --signal-text: #FF7A70; --on-signal: #1D1D1F; --warn: #F0A24A;
+  --tint-signal: color-mix(in srgb, var(--signal) 6%, var(--surface));
+  --tile: #3A3A3C;
+  --shadow-float: 0 8px 32px rgba(0,0,0,.5);
+  --scrim: rgba(0,0,0,.55);
+}
+html[data-motion=reduce] *, html[data-motion=reduce] *::before, html[data-motion=reduce] *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+@media (prefers-reduced-motion: reduce) { html:not([data-motion=full]) *, html:not([data-motion=full]) *::before, html:not([data-motion=full]) *::after { animation: none !important; transition: none !important; } }
+
+/* ----- base ----- */
+*, *::before, *::after { box-sizing: border-box; }
+html, body { height: 100%; }
+body { margin: 0; background: var(--canvas); color: var(--ink); font: 400 14px/21px var(--font); font-variant-numeric: tabular-nums; letter-spacing: 0; -webkit-font-smoothing: antialiased; word-break: keep-all; overflow-wrap: anywhere; overflow: hidden; }
+pre, code, .mono, .cmd { word-break: break-all; }
+button, input, select { font: inherit; color: inherit; letter-spacing: 0; }
+button { cursor: pointer; }
+a { color: inherit; }
+:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; border-radius: 4px; }
+h1, h2, h3, p { margin: 0; }
+ul { margin: 0; padding: 0; list-style: none; }
+svg { display: inline-block; vertical-align: middle; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+[hidden] { display: none !important; }
+/* type scale (§2) */
+.t-title { font-size: 17px; line-height: 24px; font-weight: 600; }
+.t-section { font-size: 15px; line-height: 22px; font-weight: 600; }
+.t-meta, .meta { font-size: 12.5px; line-height: 18px; color: var(--ink-2); }
+.mono { font-family: var(--mono); font-size: 12.5px; line-height: 18px; }
+.dim { color: var(--ink-2); }
+.rel { cursor: default; }

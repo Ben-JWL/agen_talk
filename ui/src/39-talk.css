@@ -1,0 +1,122 @@
+/* ===== 39-talk.css — talk cards, name line, composer, confirm card, delivery states, 흐름 tree (TALK-UX). Tokens only; no hex. ===== */
+/* talk card: the spawn-card family (radius 12, speaker-side top corner 4) */
+.msg.ag .col:has(.talk), .msg.ag .col:has(.who:not([hidden])), .msg .col:has(.spe:not([hidden])) { width: min(72%, 640px); }
+.bub.talk { display: block; padding: 10px 12px; border-radius: var(--r-card); border-top-left-radius: 4px; white-space: normal; }
+.bub.talk .th { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 12.5px; line-height: 18px; font-weight: 600; color: var(--ink-2); }
+.bub.talk .th svg { width: 12px; height: 12px; fill: currentColor; flex: none; }
+.bub.talk .thl { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bub.talk .thr { font-weight: 500; flex: none; }
+.tb { margin-top: 2px; font-size: 14px; line-height: 21px; color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; }
+.tb.clamp { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: var(--n, 3); overflow: hidden; }
+.tb.open { max-height: 60vh; overflow: auto; }
+.tb.enc { color: var(--ink-2); }
+.bub.spawn .tb { margin-top: 0; }
+.spe, .fvw { display: flex; align-items: flex-start; gap: 6px; min-width: 0; }
+.spe .tb, .fvw .tb { flex: 1; min-width: 0; }
+.spe .flk, .fvw .flk { flex: none; margin-top: 5px; color: var(--ink-2); }
+.flk svg { width: 12px; height: 12px; fill: currentColor; display: block; }
+.tf { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 4px; font-size: 12.5px; line-height: 18px; color: var(--ink-2); }
+.tf .tfr { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; }
+.tf .btn.link { color: var(--ink-2); font-size: 12.5px; line-height: 18px; }
+.tf .btn.link:hover { color: var(--ink); }
+/* my talk: outlined = sent from here (peer authority); the filled bubble stays the terminal prompt */
+.bub.talkme { border: 1.5px solid var(--ink); background: var(--surface); border-radius: var(--r-bubble); border-top-right-radius: 4px; }
+.bub.talkme .th { color: var(--ink-2); }
+/* delivery state */
+.ds { display: inline-flex; align-items: center; gap: 6px; min-width: 0; color: var(--ink-2); }
+.ds .gl { width: 12px; height: 12px; color: inherit; vertical-align: 0; }
+.ds.held { color: var(--signal-text); font-weight: 600; }
+.ds.bad, .ds.exp { color: var(--ink); font-weight: 600; }
+/* name line (group chat): the speaker's avatar sits in the normal .av slot */
+.who { display: flex; align-items: center; gap: 6px; margin: 0 0 3px 2px; font-size: 12.5px; line-height: 18px; min-width: 0; }
+.who .wn { max-width: 70%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border: 0; background: none; padding: 0; font: inherit; font-weight: 600; color: var(--ink); cursor: pointer; }
+.who .wn:hover:not(:disabled) { text-decoration: underline; }
+.who .wn:disabled { cursor: default; }
+.av.gen .avs { display: none; }
+/* the fan-out line and other system lines that carry a link */
+.sysl .btn.link { display: inline; font-size: inherit; line-height: inherit; color: var(--ink); text-decoration: underline; }
+
+/* footer = status row + composer row, one block with one hairline */
+#foot { flex: none; background: var(--surface); border-top: 1px solid var(--line); }
+#foot #sbar { border-top: 0; }
+.stalk { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--signal-text); font-weight: 600; }
+.stalk.calm { color: var(--ink-2); font-weight: 500; }
+.trow { padding: 0 16px 12px; }
+.cmp { display: flex; align-items: flex-end; gap: 8px; }
+.cmw { flex: 1; min-width: 0; }
+.cta { display: block; width: 100%; height: 40px; max-height: 124px; resize: none; border: 0; border-radius: var(--r-btn); background: var(--canvas); color: var(--ink); padding: 9px 12px; font: inherit; line-height: 21px; overflow-y: auto; }
+.cta::placeholder { color: var(--ink-2); }
+.cta:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.csend { flex: none; min-width: 72px; }
+.ccnt { margin-top: 2px; text-align: right; font-size: 12.5px; line-height: 18px; color: var(--ink-2); }
+.ccnt.over { color: var(--ink); font-weight: 600; }
+.coff { display: flex; align-items: center; gap: 8px; min-height: 36px; font-size: 12.5px; line-height: 18px; color: var(--ink-2); }
+.coff .gl { margin: 0; flex: none; }
+.coff .cop { margin-left: auto; flex: none; }
+/* confirm card: in place, not a modal; ink border (not red: nothing needs me yet) */
+.confirm { display: grid; gap: 8px; padding: 12px 14px; border: 1.5px solid var(--ink); border-radius: var(--r-card); background: var(--surface); }
+.cfh, .cft { font-size: 12.5px; line-height: 18px; font-weight: 600; }
+.cfh { color: var(--ink-2); }
+.cft { overflow-wrap: anywhere; }
+.cfp { max-height: calc(6 * 21px + 20px); overflow: auto; padding: 10px 12px; border-radius: var(--r-btn); background: var(--canvas); white-space: pre-wrap; overflow-wrap: anywhere; }
+.cfls { display: grid; gap: 4px; }
+.cfls:empty { display: none; }
+.cfl { display: flex; align-items: flex-start; gap: 6px; font-size: 12.5px; line-height: 18px; font-weight: 600; }
+.cfl .gl { width: 12px; height: 12px; margin-top: 3px; }
+.cfn { font-size: 12.5px; line-height: 18px; color: var(--ink-2); }
+.cfb { display: flex; justify-content: flex-end; gap: 8px; }
+
+/* 대화 | 흐름 toggle in the room header */
+.hlinks .fseg { padding: 2px; }
+.hlinks .fseg button { height: 24px; padding: 0 10px; font-size: 12.5px; }
+
+/* 흐름: the drawer tree widened, with the text of each node */
+#flow { position: absolute; inset: 0; z-index: 2; overflow-y: auto; padding-bottom: 24px; background: var(--canvas); outline: none; }
+.fhead { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 16px; margin: 16px 24px 0; }
+.fhl { flex: 1; min-width: 220px; }
+.fsum { font-weight: 600; color: var(--ink); }
+.fhr { display: flex; align-items: center; gap: 12px; }
+.fsw { display: inline-flex; align-items: center; gap: 8px; }
+.fnote { margin: 8px 24px 0; }
+#flow .ftree { margin: 12px 24px 0; padding: 0; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-card); overflow: hidden; }
+.tn.fn { height: auto; overflow: visible; align-items: stretch; padding: 0 16px 0 12px; }
+.tn.fn .tg { align-self: start; margin-top: 14px; }
+.fn .tbody { align-self: stretch; padding: 8px 0; }
+.fn + .fn .tbody { border-top: 1px solid var(--line); }
+.fn.cur { background: var(--canvas); }
+.ftree .tn .c { width: 20px; }
+.ftree .tn .c.v::before, .ftree .tn .c.e.t::after { left: 9px; }
+.ftree .tn .c.e::before { left: 9px; width: 11px; }
+.ftree .tn .c.e:first-child:last-child::before { display: block; }   /* the root row is row 0: its children get an elbow too */
+.tn.fn .t1 { height: 28px; gap: 8px; }
+.tn.fn .dt-nm { font-size: 15px; line-height: 22px; }
+.fn .av { width: 28px; height: 28px; border-radius: 9px; }
+.fn .av .amk { width: 16px; height: 16px; }
+.fn .av .avs { width: 14px; height: 14px; right: -4px; bottom: -4px; }
+.fn .av .avs .gl { width: 11px; height: 11px; }
+.fn .fst { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; flex: none; font-size: 12.5px; color: var(--ink-2); }
+.fn .fst .gl { width: 12px; height: 12px; }
+.fn .fst .el { margin-left: 0; }
+.fn .ft { display: grid; gap: 2px; margin-top: 4px; padding-left: 36px; }
+.fn .ft:empty { display: none; }
+.fl { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; column-gap: 6px; align-items: start; }
+.fk { font-size: 12.5px; line-height: 21px; font-weight: 600; color: var(--ink-2); white-space: nowrap; text-align: left; }
+button.fk { border: 0; background: none; padding: 0; cursor: pointer; }
+.fl .tb { margin-top: 0; }
+.fl .tb.open { max-height: 280px; }
+.fr .btn.link { font-size: 12.5px; line-height: 21px; color: var(--ink-2); }
+.tn.fn.ghost { opacity: .55; cursor: default; }
+.tn.fn.sumrow .av, .tn.fn.sumrow .fst, .tn.fn.sumrow .cnt, .tn.fn.sumrow .xp, .tn.fn.sumrow .bdg { display: none; }
+.tn.fn.sumrow .dt-nm { font-weight: 500; color: var(--ink-2); font-size: 13px; }
+.tn.fn.sumrow .t1 { height: 24px; }
+.tn.fn .fexp { margin-left: auto; flex: none; }
+@media (max-width: 900px) {
+  .fn .fsl, .fn .xpt { display: none; }
+  .ftree .tn .c { width: 16px; }
+  .ftree .tn .c.v::before, .ftree .tn .c.e.t::after { left: 7px; }
+  .ftree .tn .c.e::before { left: 7px; width: 9px; }
+  .fhead { margin: 12px 16px 0; } .fnote { margin: 8px 16px 0; } #flow .ftree { margin: 12px 16px 0; }
+}
+/* ? sheet: the 톡 block */
+.sheet-g { padding: 16px 0 4px; font-size: 12.5px; font-weight: 600; color: var(--ink-2); }
+.sheet-leg { padding: 12px 0 0; font-size: 12.5px; color: var(--ink-2); }

@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  selftest:
+    name: selftest (${{ matrix.os }}, py${{ matrix.py }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # 3.8 is the floor (the collector runs on old servers); setup-python only offers it on the older Ubuntu image.
+          - { os: ubuntu-22.04, py: "3.8" }
+          - { os: ubuntu-latest, py: "3.12" }
+          - { os: windows-latest, py: "3.12" }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ matrix.py }}
+      - name: Compile
+        run: python -m py_compile agent_room.py app.py ui/build.py tools/scan.py tools/check_ui.py packaging/make_icon.py
+      - name: agent_room selftest
+        run: python agent_room.py --selftest
+      - name: app selftest (pywebview absent is fine)
+        if: matrix.py == '3.12'
+        run: python app.py --selftest
+
+  ui:
+    name: UI build matches index.html + hygiene scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - run: python tools/check_ui.py
+      - run: python tools/scan.py

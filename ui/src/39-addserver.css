@@ -1,0 +1,69 @@
+/* ===== 39-addserver.css — 서버 추가 dialog skinned per CHAT-UX §8 (flow/copy unchanged). Tokens only. ===== */
+.dlg { width: min(480px, calc(100vw - 32px)); max-height: calc(100vh - 32px); padding: 20px; border: 1px solid var(--line); border-radius: var(--r-dlg); background: var(--surface); color: var(--ink); box-shadow: var(--shadow-float); overflow: auto; }
+.dlg::backdrop { background: color-mix(in srgb, var(--ink) 40%, transparent); }
+.dlg .hd { padding-right: 36px; }
+.dlg .x { position: absolute; top: 14px; right: 14px; height: 32px; min-width: 32px; padding: 0; }
+.dlg .acts.rev { flex-direction: row-reverse; justify-content: flex-start; }
+.dlg > .meta { margin: 4px 0 14px; }
+.dlg .frow { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 4px 8px; align-items: start; margin-bottom: 10px; }
+.dlg .frow > label { line-height: 34px; font-weight: 500; }
+.dlg .frow.pair { grid-template-columns: 96px 80px auto minmax(0, 1fr); }
+.dlg .frow.pair > label + .fc + label { padding-left: 8px; }
+.dlg .field input:invalid { box-shadow: none; }
+.dlg .field input[aria-invalid=true] { color: var(--ink); }
+.dlg .field:has(input[aria-invalid=true]) { outline: 2px solid var(--ink); }
+.dlg .err { margin-top: 4px; color: var(--ink); font-weight: 600; font-size: 12.5px; line-height: 18px; }
+.dlg .priv { display: flex; gap: 8px; align-items: flex-start; margin: 14px 0 0; }
+.dlg .priv svg { width: 16px; height: 16px; flex: none; fill: currentColor; margin-top: 1px; }
+.dlg .acts { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+.dlg .bn-err .acts { justify-content: flex-start; gap: 8px 12px; margin-top: 6px; }
+.dlg .bn-err .acts .link:first-child, .dlg .bn-err .acts .btn.link { margin-right: 4px; }
+.dlg .bn-err .acts .btn.primary { margin-left: auto; }
+.dlg .bn-err[data-kind=host_key_changed] .ttl, .dlg .bn-err[data-kind=host_key_changed] .ttl .gl { color: var(--signal-text); }
+.dlg .bn-err .msg { display: block; overflow-wrap: anywhere; color: var(--ink-2); }
+.dlg .bn-err .pyrow { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+.dlg .bn-err .pyrow label { font-weight: 500; }
+.dlg .bn-err .inset { max-height: 160px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+.dlg > div > .ttl { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.dlg .flash { margin: 10px 0 0; color: var(--ink); }
+.dlg .steps ~ .meta { margin: 10px 0 0; }
+.steps { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 8px; }
+.steps li { display: grid; grid-template-columns: 20px 96px minmax(0, 1fr); column-gap: 8px; align-items: start; }
+.steps .gl { margin-top: 2px; }
+.steps b { font-weight: 600; }
+.steps .d { color: var(--ink-2); overflow-wrap: anywhere; }
+.steps .d.mono { font-size: 12px; }
+.steps li[data-st=pending] .gl { color: var(--ink-2); }
+.steps li[data-st=pending] b { color: var(--ink-2); }
+.steps li[data-st=active] .gl { color: var(--ink); }
+.steps li[data-st=user] .gl { color: var(--signal); }
+.steps li[data-st=error] .gl { color: var(--ink); }
+.steps li[data-st=error] b { color: var(--ink); }
+.dlg .bn-err + .steps { margin-top: 14px; }
+/* entry points */
+.shd { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.cacts { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.clist > .meta { padding: 12px 0; }
+@media (max-width: 700px) {
+  .dlg .frow, .dlg .frow.pair { grid-template-columns: minmax(0, 1fr); }
+  .dlg .frow > label { line-height: 20px; }
+  .dlg .frow.pair > label + .fc + label { padding-left: 0; margin-top: 6px; }
+  .steps li { grid-template-columns: 20px minmax(0, 1fr); }
+  .steps li .d { grid-column: 2; }
+}
+.pchips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 12px; }
+.pchips .meta { margin-right: 4px; }
+.pchip { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.dlg .bperm { margin-top: 6px; }
+.dlg .field .eye { height: 24px; min-width: 24px; padding: 0 4px; flex: none; }
+.dlg .sess { display: flex; gap: 8px; align-items: flex-start; margin: 4px 0 8px; font-size: 13px; }
+.dlg .sess input { margin-top: 4px; }
+.dlg .confirm { display: grid; gap: 6px; margin: 12px 0 0; padding: 10px 12px; border: 1.5px solid var(--signal); border-radius: var(--r-card); border-top-left-radius: 4px; background: var(--tint-signal); }
+.dlg .confirm .ah { color: var(--signal-text); font-weight: 600; }
+.dlg .confirm p { margin: 0; }
+.dlg .confirm .fp { display: block; padding: 6px 10px; border-radius: var(--r-btn); background: var(--surface); font-size: 12.5px; word-break: break-all; user-select: all; }
+code.nw, .nw { white-space: nowrap; }
+.dlg .bn-err[data-kind=host_key_changed] .acts .btn:not(.primary):not(.link) { flex-basis: 100%; order: 2; }
+.dlg .bn-err[data-kind=host_key_changed] .acts .btn.primary { order: 1; }
+.pchip[aria-pressed=true] { background: var(--ink); color: var(--on-ink); border-color: var(--ink); }
+.dlg [tabindex="-1"]:focus, .dlg [tabindex="-1"]:focus-visible { outline: none; }

@@ -1,0 +1,70 @@
+/* ===== 34-drawer.css — 세션 정보 drawer (property sheet, 하위 tree, 프로세스) + toasts. CHAT-UX §5, §7. ===== */
+#drawer { background: var(--surface); border-left: 1px solid var(--line); overflow-y: auto; min-width: 0; animation: slide var(--dur-mid) ease-out; }
+@keyframes slide { from { transform: translateX(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+.dhead { display: flex; align-items: center; justify-content: space-between; height: 64px; padding: 0 12px 0 16px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--surface); z-index: 3; }
+.sheet { margin: 8px 0; }
+.dr { display: grid; grid-template-columns: 80px minmax(0, 1fr); gap: 8px; padding: 6px 16px; }
+.dr dt { color: var(--ink-2); font-size: 12.5px; line-height: 21px; }
+.dr dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.dr dd .pr { margin-left: 0; }
+.dr .lnk { color: var(--ink); text-decoration: underline; font-size: 14px; }
+.dsec { padding: 12px 0 4px; border-top: 1px solid var(--line); }
+.dsec h3 { padding: 0 16px 6px; }
+.dsec h3 .n { color: var(--ink-2); font-weight: 400; }
+.dprocs { padding: 0 16px 8px; }
+.dprocs .note { color: var(--ink-2); font-size: 12.5px; padding: 4px 0; }
+.dmiss { padding: 12px 16px; }
+.missing { display: grid; gap: 8px; }
+.missing h3 { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; }
+.missing h3 svg { width: 16px; height: 16px; fill: currentColor; }
+.missing ul { list-style: disc; padding-left: 20px; color: var(--ink-2); font-size: 12.5px; line-height: 18px; }
+.missing .acts { display: flex; gap: 8px; }
+.pw .prow { cursor: pointer; }
+.pw .prow[aria-expanded=true] { background: var(--canvas); }
+.pw .prow .cmd .bg { border: 1px solid var(--line); border-radius: var(--r-chip); padding: 0 6px; font-family: var(--font); }
+.pdet { display: none; padding: 2px 0 8px 24px; }
+.pw.open .pdet { display: block; }
+.pdet .k { color: var(--ink-2); font-size: 12.5px; margin-top: 6px; }
+.prow.fin { opacity: .75; grid-template-columns: 16px minmax(0, 1fr) auto auto; }
+
+/* subagent tree: no root node, 2-line 44 px nodes, 16 px indent per depth, guides */
+.hsum { padding: 0 16px 6px; }
+.dt-tree { --guide: color-mix(in srgb, var(--ink-2) 45%, var(--surface)); padding: 0 0 6px; }
+.tn { display: grid; grid-template-columns: auto 16px minmax(0, 1fr); align-items: stretch; column-gap: 2px; height: 44px; padding: 0 12px 0 16px; cursor: pointer; overflow: hidden; }
+.tn:hover, .tn:focus-visible { background: var(--canvas); }
+.tn:focus-visible { outline-offset: -2px; border-radius: 0; }
+.tn .ind { display: flex; align-self: stretch; }
+.tn .c { position: relative; width: 16px; flex: none; --lc: var(--guide); }
+.tn .c.v::before, .tn .c.e.t::after { content: ""; position: absolute; left: 7px; top: 0; bottom: 0; border-left: 1px solid var(--lc); }
+.tn .c.e.t::after { top: 50%; }
+.tn .c.e::before { content: ""; position: absolute; left: 7px; top: 0; height: 22px; width: 9px; border-left: 1px solid var(--lc); border-bottom: 1px solid var(--lc); border-bottom-left-radius: 5px; }
+.tn .c.e:first-child:last-child::before { display: none; }
+.tn .c.e.dsh::before { border-bottom-style: dashed; }
+.tn .tg { align-self: center; justify-self: center; width: 16px; height: 16px; padding: 0; border: 0; background: none; color: var(--ink-2); display: grid; place-items: center; }
+.tn .tg svg { width: 14px; height: 14px; fill: currentColor; transition: transform var(--dur-fast); }
+.tn .tg.open svg { transform: rotate(90deg); }
+.tn .tg.off { visibility: hidden; }
+.tn .tbody { min-width: 0; align-self: center; }
+.tn .t1 { display: flex; align-items: center; gap: 6px; min-width: 0; height: 22px; }
+.tn .t1 .gl { width: 12px; height: 12px; }
+.tn .dt-nm { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tn .cnt { color: var(--ink-2); flex: none; }
+.tn .xp { flex: none; border: 1px dashed var(--ink-2); background: none; }
+.tn .el { margin-left: auto; flex: none; color: var(--ink-2); font-size: 12px; white-space: nowrap; }
+.tn .t2 { display: flex; align-items: center; gap: 6px; height: 18px; padding-left: 18px; white-space: nowrap; overflow: hidden; }
+.tn .t2 .nw { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.tn .t2 .xp { font-size: 11.5px; line-height: 16px; }
+.tn .nw { color: var(--ink-2); }
+.tn .nw .verb { color: var(--ink-2); } .tn .nw .obj { font-family: var(--mono); font-size: 12px; } .tn .nw .obj.prose { font-family: inherit; font-size: inherit; }
+.tn.hid { height: 28px; color: var(--ink-2); cursor: default; } .tn.hid:hover { background: none; }
+.tn.hid .t1 { font-size: 12px; padding-left: 18px; }
+
+/* toasts: list-row look-alike, bottom-right, 320 px */
+#toasts { position: fixed; right: 16px; bottom: 16px; display: flex; flex-direction: column; gap: 8px; width: 320px; max-width: calc(100vw - 32px); pointer-events: none; }
+body.room-composer #toasts { bottom: calc(var(--foot-h, 108px) + 16px); }
+.toast { pointer-events: auto; display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; column-gap: 10px; align-items: center; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r-card); background: var(--surface); box-shadow: var(--shadow-float); animation: slide var(--dur-mid) ease-out; }
+.toast.out { opacity: 0; transition: opacity var(--dur-mid); }
+.toast .tx { min-width: 0; } .toast .tx b { display: block; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.toast .tx .meta { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.toast .ta { display: flex; align-items: center; gap: 4px; }
+.toast .x { border: 0; background: none; color: var(--ink-2); font-size: 18px; line-height: 1; padding: 0 4px; }
