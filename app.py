@@ -95,10 +95,7 @@ def other_instance(state, timeout=2):
     if not run or not all(k in run for k in ("port", "secret", "token")):
         return False
     base = "http://127.0.0.1:%s/%s/api/" % (run["port"], run["secret"])
-    try:
-        d = json.load(loopback_open(base + "channels", timeout))
-        if not isinstance(d, list):
-            return False
+    try:   # token only (run.json is user-only): the page's session cookie belongs to the window, not to a second launch
         r = loopback_open(Request(base + "show", data=b"{}", method="POST", headers={"Content-Type": "application/json", "X-AT-Token": run["token"]}), timeout)
         return r.status == 200 and json.load(r).get("ok") is True   # only OUR hub (secret + token) answers like this: a stranger on a reused port does not
     except (OSError, ValueError, AttributeError):

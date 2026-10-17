@@ -31,7 +31,7 @@
     const nd = C.nowDoing({ st: 'tool', now: 'Bash: pytest -q', why: '', kids: [] });
     A(nd.verb === 'Bash 실행 중' && nd.obj === 'pytest -q', 'nowDoing bash');
     A(C.nowDoing({ st: 'user', why: '명령 승인 대기', kids: [] }).reason === true, 'nowDoing reason');
-    A(C.meta({ meta: 'pid 48213 · ~/work/cdr · gpt-5.1 · worker' }).model === 'gpt-5.1', 'meta parse');
+    A(C.meta({ meta: 'pid 48213 · ~/work/data · gpt-5.1 · worker' }).model === 'gpt-5.1', 'meta parse');
     // chat: acts normalisation, ring dedupe + merged-tool growth, parseAct, badge, ask component
     const out = new Map(), ag = R.normalize('t', { id: 'Z', acts: [{ t: 1.7e9, k: 'tool', x: 'Bash: ls ×2' }, { t: 1.7e9 + 1, k: 'nope', x: 'x' }, { t: 'x', k: 'say', x: 'y' }, { t: 1.7e9 + 2, k: 'say', x: 'a\nb' }] }, null, 0, out, 0);
     A(ag.acts.length === 2 && ag.acts[0].t === 1.7e12 && ag.acts[1].x === 'a', 'acts normalised (unknown kind / bad t dropped, first line only)');
@@ -52,7 +52,7 @@
     A(!document.querySelector('#views script, #views img'), 'no injected elements');
     A(R.isWaiting({ st: 'dead', age: 10 }) && !R.isWaiting({ st: 'dead', age: 9999 }) && R.isWaiting({ st: 'stall', age: 9999 }), 'isWaiting');
     // talk (TALK-UX §10): previews, msgs normalisation, spawn/down merge, done/up dedupe, fan-out, my talk matched by msg_id, 5-minute hold expiry
-    A(C.actText({ k: 'mdown', x: 'CDR' }) === '부모 지시: CDR' && C.actText({ k: 'mdown', x: '', enc: true }) === '부모 지시: 🔒 암호화됨' && C.actText({ k: 'mup', x: '끝' }) === '보고: 끝' && C.actText({ k: 'mtalk', x: '안녕' }) === '나 (에겐 톡): 안녕' && C.actText({ k: 'mpeer', x: 'hi' }) === '다른 세션: hi', 'actText talk cases');
+    A(C.actText({ k: 'mdown', x: 'DATA' }) === '부모 지시: DATA' && C.actText({ k: 'mdown', x: '', enc: true }) === '부모 지시: 🔒 암호화됨' && C.actText({ k: 'mup', x: '끝' }) === '보고: 끝' && C.actText({ k: 'mtalk', x: '안녕' }) === '나 (에겐 톡): 안녕' && C.actText({ k: 'mpeer', x: 'hi' }) === '다른 세션: hi', 'actText talk cases');
     const mg = (id, dir, kind, from, to, ts, text, o) => Object.assign({ id: id.padStart(12, '0'), dir, kind, from, to, who: 'w', ts, text }, o || {});
     const tr = { id: 'P', name: 'parent', talk: { ok: true }, msgs: [mg('b1', 'down', 'talk', 'agen-talk:alice@PC', 'P', 1.7e9 + 20, 'hello', { msg_id: 'at-1a2b3c4d' }), mg('zz', 'down', 'agent', 'x', 'P', 1.7e9, 'bad id is dropped')],
       kids: [{ id: 'K1', name: 'kid', msgs: [mg('a1', 'down', 'agent', 'P', 'K1', 1.7e9 + 5, 'do it'), mg('a2', 'up', 'agent', 'K1', 'P', 1.7e9 + 9, 'done it'), mg('a3', 'follow', 'codex', 'P', 'K1', 1.7e9 + 7, '', { encrypted: true })] }, { id: 'K2', name: 'kid2', msgs: [mg('a4', 'down', 'agent', 'P', 'K2', 1.7e9 + 6, 'x'.repeat(4001))] }] };

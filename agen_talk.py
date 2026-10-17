@@ -82,7 +82,12 @@ def line1(s, n=200):
 SECRET = re.compile("|".join([   # ponytail: a pattern list, not entropy detection; add a pattern when a real leak shows up
     r"sk-[A-Za-z0-9_-]{20,}", r"gh[pousr]_[A-Za-z0-9]{36,}", r"github_pat_[A-Za-z0-9_]{20,}", r"AKIA[0-9A-Z]{16}", r"xox[abprs]-[A-Za-z0-9-]{10,}",
     r"AIza[0-9A-Za-z_-]{35}", r"eyJ[\w-]{10,}\.[\w-]{10,}\.[\w-]{10,}", r"-----BEGIN [A-Z ]*PRIVATE KEY(?: BLOCK)?-----(?s:.{0,8192}?)-----END [A-Z ]*PRIVATE KEY(?: BLOCK)?-----",  # shortcut: key labels are capped at 40/64 chars and PEM bodies at 8 KiB; raise those bounds if longer values must be supported
-    r"(?P<b>(?i:\bbearer\s+))[\w.~+/-]{16,}=*", r"(?P<k>(?i:(?<![A-Za-z0-9])[A-Za-z0-9_-]{0,40}(?:password|passwd|secret|token|api[_-]?key)[A-Za-z0-9_-]{0,64}[\"']?\s*[:=]\s*[\"']?))[^\s\"',}]{6,}"]))
+    r"(?P<b>(?i:\bbearer\s+))[\w.~+/-]{16,}=*", r"(?P<ba>(?i:\bbasic\s+))[A-Za-z0-9+/]{12,}=*",
+    r"[sr]k_(?:live|test)_[A-Za-z0-9]{16,}", r"glpat-[\w-]{20,}", r"hf_[A-Za-z0-9]{30,}", r"npm_[A-Za-z0-9]{36}", r"ya29\.[\w-]{20,}",
+    r"(?P<ak>(?i:accountkey=))[^;\s]{20,}",
+    r"(?P<u>\b[A-Za-z][A-Za-z0-9+.-]*://[^/\s:@]+:)[^@\s/]{3,}(?=@)",   # scheme://user:PASSWORD@host
+    r"(?P<sp>\bsshpass\s+-p\s*)\S+", r"(?P<pw>(?<!\S)(?:--password(?:=|\s+)|-p(?=[^\s\d-])))\S{3,}",   # mysql -pSECRET, --password X (ssh -p 22 stays)
+    r"(?P<k>(?i:(?<![A-Za-z0-9])[A-Za-z0-9_-]{0,40}(?:password|passwd|pass|pwd|secret|token|api[_-]?key|private[_-]?key|credentials?)[A-Za-z0-9_-]{0,64}[\"']?\s*[:=]\s*[\"']?))[^\s\"',}]{4,}"]))
 
 
 def redact(s):
@@ -150,7 +155,7 @@ def node(nid, tool, name, st, why, ts, sub=False, since=None, **kw):
     n.update({k: v for k, v in kw.items() if v})
     for k in ("name", "why", "now", "last", "meta"):
         if isinstance(n[k], str):
-            n[k] = CTRL.sub("", redact(n[k][:8000]))
+            n[k] = CTRL.sub("", redact(n[k][:65536])[:8000])   # redact, then cut: a cut must never leave half a key behind
     NODES[nid] = n
     return n
 
@@ -163,6 +168,11 @@ def fold(n):
     return n
 
 
+def rline1(s, n=200):
+    """line1 with secrets redacted first: cutting before redaction can leave the head of a key visible."""
+    return line1(redact(line1(s, 4096)), n)
+
+
 def act(name, args):
     """One line for a tool call: the command, path or target it names."""
     if isinstance(args, str):
@@ -170,20 +180,20 @@ def act(name, args):
         m = re.search(r'cmd:\s*"((?:[^"\\]|\\.)*)', args)  # codex code-mode: exec_command({cmd:"..."})
         if m:
             try:
-                return "$ " + line1(json.loads(f'"{m.group(1)}"'))
+                return "$ " + rline1(json.loads(f'"{m.group(1)}"'))
             except ValueError:
-                return "$ " + line1(m.group(1))
+                return "$ " + rline1(m.group(1))
         try:
             args = json.loads(args)
         except ValueError:
-            return f"{name} {line1(args, 80)}"
+            return f"{name} {rline1(args, 80)}"
     if isinstance(args, dict):
         for k in ("description", "command", "cmd", "file_path", "path", "pattern", "query", "url", "target", "prompt"):
             v = args.get(k)
             if isinstance(v, list):
                 v = " ".join(map(str, v))
             if isinstance(v, str) and v and not v.startswith("gAAAA"):  # gAAAA… = encrypted payload
-                return ("$ " if k in ("command", "cmd") else f"{name}: ") + line1(v)
+                return ("$ " if k in ("command", "cmd") else f"{name}: ") + rline1(v)
     return name
 
 
@@ -1106,7 +1116,7 @@ def claude_state(lines, kind, sess, shells, notes, nid=None, t0=None):
         if st in CL_RUN and not now:
             now = claude_now(lines)
         if main:  # shells no pending call owns: background Monitor / nohup
-            procs.extend(proc_entry(p, cmd=line1(e), bg=True) for p, e, _ in shells if p not in used)
+            procs.extend(proc_entry(p, cmd=e, bg=True) for p, e, _ in shells if p not in used)   # proc_entry redacts before it cuts
         return st, why, now, last, ts, since, procs
 
     if main and sess.get("status") == "waiting":                                           # 0
@@ -1142,7 +1152,7 @@ def claude_state(lines, kind, sess, shells, notes, nid=None, t0=None):
             for p, e, _ in shells:
                 if pb_.get("name") in ("Bash", "Monitor") and p not in used and c and e.strip() == c:
                     used.add(p)
-                    procs.append(proc_entry(p, cmd=line1(c)))
+                    procs.append(proc_entry(p, cmd=c))
         if name in ("AskUserQuestion", "ExitPlanMode"):
             return fin("user", "질문에 답 필요" if name == "AskUserQuestion" else "플랜 승인 대기", now)
         if name in ("Agent", "Task", "Workflow", "TaskOutput", "SendMessage"):
@@ -1457,7 +1467,7 @@ def claude_node(s, shells):
                 why, ts = "CPU 사용 중", NOW
             elif api_open(pid):
                 ts = NOW
-        procs = [proc_entry(p, cmd=line1(e)) for p, e, _ in shells]
+        procs = [proc_entry(p, cmd=e) for p, e, _ in shells]
         return node(sid, "claude", s.get("name"), st, why, ts, False, su if st in CL_RUN else None, procs=procs,
                     meta=meta, now=None if st != "work" else "transcript 없음 (--no-session-persistence)")
     sub, notes = tr.with_suffix("") / "subagents", [None]
@@ -1535,7 +1545,7 @@ def claude_collect(roots):
 def selftest_claude():
     global NOW, proc_entry
     NOW = time.time()
-    real, proc_entry = proc_entry, lambda pid, cmd=None, bg=False: dict(pid=pid, cmd=cmd, age=90, cpu=0, state="S", **({"bg": True} if bg else {}))
+    real, proc_entry = proc_entry, lambda pid, cmd=None, bg=False: dict(pid=pid, cmd=cmd and line1(cmd), age=90, cpu=0, state="S", **({"bg": True} if bg else {}))
     try:
         def ts(ago):
             return datetime.fromtimestamp(NOW - ago, timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
@@ -2119,6 +2129,15 @@ def talk_claude(sid, text, by, mid):
     except OSError as e:   # nobody listens: nothing was sent
         c.close()
         return "unreachable", "no-listener", type(e).__name__
+    if hasattr(socket, "SO_PEERCRED"):   # the path was checked before connect; the listener itself must be this user too (no swap in between)
+        import struct
+        try:
+            peer_uid = struct.unpack("3i", c.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, struct.calcsize("3i")))[1]
+        except OSError:
+            peer_uid = None
+        if peer_uid != os.getuid():
+            c.close()
+            return "refused", "no-socket", None
     try:
         c.sendall(frame)
         c.shutdown(socket.SHUT_WR)
@@ -2621,7 +2640,7 @@ def write_conf(cfg, conf):
         try:
             mode = os.stat(cfg).st_mode & 0o7777
         except OSError:
-            mode = 0o644   # a new file: mkstemp's 0600 would surprise the owner's editor
+            mode = 0o600   # a new file: server names and accounts are nobody else's business (Windows ignores the bits)
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             json.dump(conf, f, indent=1, ensure_ascii=False)
             f.flush()
@@ -2858,8 +2877,12 @@ def srv_job(j, rq, save):
 def install_cmd(pub):
     """The remote command that appends `pub` (already regex-validated) to authorized_keys. sh -c "...": fish / csh login shells cannot
     parse &&, ||; the leading blank line protects a last line without a final newline."""
+    kt, kb = pub.split()[:2]   # the line gets options: the app only runs `python3 -c` (exec, no pty), so it needs no shell, forwarding or X11
     return ('sh -c "umask 077; mkdir -p ~/.ssh && chmod 700 ~/.ssh && touch ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys'
-            " && (grep -qxF '%s' ~/.ssh/authorized_keys || (echo; echo '%s') >> ~/.ssh/authorized_keys)\"" % (pub, pub))
+            " && (grep -qF '%s %s' ~/.ssh/authorized_keys || (echo; echo '%s %s') >> ~/.ssh/authorized_keys)\"" % (kt, kb, AUTH_OPTS, pub))
+
+
+AUTH_OPTS = "no-port-forwarding,no-agent-forwarding,no-X11-forwarding,no-pty"   # not `restrict`: OpenSSH < 7.2 would refuse the whole line
 
 
 def keyinstall(res, tgt, port, name=""):
@@ -3669,11 +3692,16 @@ def hub_start(cfg=None, port=None, secret="", on_show=None, token=None, fallback
             continue
         slots[ch["id"]] = {"state": "connecting", "error": None, "data": None, "t": None, "wake": threading.Event()}
         chans.append(ch)
+    if not secret:   # `hub --insecure`: every account on this machine can read the page and the agents' text
+        if any(c["kind"] != "local" for c in chans):
+            raise SystemExit("에겐 톡: --insecure 는 다른 서버(ssh/argv 채널)와 함께 쓸 수 없습니다 — 그 서버들의 에이전트 내용까지 이 컴퓨터의 모든 계정에 공개됩니다")
+        print("에겐 톡: 경고 — --insecure: 이 컴퓨터의 모든 계정이 내 에이전트의 프롬프트·명령·경로를 읽을 수 있습니다 (읽기 전용)", file=sys.stderr)
     token = token or secrets.token_urlsafe(24)   # per hub start; the page gets it in <meta name="at-token">, POSTs must send it back
     lock, jobs = threading.Lock(), [None]   # jobs[0]: the one 서버 추가 job (running or last)
     tk, talk_lock = {"on": conf.get("talk") is not False, "dup": {}, "last": {}, "win": deque()}, threading.Lock()   # the talk switch (channels.json "talk") and the rate limits
     page = bundle("index.html")
     prefix = "/" + secret if secret else ""
+    sess = {"cookie": None}   # the page's session cookie (see session_ok); one per launch
 
     def save(rq, j):
         """channels.json (re-read; atomic write) + the live channel, for a verified job; None when cancelled meanwhile."""
@@ -3796,6 +3824,15 @@ def hub_start(cfg=None, port=None, secret="", on_show=None, token=None, fallback
                 return None
             return "/" + (parts[2] if len(parts) > 2 else "")
 
+        def session_ok(self):
+            """The page's session cookie: minted on the first page load of this launch, then required everywhere, so the secret URL alone
+            (seen in a process list, a shell history or a screenshot) is not a credential. No secret (`--insecure`) = read-only, no cookie."""
+            if not secret:
+                return True
+            c = sess["cookie"]
+            got = next((v for k, _, v in (x.strip().partition("=") for x in self.headers.get("Cookie", "").split(";")) if k == "at"), "")
+            return bool(c) and hmac.compare_digest(got.encode("utf-8", "replace"), c.encode())
+
         def do_GET(self):
             if not hub_host_ok(self.headers.get("Host", "")):
                 return self.send(403, {"error": "forbidden"})
@@ -3806,8 +3843,16 @@ def hub_start(cfg=None, port=None, secret="", on_show=None, token=None, fallback
             if secret and u.path == prefix:   # relative URLs (api/...) need the trailing slash
                 return self.send(301, b"", extra={"Location": prefix + "/"})
             if path in ("/", "/index.html"):
+                extra = None
+                if secret and not self.session_ok():
+                    if sess["cookie"]:   # the URL was already used by the window: a copied URL gets nothing
+                        return self.send(403, {"error": "이 주소는 이미 사용되었습니다 — 에겐 톡 창에서 여세요"})
+                    sess["cookie"] = secrets.token_urlsafe(32)
+                    extra = {"Set-Cookie": "at=%s; HttpOnly; SameSite=Strict; Path=%s/" % (sess["cookie"], prefix)}
                 body = page.read_bytes().replace(b"__AT_TOKEN__", token.encode()).replace(b"\r\n", b"\n").replace(b"\r", b"\n")
-                return self.send(200, body, "text/html", csp=page_csp(body))
+                return self.send(200, body, "text/html", extra=extra, csp=page_csp(body))
+            if not self.session_ok():
+                return self.send(403, {"error": "forbidden"})
             if path.startswith("/api/"):
                 HUB_SEEN[0] = time.time()
             if path == "/api/servers/job":   # read-only, no secrets: no token
@@ -3843,6 +3888,8 @@ def hub_start(cfg=None, port=None, secret="", on_show=None, token=None, fallback
             path = self.sub()
             if path is None:
                 return self.send(404, {"error": "not found"})   # wrong secret: nothing to learn, not even that the token exists
+            if path != "/api/show" and not self.session_ok():   # show: a second launch proves itself with run.json's token alone
+                return self.send(403, {"error": "forbidden"})
             talking = path in ("/api/talk", "/api/talk/setting")   # these must name their Origin: a missing one is not the page
             if (not hmac.compare_digest(h.get("X-AT-Token", "").encode(), token.encode())
                     or h.get("Origin", None if talking else "http://127.0.0.1:%d" % port) not in ("http://127.0.0.1:%d" % port, "http://localhost:%d" % port)):
@@ -3863,6 +3910,8 @@ def hub_start(cfg=None, port=None, secret="", on_show=None, token=None, fallback
             ids = {c["id"]: c.get("python") for c in chans if c["kind"] == "ssh"}
             try:
                 if path == "/api/show":
+                    if APP_INFO.get("mode") in ("browser", "cli"):   # no native window: the reopened browser window must be able to load the page again
+                        sess["cookie"] = None
                     if on_show:
                         threading.Thread(target=on_show, daemon=True).start()
                     return self.send(200, {"ok": True})
@@ -4051,6 +4100,8 @@ def hub(args):
 
 
 def selftest_srv():
+    ic = install_cmd("ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIabc agen-talk@PC")   # restricted line; the duplicate check matches the key, with or without options
+    assert "echo '%s ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIabc agen-talk@PC'" % AUTH_OPTS in ic and "grep -qF 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIabc'" in ic
     # the python check reads only its tagged line: a login banner from ~/.bashrc must not fail the server
     assert pycheck_parse("(base) conda ready\nAT-PY True\n") == "True" and pycheck_parse("AT-PY False") == "False" and pycheck_parse("True") == ""
     ids = {"s1": "python", "pc": None}
@@ -4150,7 +4201,7 @@ def selftest_pack():
     with tempfile.TemporaryDirectory() as t:   # atomic write: new file 0644, an existing file's mode kept, no temp file left
         f = Path(t) / "sub" / "c.json"
         write_conf(f, {"a": 1})
-        assert json.loads(f.read_text(encoding="utf-8")) == {"a": 1} and (os.name == "nt" or f.stat().st_mode & 0o777 == 0o644)
+        assert json.loads(f.read_text(encoding="utf-8")) == {"a": 1} and (os.name == "nt" or f.stat().st_mode & 0o777 == 0o600)   # new channels.json: owner only
         os.chmod(f, 0o664)
         write_conf(f, {"a": 2})
         assert (os.name == "nt" or f.stat().st_mode & 0o777 == 0o664) and [x.name for x in f.parent.iterdir()] == ["c.json"]
@@ -4558,21 +4609,41 @@ def selftest_http():
     with tempfile.TemporaryDirectory() as d:
         cfg = Path(d) / "channels.json"
         cfg.write_text(json.dumps({"port": 8765, "channels": [{"id": "pc", "name": "pc", "kind": "local"}]}), encoding="utf-8")
+        bad = Path(d) / "remote.json"
+        bad.write_text(json.dumps({"port": 8765, "channels": [{"id": "s1", "kind": "ssh", "ssh": "u@h"}]}), encoding="utf-8")
+        try:
+            hub_start(bad, port=0, secret="", fallback=False)
+            raise AssertionError("--insecure must refuse remote channels")
+        except SystemExit:
+            pass
         srv, url, stop = hub_start(cfg, port=0, secret="s3cr3t", token="tok-1", fallback=False)
         threading.Thread(target=srv.serve_forever, daemon=True).start()
         port = srv.server_address[1]
         try:
+            jar = {}
+
             def req(method, path, body=None, hdr=None, raw=None):
                 c = http.client.HTTPConnection("127.0.0.1", port, timeout=30)
-                hd = {"Host": "127.0.0.1:%d" % port, "Content-Type": "application/json", "X-AT-Token": "tok-1", "Origin": "http://127.0.0.1:%d" % port}
+                hd = {"Host": "127.0.0.1:%d" % port, "Content-Type": "application/json", "X-AT-Token": "tok-1", "Origin": "http://127.0.0.1:%d" % port,
+                      "Cookie": "at=" + jar["at"] if "at" in jar else None}
                 hd.update(hdr or {})
                 c.request(method, path, raw if raw is not None else json.dumps(body) if body is not None else None, {k: v for k, v in hd.items() if v is not None})
                 r = c.getresponse()
                 data = r.read()
+                sc = r.getheader("Set-Cookie") or ""
+                if sc.startswith("at="):
+                    jar["at"] = sc[3:].split(";")[0]
+                    jar["attrs"] = sc
                 c.close()
                 return r.status, (json.loads(data) if data[:1] in (b"{", b"[") else data)
+            assert req("GET", "/s3cr3t/api/channels")[0] == 403   # no page load yet: no session
             code, page = req("GET", "/s3cr3t/")
             assert code == 200 and b"tok-1" in page and b"__AT_TOKEN__" not in page, code
+            assert "HttpOnly" in jar["attrs"] and "SameSite=Strict" in jar["attrs"] and "Path=/s3cr3t/" in jar["attrs"], jar
+            assert req("GET", "/s3cr3t/")[0] == 200   # the window reloads with its cookie
+            assert req("GET", "/s3cr3t/", hdr={"Cookie": None})[0] == 403   # a copied URL is not a credential
+            assert req("GET", "/s3cr3t/api/channels", hdr={"Cookie": "at=wrong"})[0] == 403
+            assert req("POST", "/s3cr3t/api/talk/setting", {"on": True}, hdr={"Cookie": None})[0] == 403
             assert req("GET", "/")[0] == 404 and req("GET", "/api/channels")[0] == 404 and req("GET", "/wrong/api/channels")[0] == 404
             assert req("GET", "/s3cr3t/api/channels", hdr={"Host": "evil.example:%d" % port})[0] == 403   # DNS rebinding
             assert req("GET", "/s3cr3t/api/channels")[0] == 200
@@ -4584,6 +4655,15 @@ def selftest_http():
             assert req("POST", "/s3cr3t/api/talk/setting", {"on": "yes"})[0] == 400
             assert req("POST", "/s3cr3t/api/talk/setting", {"on": False}) == (200, {"on": False}) and json.loads(cfg.read_text(encoding="utf-8"))["talk"] is False
             assert req("POST", "/s3cr3t/api/nope", {})[0] == 404
+            mode0 = APP_INFO.get("mode")
+            try:   # a second launch (token only) in browser/cli mode re-arms the session: the reopened window loads the page again
+                APP_INFO["mode"] = "cli"
+                assert req("POST", "/s3cr3t/api/show", {}, hdr={"Cookie": None, "Origin": None})[0] == 200
+                assert req("GET", "/s3cr3t/api/channels")[0] == 403 and req("GET", "/s3cr3t/")[0] == 200 and req("GET", "/s3cr3t/api/channels")[0] == 200
+                APP_INFO["mode"] = "webview"   # the native window keeps its session
+                assert req("POST", "/s3cr3t/api/show", {}, hdr={"Cookie": None, "Origin": None})[0] == 200 and req("GET", "/s3cr3t/api/channels")[0] == 200
+            finally:
+                APP_INFO["mode"] = mode0
         finally:
             stop()
     print("http ok")
@@ -4887,15 +4967,21 @@ def selftest_talk():
             threading.Thread(target=srv.serve_forever, daemon=True).start()
             port = srv.server_address[1]
             try:
+                jar = {}
+
                 def req(method, path, body=None, hdr=None, raw=None):
                     c = http.client.HTTPConnection("127.0.0.1", port, timeout=60)
-                    hd = {"Content-Type": "application/json", "X-AT-Token": "tok-1", "Origin": "http://127.0.0.1:%d" % port}
+                    hd = {"Content-Type": "application/json", "X-AT-Token": "tok-1", "Origin": "http://127.0.0.1:%d" % port, "Cookie": jar.get("c")}
                     hd.update(hdr or {})
                     c.request(method, "/s3cr3t" + path, raw if raw is not None else json.dumps(body) if body is not None else None, {k: v for k, v in hd.items() if v is not None})
                     r = c.getresponse()
                     data = r.read()
+                    sc = r.getheader("Set-Cookie") or ""
+                    if sc.startswith("at="):
+                        jar["c"] = sc.split(";")[0]
                     c.close()
                     return r.status, (json.loads(data) if data[:1] in (b"{", b"[") else data), r
+                assert req("GET", "/")[0] == 200 and jar.get("c"), "the page load starts the session"
                 code_, body_, bad_ = req("OPTIONS", "/")
                 assert code_ == 501 and bad_.getheader("Content-Type", "").startswith("text/plain"), bad_.getheader("Content-Type")
                 def talk(text="hello hub", **kw):
@@ -4910,7 +4996,7 @@ def selftest_talk():
                 assert req("POST", "/api/talk", {"ch": "pc"}, hdr={"Origin": None})[0] == 403 and req("POST", "/api/talk", {}, hdr={"Origin": "http://evil.example"})[0] == 403
                 assert req("POST", "/api/talk", {}, hdr={"X-AT-Token": "bad"})[0] == 403 and req("POST", "/api/talk", {}, hdr={"Content-Type": "text/plain"})[0] == 400
                 sk = socket.create_connection(("127.0.0.1", port))   # a 40 KB body is refused from its header alone
-                sk.sendall(("POST /s3cr3t/api/talk HTTP/1.1\r\nHost: 127.0.0.1:%d\r\nX-AT-Token: tok-1\r\nOrigin: http://127.0.0.1:%d\r\nContent-Type: application/json\r\nContent-Length: 40000\r\n\r\n" % (port, port)).encode())
+                sk.sendall(("POST /s3cr3t/api/talk HTTP/1.1\r\nHost: 127.0.0.1:%d\r\nX-AT-Token: tok-1\r\nOrigin: http://127.0.0.1:%d\r\nCookie: %s\r\nContent-Type: application/json\r\nContent-Length: 40000\r\n\r\n" % (port, port, jar["c"])).encode())
                 resp = b""
                 while True:   # HTTP/1.0: the server closes after its answer
                     b_ = sk.recv(4096)
@@ -4984,6 +5070,14 @@ def selftest():
     assert b and all(abs(agy_t(x) - b - d) < 1e-3 for x, d in (("2026-10-14 02:16:34.5+00:00", .5), ("2026-10-14 02:16:34.22273+00:00", .22273),
            ("2026-10-14 02:16:34.222736805+00:00", .222736), ("2026-10-14T02:16:34Z", 0), ("2026-10-14T02:16:34.5Z", .5)))
     assert act("Bash", {"command": "ls -la\nmore"}) == "$ ls -la"
+    for raw, want in (("postgres://admin:hunter2pass@db:5432/x", "postgres://admin:[가려짐]@db:5432/x"), ("mysql -pS3cret -h db", "mysql -p[가려짐] -h db"),
+                      ("psql --password hunter2", "psql --password [가려짐]"), ("sshpass -p hunter2 ssh h", "sshpass -p [가려짐] ssh h"),
+                      ("Authorization: Basic dXNlcjpwYXNzd29yZDEyMw==", "Authorization: Basic [가려짐]"), ("DB_PASS=abcd", "DB_PASS=[가려짐]"),
+                      ("x sk_live_abcdefghijklmnop1234 glpat-abcdefghijklmnopqrst", "x [가려짐] [가려짐]"), ("AccountKey=" + "a" * 24 + ";", "AccountKey=[가려짐];"),
+                      ("ssh -p 2222 host", "ssh -p 2222 host"), ("git push -f origin main", "git push -f origin main"), ("cp -pr a b", "cp -pr a b"),
+                      ("claude --permission-mode=bypassPermissions", "claude --permission-mode=bypassPermissions")):
+        assert redact(raw) == want, (raw, redact(raw))
+    assert "aaa" not in act("Bash", {"command": "x" * 190 + " Bearer " + "a" * 30}), "redact, then cut: no head of a secret"
     assert act("exec", 'text((await tools.exec_command({cmd:"pytest -q\\nx"})))') == "$ pytest -q"
     assert "\x1b" not in node("x", "codex", "a\x1b[2Jb", "work", "w", NOW)["name"] and line1("a\x1bb") == "ab"
     assert act("exec", '// @exec: {"yield_time_ms": 6}\ntext(await tools.write_stdin({id:1}))').startswith("exec text(")

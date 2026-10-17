@@ -3281,7 +3281,7 @@ window.Importer = (() => {
   R.on('model', () => { if (mode === 'pal') render(false); });
   R.on('palette', () => (mode === 'pal' ? close() : open('pal')));
   R.key('?', () => (mode === 'sheet' ? close() : open('sheet')), '단축키');
-  // screenshot / test overrides, like ?theme=: ?pal=cdr opens the palette with a query, ?sheet=1 the shortcut sheet
+  // screenshot / test overrides, like ?theme=: ?pal=data opens the palette with a query, ?sheet=1 the shortcut sheet
   let qs = new URLSearchParams(location.search);
   if (!qs.has('pal') && !qs.has('sheet')) qs = null;
   if (qs) R.on('model', () => { if (qs) { const q = qs; qs = null; open(q.has('sheet') ? 'sheet' : 'pal', q.get('pal')); } });
