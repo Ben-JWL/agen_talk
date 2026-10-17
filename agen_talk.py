@@ -2932,10 +2932,20 @@ def win_set_dacl(path, sddl):
     from ctypes import wintypes
     adv, k32 = ctypes.WinDLL("advapi32", use_last_error=True), ctypes.WinDLL("kernel32")
     DACL = 4   # DACL_SECURITY_INFORMATION
+
+    def as_text(sd_):   # Windows' own rendering: well-known SIDs come back as aliases (LA, BA…), so compare renderings, not input text
+        out = ctypes.c_wchar_p()
+        if not adv.ConvertSecurityDescriptorToStringSecurityDescriptorW(sd_, 1, DACL, ctypes.byref(out), None):
+            raise ctypes.WinError(ctypes.get_last_error())
+        try:
+            return out.value
+        finally:
+            k32.LocalFree(out)
     sd = ctypes.c_void_p()
     if not adv.ConvertStringSecurityDescriptorToSecurityDescriptorW(ctypes.c_wchar_p(sddl), 1, ctypes.byref(sd), None):
         raise ctypes.WinError(ctypes.get_last_error())
     try:
+        want = as_text(sd)
         if not adv.SetFileSecurityW(ctypes.c_wchar_p(path), DACL, sd):
             raise ctypes.WinError(ctypes.get_last_error())
     finally:
@@ -2945,15 +2955,9 @@ def win_set_dacl(path, sddl):
     buf = ctypes.create_string_buffer(need.value or 1)
     if not adv.GetFileSecurityW(ctypes.c_wchar_p(path), DACL, buf, need, ctypes.byref(need)):
         raise ctypes.WinError(ctypes.get_last_error())
-    out = ctypes.c_wchar_p()
-    if not adv.ConvertSecurityDescriptorToStringSecurityDescriptorW(buf, 1, DACL, ctypes.byref(out), None):
-        raise ctypes.WinError(ctypes.get_last_error())
-    try:
-        got = out.value
-    finally:
-        k32.LocalFree(out)
-    if got != sddl:
-        raise OSError("DACL did not stick: %s" % got)
+    got = as_text(buf)
+    if got != want:
+        raise OSError("DACL did not stick: %s (wanted %s)" % (got, want))
 
 
 def pm_acl(path):
@@ -4316,6 +4320,8 @@ def selftest_pm():
             pm_acl(f)
             out = sp.run([sys32("icacls.exe"), str(f)], **popen_kw(capture_output=True, timeout=10)).stdout.decode("mbcs", "replace")
             assert "S-1-5-32-545" not in out and "BUILTIN" not in out and out.count(":(F)") == 1, out
+            win_set_dacl(str(f), "D:P(A;;FA;;;S-1-5-32-544)")   # a well-known SID reads back as an alias (BA); CI runs as LA
+            pm_acl(f)
 
         old = (WIN, conf_dir, pm_acl, pm_open)
         called, keydir = [], Path(t) / "acl"
