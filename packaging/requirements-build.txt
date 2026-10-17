@@ -1,4 +1,14 @@
-# Build-time tools for the Windows release (pinned; bump deliberately).
+# Build-time tools for the Windows release: the human-edited INPUT (top-level pins; bump deliberately).
+# CI does NOT install this file. It installs packaging/requirements-build.lock, the fully resolved,
+# hash-pinned lock (every transitive dependency, with sha256 hashes), via:
+#     python -m pip install --require-hashes -r packaging/requirements-build.lock
+#
+# After editing this file, regenerate the lock ON WINDOWS with CPython 3.12 (the release runner is
+# windows-latest + Python 3.12; pywebview's Windows-only deps such as pythonnet resolve per platform):
+#     .venv\Scripts\python.exe -m pip install pip-tools
+#     .venv\Scripts\python.exe -m piptools compile --generate-hashes --allow-unsafe --strip-extras --no-emit-index-url -o packaging/requirements-build.lock packaging/requirements-build.txt
+# (--allow-unsafe keeps setuptools, which pyinstaller needs, in the lock; add --upgrade to move transitive
+# deps to their latest versions, otherwise existing lock pins are kept.) Review the diff, then commit both files.
 pyinstaller==6.22.3
 pywebview==6.2.1
 pillow==12.3.0

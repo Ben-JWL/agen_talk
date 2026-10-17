@@ -54,3 +54,11 @@ smoke-test the exe, Inno Setup installer (per user, no admin), portable zip, `SH
 UI dev selftest (`ui/build.py --dev`, headless Chrome with `?talkfx=1&selftest=1`) on every push and pull request; a manual
 run (workflow_dispatch) also builds the PyInstaller app and runs the frozen `AgenTalk.exe --selftest`.
 The installer deletes `{app}\_internal` before copying, so an upgrade never mixes old and new runtime files.
+
+Supply chain: the build installs `packaging/requirements-build.lock` with `pip install --require-hashes` (every package,
+transitive ones included, pinned by version and sha256; `packaging/requirements-build.txt` is the human-edited input and its
+header says how to regenerate the lock with pip-compile on Windows/Python 3.12). Every `uses:` action is pinned to a full
+commit SHA (tag in the trailing comment), and the Inno Setup fallback installs a pinned Chocolatey version. The release workflow
+signs SLSA build provenance for the Setup exe, the portable zip and `SHA256SUMS` (`actions/attest-build-provenance`; only the
+`build` job gets `id-token: write` / `attestations: write`). To verify a download (needs the GitHub CLI):
+`gh attestation verify <file> --repo Ben-JWL/agen_talk`; then check the other files against the verified `SHA256SUMS`.

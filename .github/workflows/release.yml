@@ -16,6 +16,10 @@ jobs:
   build:
     runs-on: windows-latest
     timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write       # OIDC token for the Sigstore signing certificate (artifact attestation)
+      attestations: write   # store the build-provenance attestation on the repo
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -40,7 +44,8 @@ jobs:
           fi
 
       - name: Install build tools
-        run: python -m pip install -r packaging/requirements-build.txt
+        # fully resolved, hash-pinned lock (see packaging/requirements-build.txt for how to regenerate it)
+        run: python -m pip install --require-hashes -r packaging/requirements-build.lock
 
       - name: UI build equals committed index.html
         run: python tools/check_ui.py
@@ -109,7 +114,8 @@ jobs:
           $iscc = (Get-Command iscc -ErrorAction SilentlyContinue).Source
           if (-not $iscc) { $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" }
           if (-not (Test-Path $iscc)) {
-            choco install innosetup -y --no-progress
+            choco install innosetup --version 6.7.1 -y --no-progress   # pinned: latest Chocolatey innosetup 6.7.x (checked 2026-10-17)
+            if ($LASTEXITCODE -ne 0) { throw "choco install innosetup failed" }
             $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           }
           & $iscc "/DAppVersion=$env:AT_VERSION" packaging\installer.iss
@@ -149,6 +155,15 @@ jobs:
           cd release
           sha256sum "$APP_FILE-Setup-$AT_VERSION.exe" "$APP_FILE-$AT_VERSION-portable.zip" > SHA256SUMS
           cat SHA256SUMS
+
+      # Build provenance (SLSA, Sigstore-signed, stored on GitHub). Users verify a download with:
+      #   gh attestation verify <file> --repo Ben-JWL/agen_talk
+      - uses: actions/attest-build-provenance@96278af6caaf10aea03fd8d33a09a777ca52d62f # v3.2.0
+        with:
+          subject-path: |
+            release/${{ env.APP_FILE }}-Setup-${{ env.AT_VERSION }}.exe
+            release/${{ env.APP_FILE }}-${{ env.AT_VERSION }}-portable.zip
+            release/SHA256SUMS
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

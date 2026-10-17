@@ -85,7 +85,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install build tools
-        run: python -m pip install -r packaging/requirements-build.txt
+        run: python -m pip install --require-hashes -r packaging/requirements-build.lock
       - name: Icon
         run: python packaging/make_icon.py
       - name: PyInstaller
