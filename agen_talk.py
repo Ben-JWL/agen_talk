@@ -4,22 +4,20 @@
   agen_talk.py                  tree: what each agent is for and what it is doing now
   agen_talk.py --board          kanban
   agen_talk.py --all            also show sessions idle for more than a day
-  agen_talk.py --json           state as JSON (the /agent-tree pane reads this)
-  agen_talk.py hub [FILE]       (Windows; on a shared Linux box needs --insecure) dashboard for several machines: reads channels.json (next to this file, or FILE),
-                                 serves http://127.0.0.1:PORT/ only. ssh channels stream this file to the server
-                                 over the ssh session (python3 -c, nothing installed there); the server-side collector
-                                 exits when the session ends. agen-talk.cmd starts this on Windows.
-                                 설정 → 서버 추가 registers servers without editing channels.json (type the password once; the
-                                 hub installs ~/.ssh/agen_talk_ed25519). Test-only env: AT_SSH, AT_SSH_KEYGEN, AT_KEYINSTALL_TIMEOUT.
-                                 Page and API live under a random /<secret>/ (printed URL); --insecure = no secret, root paths.
-                                 Without FILE: channels.json next to this file if it exists, else %APPDATA%\\AgenTalk (Linux ~/.config/agen-talk).
-                                 app.py (the installed Windows app) runs this same hub in-process via hub_start().
+  agen_talk.py --json           state as JSON
+  agen_talk.py hub [FILE]       dashboard for several machines in a Chrome/Edge app window (dev / source use; the installed app is app.py,
+                                 which runs this same hub in-process via hub_start()). Reads channels.json (FILE, else next to this file,
+                                 else %APPDATA%\\AgenTalk, Linux ~/.config/agen-talk) and serves http://127.0.0.1:PORT/ only, page and API under
+                                 a random /<secret>/ (printed URL); --insecure = no secret, root paths, read-only (a shared Linux box).
+                                 ssh channels stream this file to the server over the ssh session (python3 -c, nothing installed there);
+                                 the server-side collector exits when the session ends. Transport: in-app SSH (paramiko) with the app's own
+                                 key and trust store (%APPDATA%\\AgenTalk\\id_ed25519, known_hosts); OpenSSH only when paramiko is missing or a
+                                 channel's ssh_args need it (fallback key ~/.ssh/agen_talk_ed25519). 설정 → 서버 추가 registers servers
+                                 (the password is typed once in the app and never stored).
+                                 Test-only env: AT_SSH, AT_SSH_KEYGEN, AT_KEYINSTALL_TIMEOUT, AT_NO_PARAMIKO, AT_TALK_ROOT, AT_CODEX.
   agen_talk.py keyinstall RESULT_FILE user@host PORT [NAME]   internal: the password console the hub opens
   agen_talk.py pipe             collector over stdin/stdout, one JSON line per input line (the hub runs this remotely);
                                  a line starting with { is a talk request (톡: a message into a claude / codex session), anything else is a poll
-  agen_talk.py serve [SOCK]     legacy: dashboard over a unix socket (dir 0700, socket 0600), default
-                                 ~/.cache/agen-talk/sock. Exits when stdin closes, so
-                                 `ssh -L PORT:SOCK host agen_talk.py serve` lives and dies with the tunnel.
   agen_talk.py --selftest
   watch -c -n3 'agen_talk.py -c'
 
@@ -292,7 +290,11 @@ def procs():
     PREV.update({(k, v["started"]): (v["cpu"], PTS) for k, v in PROC.items()})
     PTS = NOW
     if WIN:
-        return win_procs(ps_json())
+        snap = win_procs(ps_json())
+        if not snap and PROC:   # PowerShell failed or timed out: keep the last snapshot instead of showing every agent dead
+            WARN.append("프로세스 목록을 읽지 못함 (PowerShell 실패/시간 초과)")
+            return PROC
+        return snap
     out = {}
     for d in os.listdir("/proc"):
         if not d.isdigit():
@@ -360,6 +362,12 @@ def cwd(pid):
 
 
 def argv(pid):
+    if WIN:   # no /proc: split the CommandLine of the process snapshot (good enough for flag checks)
+        import shlex
+        try:
+            return [a.strip('"') for a in shlex.split(PROC.get(pid, {}).get("cmd") or "", posix=False)]
+        except ValueError:
+            return (PROC.get(pid, {}).get("cmd") or "").split()
     try:
         return open(f"/proc/{pid}/cmdline", "rb").read().decode("utf-8", "replace").split("\0")[:-1]
     except OSError:
@@ -378,7 +386,7 @@ def proc_env(pid):
         raw = open(f"/proc/{pid}/environ", "rb").read()
     except OSError:
         return {}
-    return {k.decode(): v.decode() for k, v in re.findall(rb"(?:^|\0)(CLAUDE_PID|CODEX_THREAD_ID)=([^\0]*)", raw)}
+    return {k.decode(): v.decode("utf-8", "replace") for k, v in re.findall(rb"(?:^|\0)(CLAUDE_PID|CODEX_THREAD_ID)=([^\0]*)", raw)}
 
 
 def proc_kids(pid, deep=True):
@@ -424,15 +432,35 @@ def proc_entry(pid, cmd=None, bg=False):
     return e
 
 
+SHELL_RE = re.compile(rb"\beval '(.*)' (?:< /dev/null )?&& pwd -P >\| \S*/claude-[0-9a-f]+-cwd", re.S)   # any temp dir: /tmp, $TMPDIR, Git Bash's /c/Users/…/Temp
+
+
+def shell_cmdline(cmd):
+    """Windows: Git Bash's `bash.exe -c "…"` command line with the CreateProcess escapes (\\" and \\\\) undone, as bytes."""
+    return cmd.replace('\\"', '"').replace("\\\\", "\\").encode("utf-8", "replace")
+
+
+def same_proc_start(p, proc_start):
+    """PID-reuse guard for a sessions/<pid>.json: Linux compares /proc stat field 22; Windows' procStart is a FILETIME (100 ns since 1601)."""
+    if not proc_start:
+        return True
+    if p["start"] is not None:
+        return str(p["start"]) == str(proc_start)
+    try:
+        return abs(p["started"] - (int(proc_start) / 1e7 - 11644473600)) < 2
+    except (TypeError, ValueError):
+        return True
+
+
 def proc_shells(host):
     """[(pid, eval_text, fd1)] of the claude tool shells directly under a claude process."""
     out = []
     for c in proc_kids(host, False):
         try:
-            m = re.search(rb"\beval '(.*)' (?:< /dev/null )?&& pwd -P >\| /tmp/claude-\w+-cwd",
-                          PROC[c]["cmd"].encode() if WIN else open(f"/proc/{c}/cmdline", "rb").read(), re.S)
+            raw = shell_cmdline(PROC[c]["cmd"]) if WIN else open(f"/proc/{c}/cmdline", "rb").read()
         except OSError:
             continue
+        m = SHELL_RE.search(raw)
         if m:
             try:
                 fd1 = os.readlink(f"/proc/{c}/fd/1")
@@ -478,7 +506,7 @@ def proc_attach(roots):
         if p["uid"] != me or (p["ppid"] in PROC and p["ppid"] != 1) or pid in roots or pid in seen:
             continue
         e = proc_env(pid)
-        x, t = int(e.get("CLAUDE_PID", 0)), e.get("CODEX_THREAD_ID")
+        x, t = int(e.get("CLAUDE_PID") or 0) if str(e.get("CLAUDE_PID") or "0").isdigit() else 0, e.get("CODEX_THREAD_ID")   # an empty or junk CLAUDE_PID is just no claude
         n = roots[x][0] if roots.get(x) and PROC[x]["started"] <= p["started"] else NODES.get(t)
         if n:
             n["procs"].append(proc_entry(pid, bg=True))
@@ -487,9 +515,17 @@ def proc_attach(roots):
 
 
 def selftest_proc():
-    global PROC, PREV, NOW, NODES, proc_env
-    save = PROC, dict(PREV), NOW, dict(NODES), proc_env, KIDS
+    global PROC, PREV, NOW, NODES, proc_env, argv
+    # claude tool shells: Linux argv (any temp dir) and Windows Git Bash command lines (CreateProcess escapes)
+    lin = b"bash\0-c\0source x && eval 'ls -la' < /dev/null && pwd -P >| /run/user/1000/claude-ab12-cwd\0"
+    win = r'''"C:\Program Files\Git\bin\bash.exe" -c "source /c/s.sh && eval 'grep \"a b\" f' < /dev/null && pwd -P >| /c/Temp/claude-9328-cwd"'''
+    assert SHELL_RE.search(lin).group(1) == b"ls -la" and SHELL_RE.search(shell_cmdline(win)).group(1) == b'grep "a b" f'
+    wp = {"start": None, "started": 1792200902.634}   # Windows: procStart is a FILETIME of the same instant
+    assert same_proc_start(wp, "134366745026348375") and not same_proc_start(wp, str(134366745026348375 + 10 ** 8)) and same_proc_start(wp, None)
+    assert same_proc_start({"start": "77", "started": 0}, "77") and not same_proc_start({"start": "78", "started": 0}, "77")
+    save = PROC, dict(PREV), NOW, dict(NODES), proc_env, KIDS, argv
     uid = 0 if WIN else os.getuid()
+    argv = lambda pid: []   # the fake pids (10, 11, 12…) are real processes inside a container: never read their /proc
     try:
         w = win_procs('[{"ProcessId":100,"ParentProcessId":4,"Name":"claude.exe","CommandLine":"claude.exe -p","CreationDate":"/Date(1760000000000)/",'
                       '"UserModeTime":3000000,"KernelModeTime":2000000},{"ProcessId":200,"ParentProcessId":100,"Name":"bash.exe","CommandLine":null,'
@@ -532,12 +568,13 @@ def selftest_proc():
         assert win_procs("garbage") == {} and win_procs('{"Name":"x"}') == {}
         WARN.clear()
     finally:
-        PROC, NOW, proc_env = save[0], save[2], save[4]
+        PROC, NOW, proc_env, argv = save[0], save[2], save[4], save[6]
         PREV.clear(), PREV.update(save[1]), NODES.clear(), NODES.update(save[3])
 
 
 # ---------- codex ----------
 CX, CX_KIDS, CX_PARENT, CX_HELD, CX_TURN, CX_TAG, CX_LIVE = {}, {}, {}, {}, {}, {}, set()
+CX_SUB = set()   # threads whose `source` says subagent (guardian reviews have no spawn edge): never a root room
 CX_CALLS = ("function_call", "custom_tool_call", "local_shell_call")
 
 
@@ -697,13 +734,24 @@ def codex_msgs(t, lines):
     return msgs_fin(ms)
 
 
+def cx_subagent(source):
+    """The `subagent` object of a threads.source JSON ({"subagent": {"thread_spawn": {...}}} or {"subagent": {"other": "guardian"}}), else None."""
+    if not isinstance(source, str) or not source.startswith("{"):
+        return None
+    try:
+        d = json.loads(source)
+    except ValueError:
+        return None
+    return d.get("subagent") if isinstance(d, dict) and "subagent" in d else None
+
+
 def codex_node(t):
     _, path, role, apath, model, title, first, source, rec, cwd_, created = CX[t]
     pid = CX_HELD.get(t)
     if pid not in CX_TAG:  # direct children of the holder carrying this thread's id (proc_tagged is per holder)
         CX_TAG[pid] = proc_tagged(pid) if pid else {}
     tagged = [p for p, th in CX_TAG[pid].items() if th == t]
-    sub = bool(apath) or t in CX_PARENT
+    sub = bool(apath) or t in CX_PARENT or t in CX_SUB
     kids = [k for k in CX_KIDS.get(t, ()) if k in CX]
     g, seen = codex_lines(path), []
 
@@ -728,9 +776,17 @@ def codex_node(t):
     return fold(n)
 
 
+def codex_host(v):
+    """A process that can hold Codex threads. Linux finds the holder by its open rollout fds, so any codex* process may stay a candidate;
+    Windows has no fd listing and takes hosts[0] as the holder, so helpers (the always-on sandbox service, computer-use, exec-server) must not count."""
+    if WIN:
+        return v["comm"] == "codex" and not re.search(r" exec-server( |$)", v.get("cmd") or "")
+    return v["comm"].startswith("codex") and v["comm"] != "codex-code-mode"
+
+
 def codex_collect(roots):
     global CX, CX_KIDS, CX_PARENT, CX_HELD, CX_TURN, CX_TAG, CX_LIVE
-    hosts = [p for p, v in PROC.items() if v["comm"].startswith("codex") and v["comm"] != "codex-code-mode"]
+    hosts = [p for p, v in PROC.items() if codex_host(v)]
     db, hist = HOME / ".codex/state_5.sqlite", HOME / ".codex/thread_history_1.sqlite"
     CX = {r[0]: r for r in q(db, "select id, rollout_path, agent_role, agent_path, model, substr(title,1,200),"
                              " substr(first_user_message,1,200), source, recency_at_ms, cwd, created_at from threads", bool(hosts))}
@@ -742,6 +798,16 @@ def codex_collect(roots):
     for p, c in q(db, "select parent_thread_id, child_thread_id from thread_spawn_edges", bool(hosts)):
         CX_KIDS[p].append(c)
         CX_PARENT[c] = p
+    CX_SUB.clear()
+    for t, r in CX.items():
+        sp = cx_subagent(r[7])
+        if sp is None:
+            continue
+        CX_SUB.add(t)
+        par = (sp.get("thread_spawn") or {}).get("parent_thread_id") if isinstance(sp, dict) else None
+        if par in CX and t not in CX_PARENT:   # an edge the table lacks: the child still belongs under its parent
+            CX_KIDS[par].append(t)
+            CX_PARENT[t] = par
     # latest turn per thread, trusted only while the projection has caught up with the rollout file
     by_path = {r[1]: t for t, r in CX.items()}
     for tid, st, started, off in q(hist, "select t.thread_id, t.status, t.started_at, s.next_rollout_byte_offset from thread_turns t"
@@ -757,17 +823,17 @@ def codex_collect(roots):
         CX_HELD.update({t: hosts[0] for t, r in CX.items() if CX_TURN.get(t, ("",))[0] == "inProgress" and NOW - r[8] / 1000 < 86400})
         cutoff = min(PROC[h]["started"] for h in hosts) - 5
         recent = sorted(((r[8], t) for t, r in CX.items() if CX_TURN.get(t, ("",))[0] == "completed"
-                         and r[7] != "exec" and r[8] / 1000 >= cutoff), reverse=True)
+                         and r[7] != "exec" and t not in CX_SUB and r[8] / 1000 >= cutoff), reverse=True)
         CX_HELD.update({t: hosts[0] for _, t in recent[:len(hosts)]})
     CX_LIVE = set()  # held threads and their ancestors: never skipped as 'finished'
     for t in CX_HELD:
         while t and t not in CX_LIVE:
             CX_LIVE.add(t)
             t = CX_PARENT.get(t)
-    for t in {top(CX_PARENT, t) for t in CX_HELD} & set(CX):
+    for t in ({top(CX_PARENT, t) for t in CX_HELD} & set(CX)) - CX_SUB:
         roots.setdefault(CX_HELD.get(t), []).append(codex_node(t))
     for t, r in CX.items():  # killed `codex exec` and friends: open turn, nobody holds it
-        if t not in CX_PARENT and t not in CX_LIVE and (CX_TURN.get(t, ("",))[0] == "inProgress" and NOW - r[8] / 1000 < 86400
+        if t not in CX_PARENT and t not in CX_SUB and t not in CX_LIVE and (CX_TURN.get(t, ("",))[0] == "inProgress" and NOW - r[8] / 1000 < 86400
                                                        or r[7] == "exec" and NOW - r[8] / 1000 < FRESH):  # a just-finished `codex exec` stays visible as done
             n = codex_node(t)
             if n["st"] in ("dead", "done"):
@@ -787,6 +853,17 @@ def selftest_codex():
     PROC = {7: {"started": NOW - 5000, "state": "S"}}
     st = lambda lines, held=7, tagged=(), src="cli", sub=False, kids=False, ts0=None, hs=NOW - 5000: \
         codex_state(iter(lines), held, hs, list(tagged), src, sub, kids, ts0)
+    # Windows hosts: the app-server or CLI, never the sandbox service / computer-use helper / exec-server
+    g = globals()
+    old_win = g["WIN"]   # WIN is declared global further down this function
+    try:
+        g["WIN"] = True
+        pr = lambda comm, cmd: {"comm": comm, "cmd": cmd}
+        assert codex_host(pr("codex", r"C:\c\codex.exe -c x=1 app-server --analytics-default-enabled")) and codex_host(pr("codex", "codex.exe"))
+        assert not codex_host(pr("codex-windows-sandbox-service", "codex-windows-sandbox-service.exe"))
+        assert not codex_host(pr("codex-computer-use-swift", "x")) and not codex_host(pr("codex", 'codex.exe -c "a=b" exec-server --remote https://x'))
+    finally:
+        g["WIN"] = old_win
     # 1: error task_complete
     e = lambda r: [ev(1, "task_complete", error={"message": "x", "codex_error_info": r}, last_agent_message=None), start]
     assert st(e("usage_limit_exceeded"))[:2] == ("user", "사용량 한도/인증 필요")
@@ -900,7 +977,7 @@ CL_END = ("end_turn", "stop_sequence")
 
 def claude_lines(path):
     """Significant transcript lines, newest first (file order, never timestamps); 64 KB tail, 1 MB if that holds none."""
-    for size in (65536, 1 << 20):
+    for size in (65536, 4 << 20):   # 4 MB like codex_lines: one screenshot tool_result can exceed 1 MB
         out = [d for d in tail(path, size) if d.get("type") in CL_KEEP and isinstance(d.get("message", {}), dict)
                and not (d.get("type") == "system" and d.get("subtype") in CL_QUIET)]
         if out:
@@ -1051,7 +1128,7 @@ def claude_state(lines, kind, sess, shells, notes, nid=None, t0=None):
         return fin("user" if main else "stopped", mark, last=say)
     tr = res and " ".join(str(b.get("content")) for b in res)
     tur = f.get("toolUseResult")
-    if res and ("Structured output provided successfully" in tr
+    if res and ("Structured output provided successfully" in tr or "Report delivered to your caller." in tr   # newer Claude: the handback result is text only
                 or isinstance(tur, dict) and tur.get("message") == "Report delivered to your caller."):  # 3
         return fin("user", "보고 완료", last=say)
     pend = claude_pending(lines)                                                           # 4
@@ -1448,7 +1525,7 @@ def claude_collect(roots):
         su = (s.get("statusUpdatedAt") or 0) / 1000
         comm = p and p["comm"]
         if (p and (comm.startswith("claude") or comm == "node" if WIN else comm == "claude") and p["state"] not in "ZX"
-                and (p["start"] is None or not s.get("procStart") or str(p["start"]) == str(s["procStart"]))):
+                and same_proc_start(p, s.get("procStart"))):
             roots[pid] = [claude_node(s, proc_shells(pid))]
         elif NOW - su < FRESH:
             roots[None].append(node(sid, "claude", s.get("name"), "dead", "claude 프로세스 없음", su, False,
@@ -1505,6 +1582,8 @@ def selftest_claude():
         assert run(intr)[0] == "user" and run(intr, "sub")[0] == "stopped"                            # 6
         so = [res("t9", toolUseResult={"success": True, "message": "Report delivered to your caller."})]
         assert run(so, "sub")[0] == "user" and run(so)[1] == "보고 완료"                                # 7 (node() -> done)
+        so2 = [usr([{"type": "tool_result", "tool_use_id": "t9", "content": [{"type": "text", "text": '{"success":true,"message":"Report delivered to your caller."}'}]}])]
+        assert run(so2, "sub")[1] == "보고 완료", run(so2, "sub")   # newer Claude: no toolUseResult, the result is text only
         assert run(bash, status="waiting", waitingFor="permission prompt") == ("user", "권한 승인 대기")  # 8 beats pending
         assert run([asst([use("q", "AskUserQuestion")], "tool_use")]) == ("user", "질문에 답 필요")      # 9
         assert run([asst([use("a", "Agent")], "tool_use")])[0] == "child"
@@ -1767,8 +1846,10 @@ def agy_collect(roots):
         if not ids and not WIN:
             roots.setdefault(pid, []).append(node("agy-%d" % pid, "agy", "(대화 시작 전)", "idle", "대화 시작 전",
                                                   live_hosts[pid]["started"], meta="pid %d · %s" % (pid, short(cwd(pid)))))
-    if WIN and live_hosts:                                           # ponytail: no fd links on Windows, so any root counts as hosted by the oldest agy; use ~/.gemini lock probing if that lies
-        hosted = {c: min(live_hosts) for c in rows}
+    if WIN and live_hosts:   # no fd links on Windows: the oldest agy hosts the roots touched since it started (older conversations stay closed)
+        oldest = min(live_hosts, key=lambda p: live_hosts[p]["started"])
+        since = live_hosts[oldest]["started"] - 5
+        hosted = {up(c): oldest for c, r in rows.items() if (agy_t(r[4]) or 0) >= since}
     start = max([p["started"] for p in live_hosts.values()] or [0]) or None
 
     def build(cid, host, hs, sub):
@@ -1975,14 +2056,24 @@ def talk_fill(forest):
 
 
 def claude_session(sid):
-    """sessions/<pid>.json of a session id, or None."""
+    """sessions/<pid>.json of a session id, or None. A crash + `--resume` leaves several files with one id: the live process wins, then the newest."""
+    found = []
     for f in (HOME / ".claude/sessions").glob("*.json"):
         try:
             s = json.loads(f.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             continue
-        if isinstance(s, dict) and s.get("sessionId") == sid and type(s.get("pid")) is int:
-            return s
+        if isinstance(s, dict) and s.get("sessionId") == sid and type(s.get("pid")) is int and not s.get("spare") and not s.get("parkedJobId"):
+            found.append(s)
+
+    def live(s):
+        try:
+            st = open("/proc/%d/stat" % s["pid"]).read()
+            return str(st[st.rindex(")") + 2:].split()[19]) == str(s.get("procStart"))
+        except (OSError, ValueError, IndexError):
+            return False
+    found.sort(key=lambda s: (live(s), s.get("statusUpdatedAt") or 0), reverse=True)
+    return found[0] if found else None
 
 
 def talk_line(by, mid, text):
@@ -2214,19 +2305,37 @@ def talk_enqueue(slot, job, rate, key, target, now):
 
 
 # ---------- collect everything into one forest ----------
+import threading
+COLLECT_LOCK = threading.Lock()   # collect() rebuilds module globals (NOW, PROC, CX…, NODES): two local channels must not interleave
+
+
 def collect():
+    with COLLECT_LOCK:
+        return collect_unlocked()
+
+
+def collect_unlocked():
     global NOW, PROC
     NOW = time.time()
     del WARN[:]
     NODES.clear()
     PROC = procs()
     roots = {None: []}   # host pid -> [root nodes it hosts]; None = no live host
-    codex_collect(roots)
-    agy_collect(roots)
-    claude_collect(roots)
-    forest = proc_attach(roots)   # nests hosts under the agent that launched them, attaches leftovers
-    talk_fill(forest)
-    msgs_post(forest)
+    for name, f in (("codex", codex_collect), ("agy", agy_collect), ("claude", claude_collect)):   # one broken source must not blank the machine
+        try:
+            f(roots)
+        except Exception as e:
+            WARN.append("%s 수집 오류: %s: %s" % (name, type(e).__name__, line1(str(e), 120)))
+    try:
+        forest = proc_attach(roots)   # nests hosts under the agent that launched them, attaches leftovers
+    except Exception as e:
+        WARN.append("프로세스 연결 오류: %s: %s" % (type(e).__name__, line1(str(e), 120)))
+        forest = [n for v in roots.values() for n in v]
+    for name, f in (("talk", talk_fill), ("msgs", msgs_post)):
+        try:
+            f(forest)
+        except Exception as e:
+            WARN.append("%s 처리 오류: %s: %s" % (name, type(e).__name__, line1(str(e), 120)))
     for k in [k for k, v in CL_HEAD.items() if v[2] != NOW]:   # only the transcripts this collect read
         del CL_HEAD[k]
     rank = {s: i for i, s in enumerate(("stall", "user", "work", "tool", "child", "stopped", "dead", "idle", "done"))}
@@ -2338,7 +2447,7 @@ def board(forest):
         print(" │ ".join(paint(pad(c[row][0], w), c[row][1]) if row < len(c) else " " * w for c in lines))
 
 
-# ---------- pipe / serve / hub ----------
+# ---------- pipe / hub ----------
 # the hub feeds this to `python3 -c "BOOT"` on the server: first line = byte length, then the source, then one
 # newline per poll. ponytail: BOOT must never contain " $ ` or \ (it passes through the remote login shell)
 BOOT = ("import sys;b=sys.stdin.buffer;n=int(b.readline());s=b.read(n);sys.argv=['agen_talk.py','pipe'];"
@@ -2352,7 +2461,7 @@ def pipe():
     for ln in sys.stdin.buffer:
         s = ln.strip()
         out = talk_req(s) if s[:1] == b"{" else collect()   # a line starting with { is a talk request, anything else is a poll
-        sys.stdout.buffer.write(json.dumps(out, ensure_ascii=False).encode() + b"\n")
+        sys.stdout.buffer.write(json.dumps(out, ensure_ascii=False).encode("utf-8", "replace") + b"\n")   # a lone surrogate (a cut emoji) must not kill the channel
         sys.stdout.buffer.flush()
 
 
@@ -2491,6 +2600,17 @@ def default_cfg():
     return old if old.exists() and not getattr(sys, "frozen", False) else conf_dir() / "channels.json"
 
 
+def replace_retry(src, dst, tries=10):
+    """os.replace that rides out Windows sharing violations (Defender, OneDrive or a reader holding the target for a moment)."""
+    for i in range(tries):
+        try:
+            return os.replace(src, dst)
+        except PermissionError:
+            if not WIN or i == tries - 1:
+                raise
+            time.sleep(0.05 * (i + 1))
+
+
 def write_conf(cfg, conf):
     """Atomic channels.json write (temp file in the same folder, fsync, os.replace on the resolved path); keeps the old file's mode, new files 0644."""
     import tempfile
@@ -2507,9 +2627,11 @@ def write_conf(cfg, conf):
             f.flush()
             os.fsync(f.fileno())
         os.chmod(tmp, mode)
-        os.replace(tmp, cfg.resolve())   # resolve: a symlinked channels.json stays a symlink
-    except BaseException:
+        replace_retry(tmp, cfg.resolve())   # resolve: a symlinked channels.json stays a symlink
+    except BaseException as e:
         os.unlink(tmp)
+        if isinstance(e, OSError):
+            raise SrvErr("other", "설정 파일(channels.json)을 저장하지 못했습니다: %s" % e)
         raise
 
 
@@ -2621,17 +2743,29 @@ def run_capped(argv, timeout=30, cap=1 << 16):
     return p.returncode, got.get("out", b""), got.get("err", b"")
 
 
+PYCHECK = "%s -c 'import sys; print(\"AT-PY\", sys.version_info >= (3, 8))'"   # tagged: shell startup files (conda, nvm banners) may print too
+
+
+def pycheck_parse(out):
+    """The python check's answer ('True' / 'False' / '') from stdout that may hold other lines before it."""
+    for ln in reversed(out.splitlines()):
+        ln = ln.strip()
+        if ln.startswith("AT-PY "):
+            return ln[6:]
+    return ""
+
+
 def srv_verify(tgt, rq):
     """Key-login check (BatchMode): returns (kind, ssh stderr); kind is 'ok', 'no_python3' or an ssh_kind."""
     import subprocess
     try:
         rc, so, se = run_capped([ssh_bin("ssh"), "-T", "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=yes", "-o", "ConnectTimeout=10", "-o", "IdentitiesOnly=yes", "-i", str(KEY),
-                                 "-p", str(rq["port"]), "--", tgt, "%s -c 'import sys; print(sys.version_info >= (3, 8))'" % (rq["python"] or "python3")])
+                                 "-p", str(rq["port"]), "--", tgt, PYCHECK % (rq["python"] or "python3")])
     except subprocess.TimeoutExpired:
         return "unreachable", "timed out"
     except (OSError, TypeError):   # TypeError: ssh_bin() is None
         return "ssh_missing", NOSSH
-    out, err = so.decode("utf-8", "replace").strip(), se.decode("utf-8", "replace")
+    out, err = pycheck_parse(so.decode("utf-8", "replace")), se.decode("utf-8", "replace")
     if rc == 0 and out == "True":
         return "ok", err
     if out == "False":
@@ -2792,6 +2926,36 @@ def pm_mod():
 _PM_ACL_VALIDATED = set()
 
 
+def win_set_dacl(path, sddl):
+    """Windows: replace the file's DACL with `sddl` (e.g. 'D:P(A;;FA;;;S-1-5-…)') and read it back; OSError when it does not stick."""
+    import ctypes
+    from ctypes import wintypes
+    adv, k32 = ctypes.WinDLL("advapi32", use_last_error=True), ctypes.WinDLL("kernel32")
+    DACL = 4   # DACL_SECURITY_INFORMATION
+    sd = ctypes.c_void_p()
+    if not adv.ConvertStringSecurityDescriptorToSecurityDescriptorW(ctypes.c_wchar_p(sddl), 1, ctypes.byref(sd), None):
+        raise ctypes.WinError(ctypes.get_last_error())
+    try:
+        if not adv.SetFileSecurityW(ctypes.c_wchar_p(path), DACL, sd):
+            raise ctypes.WinError(ctypes.get_last_error())
+    finally:
+        k32.LocalFree(sd)
+    need = wintypes.DWORD(0)
+    adv.GetFileSecurityW(ctypes.c_wchar_p(path), DACL, None, 0, ctypes.byref(need))
+    buf = ctypes.create_string_buffer(need.value or 1)
+    if not adv.GetFileSecurityW(ctypes.c_wchar_p(path), DACL, buf, need, ctypes.byref(need)):
+        raise ctypes.WinError(ctypes.get_last_error())
+    out = ctypes.c_wchar_p()
+    if not adv.ConvertSecurityDescriptorToStringSecurityDescriptorW(buf, 1, DACL, ctypes.byref(out), None):
+        raise ctypes.WinError(ctypes.get_last_error())
+    try:
+        got = out.value
+    finally:
+        k32.LocalFree(out)
+    if got != sddl:
+        raise OSError("DACL did not stick: %s" % got)
+
+
 def pm_acl(path):
     """Windows: only the current user may touch the file. Granted by SID (`whoami /user`), so domain / Entra account names never matter.
     A failure aborts key use; inherited permissions could expose the unencrypted key."""
@@ -2804,9 +2968,7 @@ def pm_acl(path):
         sid = out.stdout.strip().split(",")[-1].strip().strip('"')
         if out.returncode or not re.fullmatch(r"S-1-[0-9-]+", sid):
             raise OSError("whoami /user: %r" % out.stdout[:80])
-        r = subprocess.run([sys32("icacls.exe"), str(path), "/inheritance:r", "/grant:r", "*%s:F" % sid], **popen_kw(capture_output=True, timeout=10))
-        if r.returncode:
-            raise OSError("icacls exit %d" % r.returncode)
+        win_set_dacl(path, "D:P(A;;FA;;;%s)" % sid)   # the whole DACL: protected, one entry. icacls /grant:r kept any other explicit entry
     except (OSError, subprocess.SubprocessError) as e:
         raise SrvErr("other", "개인 키 파일 권한을 제한하지 못했습니다 (%s)" % e)
 
@@ -2815,28 +2977,39 @@ def app_key(path=None):
     """The app's own key (%APPDATA%\\AgenTalk\\id_ed25519, created on first need): (paramiko key, public line 'ssh-ed25519 AAAA… agen-talk@pc')."""
     paramiko = pm_mod()
     p = Path(path) if path else conf_dir() / "id_ed25519"
+    try:
+        if p.stat().st_size == 0:   # left by an older build that died between create and write: never usable, so never authorized anywhere
+            p.unlink()
+    except OSError:
+        pass
     if not p.exists():
         from cryptography.hazmat.primitives import serialization as ser
         from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+        import secrets
         pem = Ed25519PrivateKey.generate().private_bytes(ser.Encoding.PEM, ser.PrivateFormat.OpenSSH, ser.NoEncryption())
         p.parent.mkdir(parents=True, exist_ok=True)
+        tmp = p.with_name(".%s.%s.tmp" % (p.name, secrets.token_hex(4)))
+        fd = os.open(str(tmp), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         try:
-            fd = os.open(str(p), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
             try:
-                pm_acl(p)
-                _PM_ACL_VALIDATED.add(str(p))
-            except BaseException:
-                os.close(fd)
-                p.unlink(missing_ok=True)
-                raise
-            try:
+                pm_acl(tmp)   # locked down before the private bytes exist
                 with os.fdopen(fd, "wb") as f:
                     f.write(pem)
+                    f.flush()
+                    os.fsync(f.fileno())
             except BaseException:
-                p.unlink(missing_ok=True)
+                try:
+                    os.close(fd)
+                except OSError:
+                    pass
                 raise
-        except FileExistsError:   # a second job created it a moment ago
-            pass
+            try:
+                os.link(str(tmp), str(p))   # atomic publish that never replaces a key a parallel job published first
+                _PM_ACL_VALIDATED.add(str(p))
+            except FileExistsError:
+                pass
+        finally:
+            tmp.unlink(missing_ok=True)
     if str(p) not in _PM_ACL_VALIDATED:   # validate existing keys before paramiko reads their private bytes
         pm_acl(p)
         _PM_ACL_VALIDATED.add(str(p))
@@ -2886,7 +3059,9 @@ def known_save(hk):
         except OSError:
             pass
         pm_acl(tmp)
-        os.replace(tmp, p)
+        replace_retry(tmp, p)
+    except OSError as e:
+        raise SrvErr("other", "서버 지문 기록(known_hosts)을 저장하지 못했습니다: %s" % e)
     finally:
         if tmp.exists():
             tmp.unlink()
@@ -2911,6 +3086,15 @@ def pm_neterr(e, host):
     return SrvErr("other", last(e) or type(e).__name__)
 
 
+HOSTKEY_ALGS = {"ssh-rsa": ("rsa-sha2-512", "rsa-sha2-256", "ssh-rsa")}   # known_hosts records the key type; RSA is negotiated as rsa-sha2-*
+
+
+def known_key_types(recorded, offered):
+    """The host-key algorithms to offer for a server whose recorded key types are `recorded` (all offered when none match)."""
+    want = {a for n in recorded for a in HOSTKEY_ALGS.get(n, (n,))}
+    return [k for k in offered if k in want] or list(offered)
+
+
 def pm_open(host, port, trust=None, reg=None):
     """A paramiko Transport whose host key is checked against the app's known_hosts. Unknown key: trust(fingerprint, keytype) -> bool decides
     (None = refuse). A key that differs from the recorded one is ALWAYS an error (host_key_changed). reg(obj) is told about the socket and the
@@ -2927,7 +3111,7 @@ def pm_open(host, port, trust=None, reg=None):
         reg and reg(t)
         t.banner_timeout = 10
         if known:   # offer only the recorded key types: a different key then shows up as a mismatch, not as a negotiation failure
-            t.get_security_options().key_types = [k for k in t.get_security_options().key_types if k in known.keys()] or list(t.get_security_options().key_types)
+            t.get_security_options().key_types = known_key_types(known.keys(), t.get_security_options().key_types)
         t.start_client(timeout=10)
         k = t.get_remote_server_key()
         if known:
@@ -3021,10 +3205,11 @@ def pm_exec(t, cmd, timeout=30, cap=1 << 16):
 
 def pm_pycheck(t, python):
     """(kind, text): 'ok' | 'no_python3' (too old, or the remote shell's 126/127) | 'other'."""
-    rc, out, err = pm_exec(t, "%s -c 'import sys; print(sys.version_info >= (3, 8))'" % (python or "python3"))
-    if rc == 0 and out.strip() == "True":
+    rc, out, err = pm_exec(t, PYCHECK % (python or "python3"))
+    out = pycheck_parse(out)
+    if rc == 0 and out == "True":
         return "ok", err
-    if out.strip() == "False":
+    if out == "False":
         return "no_python3", "python 버전이 3.8 보다 낮습니다"
     if rc in (126, 127):
         return "no_python3", err
@@ -3162,12 +3347,12 @@ def pm_channel(ch):
     port = int(chan_port(ch))
     t = None
     try:
+        pw = SESSION_PW.get((user, host, port)) if ch.get("auth") == "password-session" else None
+        if ch.get("auth") == "password-session" and pw is None:   # before connecting: a handshake per backoff would only fill the server's sshd log
+            raise SrvErr("wrong_password", "Permission denied: 이 서버는 이번 실행에서 비밀번호로 연결해야 합니다 — 다시 연결하세요")
         t = pm_open(host, port, None)   # channels never prompt: unknown / changed keys are errors, fixed through the dialog
         paramiko = pm_mod()
         if ch.get("auth") == "password-session":
-            pw = SESSION_PW.get((user, host, port))
-            if pw is None:
-                raise SrvErr("wrong_password", "Permission denied: 이 서버는 이번 실행에서 비밀번호로 연결해야 합니다 — 다시 연결하세요")
             pm_auth(t, user, None, pw)
         else:
             legacy = next((a[i + 1] for a in [ch.get("ssh_args")] if isinstance(a, list) for i in range(len(a) - 1) if a[i] == "-i"), None)
@@ -3201,6 +3386,8 @@ def hub_argv(ch):
         a += ["-p", str(ch["port"])]
     if ch.get("auth") == "appkey" and "-i" not in a:
         a += ["-i", str(conf_dir() / "id_ed25519"), "-o", "IdentitiesOnly=yes"]
+    if ch.get("auth") in ("appkey", "password-session"):   # trusted through the app: OpenSSH must check the app's store, not ~/.ssh/known_hosts
+        a += ["-o", "UserKnownHostsFile=" + str(known_path()), "-o", "StrictHostKeyChecking=yes"]
     return ([ssh_bin("ssh") or "ssh", "-T", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", "-o", "ServerAliveInterval=15"]
             + a + ["--", ch["ssh"], ch.get("python", "python3"), "-I", "-c", '"%s"' % BOOT])  # -I: no cwd on sys.path
 
@@ -3308,8 +3495,10 @@ def hub_read(p, sec, err):
             if len(line) >= 1 << 20 and not line.endswith(b"\n"):
                 raise ValueError("서버 응답 줄이 너무 깁니다")
             line = p.stdout.readline(1 << 20)
-        if len(line) >= 1 << 20 and not line.endswith(b"\n"):
-            raise ValueError("서버 응답 줄이 너무 깁니다")
+        if len(line) >= 1 << 20 and not line.endswith(b"\n"):   # a big fan-out can pass 1 MB: state lines may grow to 16 MB, noise may not
+            line += p.stdout.readline((16 << 20) - len(line))
+            if not line.endswith(b"\n"):
+                raise ValueError("서버 응답 줄이 너무 깁니다")
     finally:
         w.cancel()
     if not line:
@@ -3349,7 +3538,8 @@ def hub_chan(ch, slot):
                         if time.time() - job["t"] > 5:   # a late send must never happen
                             job["box"].update(outcome="unreachable", reason="channel")
                         elif p is None:
-                            job["box"].update(talk_req(json.dumps(job["req"]).encode()))
+                            with COLLECT_LOCK:   # talk_req reads the same module state collect() rebuilds
+                                job["box"].update(talk_req(json.dumps(job["req"]).encode()))
                         else:
                             timer = threading.Timer(45, kill_hub_proc, args=(p,))
                             timer.daemon = True
@@ -3367,9 +3557,10 @@ def hub_chan(ch, slot):
                         job["ev"].set()
                     continue
                 if time.time() - HUB_SEEN[0] > 30:
-                    wake.wait(1)
+                    if wake.wait(1):
+                        wake.clear()   # a set() that raced a job pickup must not leave the event set: every later wait would return at once
                     continue
-                if p is None:   # ponytail: one local channel only (collect() keeps module globals); a lock for two
+                if p is None:   # collect() serialises on COLLECT_LOCK: several local channels are safe
                     data = collect()
                 else:
                     p.stdin.write(b"\n")
@@ -3377,7 +3568,8 @@ def hub_chan(ch, slot):
                     data = hub_read(p, 20, err)
                 slot.update(state="ok", error=None, data=data, t=time.time())
                 backoff = 2
-                wake.wait(INTERVAL)   # a stop or a patched channel ends the wait early
+                if wake.wait(INTERVAL):   # a stop, a talk or a patched channel ends the wait early
+                    wake.clear()   # jobs are re-checked with get_nowait() at the top, so clearing here cannot lose one
             close_hub_proc(p)
             p = slot["p"] = None
         except Exception as e:
@@ -3415,9 +3607,9 @@ def open_app(url, quiet=False):
 
 def hub_running(port, secret=""):
     """True when something on 127.0.0.1:PORT answers /<secret>/api/channels like this hub (second launch just reopens the window)."""
-    from urllib.request import urlopen
-    try:
-        d = json.load(urlopen(f"http://127.0.0.1:{port}/{secret + '/' if secret else ''}api/channels", timeout=2))
+    from urllib.request import ProxyHandler, build_opener
+    try:   # no proxies: a corporate HTTP_PROXY would otherwise receive the loopback request (and the secret path)
+        d = json.load(build_opener(ProxyHandler({})).open(f"http://127.0.0.1:{port}/{secret + '/' if secret else ''}api/channels", timeout=2))
         return isinstance(d, list) and all(isinstance(c, dict) and "state" in c for c in d)
     except (OSError, ValueError):
         return False
@@ -3451,7 +3643,10 @@ def hub_start(cfg=None, port=None, secret="", on_show=None, token=None, fallback
         if explicit:
             print(f"에겐 톡: {cfg} 가 없어 내 PC 만 보여줍니다", file=sys.stderr)
         else:
-            write_conf(cfg, conf)   # first run of the installed app: a starter file in the config folder
+            try:
+                write_conf(cfg, conf)   # first run of the installed app: a starter file in the config folder
+            except SrvErr as e:
+                print(f"에겐 톡: {e.args[1]}", file=sys.stderr)
     except (OSError, ValueError) as e:
         sys.exit(f"channels.json 오류: {e} — 메모장 등으로 고친 뒤 다시 실행하세요")
     cport = conf.get("port", 8765) if isinstance(conf, dict) else None
@@ -3615,7 +3810,7 @@ def hub_start(cfg=None, port=None, secret="", on_show=None, token=None, fallback
                 j = jobs[0]
                 if not j or j["id"] != (parse_qs(u.query).get("id") or [""])[0]:
                     return self.send(404, {"error": "알 수 없는 작업"})
-                return self.send(200, {k: v for k, v in j.items() if k not in ("cancel", "proc", "ev", "accept", "close", "thread") and v not in (None, "")})
+                return self.send(200, {k: v for k, v in dict(j).items() if k not in ("cancel", "proc", "ev", "accept", "close", "thread") and v not in (None, "")})
             if path == "/api/presets":
                 return self.send(200, presets_view(presets, chans))
             if path == "/api/app":
@@ -3706,6 +3901,10 @@ def hub_start(cfg=None, port=None, secret="", on_show=None, token=None, fallback
                     rq = srv_check(d, ids)
                     if isinstance(d, dict):
                         d["password"] = None   # the parsed body must not keep it either
+                    old = next((c for c in chans if c["id"] == rq.get("id")), None)
+                    xarg = unsupported_ssh_arg(old) if old and old.get("kind") == "ssh" else None
+                    if xarg:   # setup connects directly; a channel that needs e.g. ProxyJump would fail as 'unreachable' and lose its trust store
+                        return self.send(400, {"error": "이 서버는 channels.json 의 ssh_args (%s) 로 연결합니다 — 앱의 서버 추가로는 다시 등록할 수 없으니 channels.json 에서 고치세요" % xarg[:60]})
                     pmod = pm_mod() is not None
                     rq["pm"] = pmod
                     if not pmod:
@@ -3768,6 +3967,8 @@ def hub_start(cfg=None, port=None, secret="", on_show=None, token=None, fallback
                         return self.send(200, {"ok": False})
             except ValueError as e:
                 return self.send(400, {"error": "입력이 올바르지 않습니다", "field": str(e)})
+            except (SrvErr, OSError) as e:   # a file the hub could not write: answer with a reason, never a dropped connection
+                return self.send(500, {"error": e.args[1] if isinstance(e, SrvErr) and len(e.args) > 1 else str(e)})
             self.send(404, {"error": "not found"})
 
     class Server(http.server.ThreadingHTTPServer):
@@ -3780,7 +3981,14 @@ def hub_start(cfg=None, port=None, secret="", on_show=None, token=None, fallback
     except OSError:
         if not fallback:
             raise
-        srv = Server(("127.0.0.1", 0), Handler)   # the preferred port is taken: any free one
+        srv = None
+        for alt in range(want + 1, min(want + 10, 65536)) if want else ():   # the page's storage (settings, read marks, talks) is per port: stay close and stable
+            try:
+                srv = Server(("127.0.0.1", alt), Handler)
+                break
+            except OSError:
+                pass
+        srv = srv or Server(("127.0.0.1", 0), Handler)   # the whole range is taken: any free one
     srv.token, srv.secret, srv.cfg = token, secret, cfg
     for ch in chans:   # only after the bind: a failed launch must not leave ssh children behind
         threading.Thread(target=hub_chan, args=(ch, slots[ch["id"]]), daemon=True).start()
@@ -3838,60 +4046,9 @@ def hub(args):
         stop()
 
 
-def serve(sock):
-    import http.server, socketserver, threading
-    page = Path(__file__).resolve().with_name("index.html")
-    lock = threading.Lock()
-
-    class Handler(http.server.BaseHTTPRequestHandler):
-        error_content_type = "text/plain"
-
-        def address_string(self):  # unix sockets have no client address
-            return "unix"
-
-        def log_message(self, *a):
-            pass
-
-        def do_GET(self):
-            if not hub_host_ok(self.headers.get("Host", "")):  # the ssh -L port is open to DNS rebinding
-                return self.send_error(403)
-            if self.path.split("?")[0] == "/api/state":
-                with lock:  # ponytail: one collect at a time; fine for a few viewers
-                    body, ctype = json.dumps(collect(), ensure_ascii=False).encode(), "application/json"
-            elif self.path in ("/", "/index.html"):
-                body, ctype = page.read_bytes().replace(b"\r\n", b"\n").replace(b"\r", b"\n"), "text/html; charset=utf-8"
-            else:
-                return self.send_error(404)
-            self.send_response(200)
-            self.send_header("Content-Type", ctype)
-            self.send_header("Content-Length", str(len(body)))
-            self.send_header("Cache-Control", "no-store")
-            self.send_header("Content-Security-Policy", page_csp(body) if ctype.startswith("text/html") else CSP)
-            self.end_headers()
-            self.wfile.write(body)
-
-    class Server(socketserver.ThreadingMixIn, socketserver.UnixStreamServer):
-        daemon_threads = True
-
-    d = os.path.dirname(sock)
-    os.makedirs(d, exist_ok=True)
-    if os.path.islink(d) or os.stat(d).st_uid != os.getuid():
-        sys.exit(f"{d}: not my directory")
-    os.chmod(d, 0o700)  # only this user can reach the socket; other users of the box cannot
-    if os.path.exists(sock):
-        os.unlink(sock)  # stale socket from a dropped tunnel
-    old = os.umask(0o177)
-    try:
-        srv = Server(sock, Handler)
-    finally:
-        os.umask(old)
-    # the ssh session's stdin closes when the tunnel goes away: take the server with it
-    threading.Thread(target=lambda: (sys.stdin.read(), os._exit(0)), daemon=True).start()
-    print(f"agen-talk: serving {sock} (close this window to stop)", flush=True)
-    srv.serve_forever()
-
-
 def selftest_srv():
+    # the python check reads only its tagged line: a login banner from ~/.bashrc must not fail the server
+    assert pycheck_parse("(base) conda ready\nAT-PY True\n") == "True" and pycheck_parse("AT-PY False") == "False" and pycheck_parse("True") == ""
     ids = {"s1": "python", "pc": None}
     ok = srv_check({"host": "gpu-1.example.com", "user": "alice", "port": 2222, "name": " a\x1b b ", "python": "python3.11"}, ids)
     assert ok == {"host": "gpu-1.example.com", "user": "alice", "port": 2222, "name": "a b", "id": None, "python": "python3.11", "password": None, "auth": "appkey"}
@@ -4095,6 +4252,7 @@ def selftest_pm():
         assert child.poll() is not None
     a = hub_argv({"kind": "ssh", "ssh": "u@h", "port": 2200, "auth": "appkey"})   # the OpenSSH fallback understands the new fields
     assert a[a.index("-p") + 1] == "2200" and "IdentitiesOnly=yes" in a and a[a.index("-i") + 1].endswith("id_ed25519")
+    assert "UserKnownHostsFile=" + str(known_path()) in a and "StrictHostKeyChecking=yes" in a
     assert hostspec("h", 22) == "h" and hostspec("h", 2222) == "[h]:2222"
     paramiko = pm_mod()
     if not paramiko:
@@ -4109,8 +4267,15 @@ def selftest_pm():
         key, pub = app_key(Path(t) / "k" / "id_ed25519")
         assert re.fullmatch(PUBKEY, pub) and (os.name == "nt" or (Path(t) / "k" / "id_ed25519").stat().st_mode & 0o777 == 0o600)
         assert app_key(Path(t) / "k" / "id_ed25519")[1] == pub   # idempotent: the same key is loaded
+        assert not [x for x in (Path(t) / "k").iterdir() if x.name.endswith(".tmp")], "the temp key is removed after publishing"
+        (Path(t) / "e").mkdir()
+        (Path(t) / "e" / "id_ed25519").write_bytes(b"")   # an older build died between create and write
+        assert re.fullmatch(PUBKEY, app_key(Path(t) / "e" / "id_ed25519")[1]), "an empty key file is replaced, not fatal"
         fp = fingerprint(key)
         assert re.fullmatch(r"SHA256:[A-Za-z0-9+/]{43}", fp)
+        offered = ["ssh-ed25519", "ecdsa-sha2-nistp256", "rsa-sha2-512", "rsa-sha2-256"]   # a recorded RSA key must pin RSA, not fall back to all
+        assert known_key_types(["ssh-rsa"], offered) == ["rsa-sha2-512", "rsa-sha2-256"] and known_key_types(["ssh-ed25519"], offered) == ["ssh-ed25519"]
+        assert known_key_types(["ssh-dss"], offered) == offered
         hk = paramiko.HostKeys()
         hk.add(hostspec("h", 2222), key.get_name(), key)
         f = str(Path(t) / "kh")
@@ -4121,17 +4286,18 @@ def selftest_pm():
         del h2["[h]:2222"]
         assert not h2.lookup("[h]:2222")
 
-        old_run, old_win, old_conf_dir = subprocess.run, WIN, conf_dir
+        global win_set_dacl
+        old_run, old_win, old_conf_dir, old_dacl = subprocess.run, WIN, conf_dir, win_set_dacl
         acl_key, acl_calls = Path(t) / "acl-key", []
         def fake_run(args, **kw):
             if args[0].lower().endswith("whoami.exe"):
                 return type("Result", (), {"returncode": 0, "stdout": '"user","S-1-5-21-123"'})()
-            if args[0].lower().endswith("icacls.exe"):
-                acl_calls.append(str(args[1]))
-                return type("Result", (), {"returncode": 0, "stdout": b""})()
             raise AssertionError(args)
+        def fake_dacl(path, sddl):
+            assert sddl == "D:P(A;;FA;;;S-1-5-21-123)", sddl   # protected, the user only: no inherited or leftover explicit entries
+            acl_calls.append(path)
         try:
-            subprocess.run, WIN, conf_dir = fake_run, True, lambda: Path(t) / "acl-conf"
+            subprocess.run, WIN, conf_dir, win_set_dacl = fake_run, True, lambda: Path(t) / "acl-conf", fake_dacl
             app_key(acl_key)
             assert len(acl_calls) == 1
             acl_key.unlink(); acl_key.with_name(acl_key.name + ".pub").unlink()
@@ -4140,8 +4306,16 @@ def selftest_pm():
             known_save(hk); known_save(hk)
             assert len(acl_calls) == 4
         finally:
-            subprocess.run, WIN, conf_dir = old_run, old_win, old_conf_dir
+            subprocess.run, WIN, conf_dir, win_set_dacl = old_run, old_win, old_conf_dir, old_dacl
             _PM_ACL_VALIDATED.discard(str(acl_key))
+        if os.name == "nt":   # the real API: a file with an extra explicit grant ends with exactly the user's entry
+            import subprocess as sp
+            f = Path(t) / "dacl-real"
+            f.write_bytes(b"x")
+            sp.run([sys32("icacls.exe"), str(f), "/grant", "*S-1-5-32-545:R"], **popen_kw(capture_output=True, timeout=10))   # BUILTIN Users
+            pm_acl(f)
+            out = sp.run([sys32("icacls.exe"), str(f)], **popen_kw(capture_output=True, timeout=10)).stdout.decode("mbcs", "replace")
+            assert "S-1-5-32-545" not in out and "BUILTIN" not in out and out.count(":(F)") == 1, out
 
         old = (WIN, conf_dir, pm_acl, pm_open)
         called, keydir = [], Path(t) / "acl"
@@ -4372,12 +4546,49 @@ def talk_fixture(root):
     return ids, procs, inbox
 
 
+def selftest_http():
+    """The hub's HTTP gates on every platform: secret prefix, Host, token, Origin, body checks, and POST routes answering JSON."""
+    import http.client, tempfile, threading
+    with tempfile.TemporaryDirectory() as d:
+        cfg = Path(d) / "channels.json"
+        cfg.write_text(json.dumps({"port": 8765, "channels": [{"id": "pc", "name": "pc", "kind": "local"}]}), encoding="utf-8")
+        srv, url, stop = hub_start(cfg, port=0, secret="s3cr3t", token="tok-1", fallback=False)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        port = srv.server_address[1]
+        try:
+            def req(method, path, body=None, hdr=None, raw=None):
+                c = http.client.HTTPConnection("127.0.0.1", port, timeout=30)
+                hd = {"Host": "127.0.0.1:%d" % port, "Content-Type": "application/json", "X-AT-Token": "tok-1", "Origin": "http://127.0.0.1:%d" % port}
+                hd.update(hdr or {})
+                c.request(method, path, raw if raw is not None else json.dumps(body) if body is not None else None, {k: v for k, v in hd.items() if v is not None})
+                r = c.getresponse()
+                data = r.read()
+                c.close()
+                return r.status, (json.loads(data) if data[:1] in (b"{", b"[") else data)
+            code, page = req("GET", "/s3cr3t/")
+            assert code == 200 and b"tok-1" in page and b"__AT_TOKEN__" not in page, code
+            assert req("GET", "/")[0] == 404 and req("GET", "/api/channels")[0] == 404 and req("GET", "/wrong/api/channels")[0] == 404
+            assert req("GET", "/s3cr3t/api/channels", hdr={"Host": "evil.example:%d" % port})[0] == 403   # DNS rebinding
+            assert req("GET", "/s3cr3t/api/channels")[0] == 200
+            for path in ("/api/talk/setting", "/api/servers", "/api/servers/job/confirm", "/api/servers/job/cancel", "/api/servers/forget-hostkey", "/api/presets/import"):
+                assert req("POST", "/s3cr3t" + path, {}, hdr={"X-AT-Token": None})[0] == 403, path
+                assert req("POST", "/s3cr3t" + path, {}, hdr={"X-AT-Token": "bad"})[0] == 403, path
+                assert req("POST", "/s3cr3t" + path, {}, hdr={"Origin": "http://evil.example"})[0] == 403, path
+                assert req("POST", "/s3cr3t" + path, raw=b"{not json")[0] == 400, path
+            assert req("POST", "/s3cr3t/api/talk/setting", {"on": "yes"})[0] == 400
+            assert req("POST", "/s3cr3t/api/talk/setting", {"on": False}) == (200, {"on": False}) and json.loads(cfg.read_text(encoding="utf-8"))["talk"] is False
+            assert req("POST", "/s3cr3t/api/nope", {})[0] == 404
+        finally:
+            stop()
+    print("http ok")
+
+
 def selftest_talk():
     """Step 1-3 of TALK-ENG: msgs, redaction, budget, nesting, the talk field and its sends. Everything lives in a temp dir (fake HOME, runtime dir,
     codex home, a fake `codex`); TALK_ROOT makes any socket outside it unusable."""
     assert not getattr(sys, "frozen", False), "talk fixtures require a Python interpreter"
     import http.client, inspect, logging, subprocess, tempfile, threading
-    assert 'error_content_type = "text/plain"' in inspect.getsource(serve)
+    assert 'error_content_type = "text/plain"' in inspect.getsource(hub_start)   # error pages never render as HTML
     global HOME, AGY, TALK_ROOT, NOW, CX_DEADLINE, PROC
     PROC = {}   # the earlier selftests leave fake entries behind
     PREV.clear()
@@ -4775,7 +4986,7 @@ def selftest():
     assert list(pb(bytes([0x0A, 0x03]) + b"abc")) == [((1,), "abc")]
     t0 = time.time()
     assert t0 <= collect()["ts"] <= time.time() + 1   # clock-skew anchor: the server's own time at collect
-    for k in "proc claude codex agy hub".split():
+    for k in "proc claude codex agy hub http".split():
         globals()["selftest_" + k]()
     if not WIN and not getattr(sys, "frozen", False):
         selftest_talk()   # last: it leaves the collector's module state to be cleared, not restored
@@ -4791,9 +5002,9 @@ if __name__ == "__main__":
         keyinstall(*sys.argv[2:])
     elif "--selftest" in sys.argv:
         selftest()
-    elif sys.argv[1:2] == ["serve"]:
-        serve(sys.argv[2] if len(sys.argv) > 2 else str(HOME / ".cache/agen-talk/sock"))
     else:
+        if hasattr(sys.stdout, "reconfigure"):   # a piped stdout on Korean Windows is cp949: '—' and emoji would raise
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
         state = collect()
         if "--json" in sys.argv:
             print(json.dumps(state, ensure_ascii=False))
