@@ -3,7 +3,6 @@
   const { h, text, attr, cls, S } = R;
   const SECTIONS = [['screen', '화면'], ['notify', '알림'], ['poll', '갱신'], ['chan', '채널'], ['keys', '단축키'], ['about', '정보']];
   const KIND = { ssh: 'ssh', local: '내 PC', argv: 'argv' };
-  const chIcon = c => c.kind === 'local' ? 'i-desktop' : /cloud|클라우드/i.test(c.id + c.name) ? 'i-cloud' : 'i-server';   // same rule as 54-shell.js
   const sync = [];                       // fns that reflect R.S into the controls
 
   // radiogroup with roving tabindex + arrow keys. opts: [[value,label]]; get(): value ; set(v)
@@ -50,8 +49,9 @@
 
   // 톡 보내기 허용 (TALK-UX §7): the UI switch takes effect at once; the hub keeps its own switch (TALK-ENG §2.5), told best-effort
   function setTalk(input) {
-    S.talkOn = input.checked; R.applySettings();
-    R.apiPost('api/talk/setting', { on: S.talkOn }).catch(() => { });
+    const want = input.checked; S.talkOn = want; R.applySettings();
+    const back = () => { if (S.talkOn !== want) return; S.talkOn = !want; input.checked = !want; R.applySettings(); };   // the hub kept its old switch: show that, not a switch that lies
+    R.apiPost('api/talk/setting', { on: want }).then(r => { if (!r.ok && r.status !== 404) back(); }, back);
   }
 
   // ---------- 채널 ----------
@@ -63,14 +63,15 @@
   function setChanRow(el, c) {
     const tgt = KIND[c.kind] || KIND.ssh, st = R.M.states[c.id], warns = st ? st.warnings : [];
     const who = st && st.host && c.kind !== 'local' ? tgt + ' · ' + (st.user ? st.user + '@' : '') + st.host : tgt;
-    el.firstElementChild.firstElementChild.setAttribute('href', '#' + chIcon(c));
+    el.firstElementChild.firstElementChild.setAttribute('href', '#' + C.chIcon(c));
     const a = el.querySelector('b a'); text(a, c.name); a.onclick = e => { e.preventDefault(); R.openChannel(c.id); }; text(el.querySelector('.tgt'), who === c.name ? '' : who);
     const v = el.querySelector('.verdict'), dead = c.state !== 'ok' && c.state !== 'connecting'; v.className = 'verdict ' + c.state;
     text(v.children[0], c.state === 'ok' ? '정상 연결' + (st && st.time ? ' · ' + st.time + ' 수집' : '') : c.state === 'connecting' ? '연결 중…' : '끊김' + (c.t ? ' · 마지막 수집 ' : ''));
     R.setTime(v.children[1], dead ? c.t : null, 'ago');
     text(v.children[2], dead && c.error ? ' — ' + c.error : '');
     const w = el.querySelector('.cwarn'); w.hidden = !warns.length; text(w, warns.join(' · '));
-    const bpm = c.kind === 'ssh' && c.state === 'error' && R.sshKind(c.error) === 'badperm', bx = el.querySelector('.cbp'); bx.hidden = !bpm; if (bpm) text(bx.querySelector('.bpb'), R.sshHint(c.error));
+    const bk = c.kind === 'ssh' && c.state === 'error' ? R.sshKind(c.error) : '', bpm = bk === 'badperm' || bk === 'badpermx', bx = el.querySelector('.cbp'); bx.hidden = !bpm;
+    if (bpm) { text(bx.querySelector('.bpb'), R.sshHint(c.error)); bx.querySelector('.bperm').hidden = bk !== 'badperm'; }   // the copy-paste fix only fits %USERPROFILE%\.ssh\config
     const fx = R.sshFix(c), rb = el.querySelector('.retry');
     el.querySelector('.fix').hidden = !fx; rb.hidden = c.state !== 'error'; cls(rb, 'link', fx); cls(rb, 'sm', !fx);
   }

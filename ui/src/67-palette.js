@@ -41,7 +41,7 @@
   const THEMES = ['system', 'light', 'dark'], THEME_KO = { system: '시스템', light: '라이트', dark: '다크' };
   function navItems() {
     const out = [{ key: 'go:chat', t: '채팅', ic: 'i-chat', cap: 'Esc', run: () => R.openChannel('all') }, { key: 'go:ch:all', t: '전체 채널', ic: 'i-all', cap: '1', run: () => R.openChannel('all') }];
-    M.channels.forEach((c, i) => out.push({ key: 'go:ch:' + c.id, t: c.name, ic: c.kind === 'local' ? 'i-desktop' : /cloud|클라우드/i.test(c.id + c.name) ? 'i-cloud' : 'i-server', cap: i < 8 ? String(i + 2) : '', run: () => R.openChannel(c.id) }));
+    M.channels.forEach((c, i) => out.push({ key: 'go:ch:' + c.id, t: c.name, ic: C.chIcon(c), cap: i < 8 ? String(i + 2) : '', run: () => R.openChannel(c.id) }));
     return out.concat([['board', '보드', 'i-board', 'b'], ['settings', '설정', 'i-gear', ',']].map(([id, t, ic, cap]) => ({ key: 'go:' + id, t, ic, cap, run: () => go(id) })));
   }
   const actItems = () => [

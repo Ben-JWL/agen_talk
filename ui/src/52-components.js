@@ -11,12 +11,8 @@ const C = (() => {
   }
   function setGlyph(el, st) { const u = el.firstElementChild; attr(u, 'href', '#g-' + st); stClass(el, st); attr(el, 'aria-label', ST[st] || st); }
 
-  // tool mark chip: shape + name (+ mono model sub-tag) — used by the drawer tree
-  function toolMark(tool, model) { return h('span.tool', { class: 'tool-' + tool, title: tool }, svgUse('t-' + tool), h('span.nm', tool), model ? h('span.model', model) : null); }
-  function setTool(el, tool, model) {
-    attr(el.firstElementChild.firstElementChild, 'href', '#t-' + tool); text(el.querySelector('.nm'), tool);
-    let m = el.querySelector('.model'); if (model) { if (!m) { m = h('span.model'); el.append(m); } text(m, model); } else if (m) m.remove();
-  }
+  // channel icon: 내 PC / cloud / server — settings channel rows and the palette's channel entries
+  const chIcon = c => c.kind === 'local' ? 'i-desktop' : /cloud|클라우드/i.test(c.id + c.name) ? 'i-cloud' : 'i-server';
   // a cwd is only trusted (shown as cwd, pasted into a terminal command) when it is plain path characters: no spaces, quotes, ; $ ` | & etc.
   const SAFE_CWD = /^(?!-)[\p{L}\p{N}_.~\/\\:@+,=-]+$/u;
   // parse meta "pid 61183 · ~/myproject · claude-opus-5-5 · role" -> {pid, cwd, model, role}
@@ -137,7 +133,7 @@ const C = (() => {
       kind === 'card' ? h('div.cfoot', h('button.btn.sm', { type: 'button', tabindex: '-1', 'aria-hidden': 'true' }, '방 열기')) : null);
     el._ask = ask; return el;
   }
-  // o: {scoped (channel chip active → leave the channel out), badge {red,n}, long (오래 도는 순), kidOf (parent name)}
+  // o: {scoped (channel chip active → leave the channel out), badge {red,n}, long (오래 도는 순), ghost (사라진 시각 ms)}
   function setRoomRow(el, a, o = {}) {
     const dead = R.isDead(a.ch), w = !o.ghost && R.isWaiting(a);
     stClass(el, a.st); cls(el, 'waiting', w); cls(el, 'rest', R.REST.has(a.st) && !w); cls(el, 'stale', dead); cls(el, 'kidrow', !!a.parent);
@@ -150,7 +146,7 @@ const C = (() => {
     const par = a.parent && R.M.agents.get(a.parent), kid = !!a.parent && !o.ghost, xp = window.Detail && a.parent && Detail.isCross(a) ? '⇢ 다른 프로세스 · ' : '';
     rc.replaceChildren(...[dead ? svgUse('i-off', 'gl off') : null, kid ? '↳ ' + (par ? par.name : '') + ' 하위 · ' + xp : (o.scoped ? '' : R.chName(a.ch) + ' · ') + xp].filter(Boolean)); cls(rc, 'kidch', kid);
     cls(pp, 'fixed', kid || w); cls(el, 'islive', R.LIVE.has(a.st));
-    if (w) { const wi = waitInfo(a); text(pp, ''); R.setTimeFor(pt, R.waitT(a) || null, 'live', a.ch); pt.hidden = false; text(pe, WAIT_WORD[a.st] || '기다림'); attr(pp, 'title', null); }
+    if (w) { text(pp, ''); R.setTimeFor(pt, R.waitT(a) || null, 'live', a.ch); pt.hidden = false; text(pe, WAIT_WORD[a.st] || '기다림'); attr(pp, 'title', null); }
     else if (kid && !o.ghost) { text(pp, ST[a.st]); attr(pp, 'title', preview(a)); const tt = R.LIVE.has(a.st) ? (a.t0 != null ? a.t0 : a.lastAt) : a.lastAt; R.setTimeFor(pt, tt, R.LIVE.has(a.st) ? 'live' : 'ago', a.ch); pt.hidden = tt == null; text(pe, ''); }
     else { const pv = o.ghost ? '사라짐 · ' + R.fmtHM(o.ghost) : preview(a); text(pp, pv); attr(pp, 'title', pv); pt.hidden = true; text(pe, ''); }
     pe.hidden = !w;
@@ -199,5 +195,5 @@ const C = (() => {
   }
 
   const kbd = k => h('kbd', k);
-  return { safeCwd: SAFE_CWD, glyph, setGlyph, toolMark, setTool, meta, parseAct, nowDoing, lastAct, lastT, waitInfo, isCmd, copy, badge, avatar, setAvatar, askBubble, setAsk, roomRow, setRoomRow, preview, actText, prefix, procRow, setProcRow, kbd, clampBody, clampBtn, setClamp, measure };
+  return { safeCwd: SAFE_CWD, glyph, setGlyph, chIcon, meta, parseAct, nowDoing, lastAct, lastT, waitInfo, isCmd, copy, badge, avatar, setAvatar, askBubble, setAsk, roomRow, setRoomRow, preview, actText, prefix, procRow, setProcRow, kbd, clampBody, clampBtn, setClamp, measure };
 })();

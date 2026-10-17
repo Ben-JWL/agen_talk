@@ -5,7 +5,6 @@ const Detail = (() => {
   const get = k => M.agents.get(k);
   const live = a => R.LIVE.has(a.st);
   const subtree = a => { const o = []; (function w(x) { for (const k of x.kids) { const c = get(k); if (c) { o.push(c); w(c); } } })(a); return o; };
-  const ancestors = a => { const o = []; for (let p = a.parent && get(a.parent); p; p = p.parent && get(p.parent)) o.unshift(p); return o; };
   const pidOf = a => { const p = C.meta(a).pid; return /^\d+$/.test(p) ? p : ''; };
   const nearestPid = a => { for (let p = a.parent && get(a.parent); p; p = p.parent && get(p.parent)) if (pidOf(p)) return pidOf(p); return ''; };
   const isCross = a => !!a.parent && ((pidOf(a) && pidOf(a) !== nearestPid(a)) || /claude -p/.test(a.name));
@@ -132,6 +131,6 @@ const Detail = (() => {
   // ---------- exports for the drawer ----------
   function tree(el, a) { if (!el._box) { el._box = treeBox(); el.append(el._box); } return setTree(el._box, a); }
   function procs(el, a) { return setProcs(el, a); }
-  return { tree, procs, isCross, spawnCmd, subtree, ancestors, live, sumKids, treeBox, guides, isOpen, setOpen, when, pidOf };
+  return { tree, procs, isCross, spawnCmd, subtree, live, sumKids, treeBox, guides, isOpen, setOpen, when };
 })();
 window.Detail = Detail;

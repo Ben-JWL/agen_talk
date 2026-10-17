@@ -66,18 +66,6 @@ const R = (() => {
     }
     if (document.activeElement === document.body && act && act !== document.body && parent.contains(act)) act.focus({ preventScroll: true });
   }
-  // Roving tabindex + ↑/↓/Home/End over the rows `sel` inside `box` (Enter is the caller's). Returns fix(): call after each render.
-  function rovingList(box, sel) {
-    const rows = () => $$(sel, box).filter(r => !r.closest('[hidden]'));
-    const fix = cur => { const rs = rows(); cur = cur || (rs.includes(document.activeElement) ? document.activeElement : rs[0]); rs.forEach(r => attr(r, 'tabindex', r === cur ? '0' : '-1')); };
-    box.addEventListener('focusin', e => { if (e.target.matches(sel)) fix(e.target); });
-    box.addEventListener('keydown', e => {
-      if (!e.target.matches(sel) || !['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) return;
-      const rs = rows(), i = rs.indexOf(e.target), t = e.key === 'Home' ? rs[0] : e.key === 'End' ? rs[rs.length - 1] : rs[i + (e.key === 'ArrowDown' ? 1 : -1)];
-      e.preventDefault(); if (t) { t.focus(); t.scrollIntoView({ block: 'nearest' }); }
-    });
-    return fix;
-  }
   // Run fn (which may reorder rows) while keeping `anchor` at the same viewport offset inside `scroller`.
   function keepScroll(scroller, anchor, fn) {
     if (!anchor || !scroller) return fn();
@@ -97,11 +85,23 @@ const R = (() => {
     return (hh % 24) ? d + '일 ' + (hh % 24) + '시간' : d + '일';
   }
   // collector durations ('25m', '1h12m', '40s') -> Korean; applied to why/now/last only (never commands), word-bounded so 'gpt-5.1' stays
+  const koText = s => /^\$ /.test(s) ? s : koDur(s);   // '$ sleep 30s' is a command: shown and copied verbatim
   const koDur = s => s.replace(/\b(\d+)h(\d+)m\b/g, '$1시간 $2분').replace(/\b(\d+)h\b/g, '$1시간').replace(/\b(\d+)m\b/g, '$1분').replace(/\b(\d+)s\b/g, '$1초');
   const fmtLive = sec => sec < 10 ? '방금' : fmtDur(sec) + '째';
   // errored ssh channel: Korean next step chosen from the real error text (the text itself is shown separately, via textContent)
   // order matters: a changed key prints the WARNING block *and* "Host key verification failed"
-  const sshKind = e => { e = String(e || ''); return /REMOTE HOST IDENTIFICATION HAS CHANGED/i.test(e) ? 'hostchanged' : /Host key verification failed/i.test(e) ? 'hostkey' : /Bad owner or permissions on/i.test(e) ? 'badperm' : /Permission denied/i.test(e) ? 'perm' : /Could not resolve|Connection refused|timed out|No route/i.test(e) ? 'net' : /python3?: (not found|No such file)|command not found/i.test(e) ? 'nopy' : /No such file or directory|WinError 2|지정된 파일/i.test(e) ? 'nossh' : 'other'; };
+  // "Bad owner or permissions on <path>": the constant fix below only touches %USERPROFILE%\.ssh\config, so it is offered only
+  // when that is the file named (or no file is named). Any other file (e.g. C:\ProgramData\ssh\ssh_config) -> kind 'badpermx'.
+  const badpermPath = e => { const m = /Bad owner or permissions on (.+)$/m.exec(String(e || '')); return m ? m[1].trim().replace(/^["']+|["':]+$/g, '') : ''; };
+  const profileOf = p => { const m = /^([A-Za-z]:[\\/]+Users[\\/]+[^\\/]+)[\\/]/i.exec(String(p || '')); return m ? m[1].replace(/[\\/]+/g, '\\').toLowerCase() : ''; };
+  function ownSshConfig(p) {
+    if (!p) return true;
+    if (/^(?:%USERPROFILE%|\$env:USERPROFILE|~)[\\/]+\.ssh[\\/]+config$/i.test(p)) return true;
+    if (!/^[A-Za-z]:[\\/]+Users[\\/]+[^\\/]+[\\/]+\.ssh[\\/]+config$/i.test(p)) return false;
+    const mine = M.app && profileOf(M.app.logdir + '\\');   // the hub's log dir lives in the user's profile: when known, the names must match
+    return !mine || profileOf(p) === mine;
+  }
+  const sshKind = e => { e = String(e || ''); return /REMOTE HOST IDENTIFICATION HAS CHANGED/i.test(e) ? 'hostchanged' : /Host key verification failed/i.test(e) ? 'hostkey' : /Bad owner or permissions on/i.test(e) ? (ownSshConfig(badpermPath(e)) ? 'badperm' : 'badpermx') : /Permission denied/i.test(e) ? 'perm' : /Could not resolve|Connection refused|timed out|No route/i.test(e) ? 'net' : /python3?: (not found|No such file)|command not found/i.test(e) ? 'nopy' : /No such file or directory|WinError 2|지정된 파일/i.test(e) ? 'nossh' : 'other'; };
   const HINT = {
     hostkey: '처음 연결하는 서버입니다 — 키 등록하기 버튼으로 호스트 키를 확인하고 접속을 등록하세요.',
     perm: '키 로그인이 되지 않습니다 — 키 등록하기 버튼으로 비밀번호를 한 번만 입력해 등록하세요.',
@@ -113,7 +113,7 @@ const R = (() => {
   };
   // kind badperm (ADD-SERVER-ENG §10): generic fix, no user names; the command is a constant
   const BADPERM = { title: '이 PC의 SSH 설정 파일 권한 문제입니다', cmd: '$f = "$env:USERPROFILE\\.ssh\\config"; $me = whoami; icacls $f /setowner $me; icacls $f /inheritance:r /grant:r "${me}:F"', extra: '그래도 같으면 ssh -V 가 8.x 인지 확인하고 OpenSSH 를 새 버전으로 올리세요' };
-  const sshHint = e => HINT[sshKind(e)] || '허브 창의 로그를 확인하세요.';
+  const sshHint = e => { const k = sshKind(e); return k === 'badpermx' ? 'Windows가 이 PC의 ssh 설정 파일 ' + badpermPath(e) + ' 의 권한을 거부했습니다 — 내 사용자 폴더의 .ssh\\config 가 아니므로 관리자 권한 PowerShell에서 이 파일의 소유자·권한을 고쳐야 합니다 (자동 명령 없음).' : HINT[k] || '허브 창의 로그를 확인하세요.'; };
   const sshFix = c => c.kind === 'ssh' && c.state === 'error' && ['perm', 'hostkey', 'hostchanged'].includes(sshKind(c.error));   // these three get the 키 등록하기 button
   const sshErr = e => (String(e || '').split('\n').map(x => x.trim()).filter(Boolean).pop() || '').slice(0, 200);
   const fmtAgo = sec => sec < 10 ? '방금' : fmtDur(sec) + ' 전';
@@ -151,7 +151,8 @@ const R = (() => {
   const S = Object.assign({ theme: 'system', motion: 'system', notify: false, titleBadge: true, interval: 3, stallMin: 5, longMin: 30, talkOn: true }, store.get('room.settings', {}));
   delete S.showKids;   // moved to U.showKids (CHAT-UX §3)
   // per-user UI state (room.ui) — CHAT-UX §3: chip filter, sort, open room, drawer, last-viewed marks, 하위 rows, 조용함 expand
-  const U = Object.assign({ expanded: {}, chFilter: 'all', sort: 'recent', room: null, drawer: false, seen: {}, showKids: false, quietOpen: false, flowText: false, lastFocus: Date.now() }, store.get('room.ui', {}));
+  const U = Object.assign({ expanded: {}, chFilter: 'all', sort: 'recent', room: null, drawer: false, seen: {}, showKids: false, quietOpen: false, flowText: false }, store.get('room.ui', {}));
+  delete U.lastFocus;   // retired field (nothing read it)
   if (!U.seen || typeof U.seen !== 'object') U.seen = {};
   { const old = store.get('room.settings', {}); if (old && old.showKids === true && !U.showKids) U.showKids = true; }   // moved from room.settings (CHAT-UX §3)
   if (!['recent', 'long', 'name'].includes(U.sort)) U.sort = 'recent';
@@ -266,11 +267,9 @@ const R = (() => {
 
   // ---------- model ----------
   const ST = { work: '작업 중', tool: '도구 실행 중', child: '하위 대기', user: '입력 대기', stall: '응답 없음', idle: '쉬는 중', done: '완료', stopped: '중단됨', dead: '끊김' };
-  const ST_ORDER = ['work', 'tool', 'child', 'user', 'stall', 'idle', 'done', 'stopped', 'dead'];
   const LIVE = new Set(['work', 'tool', 'child']), REST = new Set(['idle', 'done', 'stopped', 'dead']);
   const LIVE_BUSY = new Set(['work', 'tool']);   // work<->tool flaps carry no information (same blue)
   const OLD = 600;                               // s; stopped/dead younger than this still count as "waiting for me"
-  const BUCKET = { user: 0, stall: 0, dead: 0, work: 1, tool: 1, child: 1, idle: 2, done: 3, stopped: 3 };
   // waiting for me = user + stall + unexpected (recent) stopped/dead
   const isWaiting = a => a.st === 'user' || a.st === 'stall' || ((a.st === 'stopped' || a.st === 'dead') && a.age < OLD);
   // 나를 기다림 order: blockers first (oldest-waiting first inside a rank); '답변 끝남' rows last, newest first
@@ -284,7 +283,7 @@ const R = (() => {
     agents: new Map(),     // key "ch:id" -> agent
     roots: {},             // chId -> [agent]
     events: loadEvents(),  // transition events, newest first, cap 500 (restored from room.events)
-    app: null, presets: [], skew: {}, tsPrev: {}, waiting: [], counts: {}, focusCounts: {}, t: 0, first: true, loaded: false, hubDown: null,
+    app: null, presets: [], skew: {}, tsPrev: {}, waiting: [], counts: {}, t: 0, first: true, loaded: false, hubDown: null,
   };
   // agent = {key, ch, id, tool, name, st, why, age, since, now, last, meta, procs, hidden, t0 (turn start ms|null),
   //          lastAt (ms of last signal), parent (key|null), depth, root (key), kids [key], path [names], node (raw)}
@@ -330,7 +329,7 @@ const R = (() => {
       key: ch + ':' + id, ch, id, tool: ['codex', 'claude', 'agy'].includes(n.tool) ? n.tool : 'claude',
       name: str(n.name, 300) || '?', st: ST[n.st] ? n.st : 'idle', why: koDur(str(n.why, 300)),
       age: n.age == null ? null : num(n.age), since: n.since == null ? null : num(n.since),
-      now: n.now == null ? null : koDur(str(n.now, 400)), last: n.last == null ? null : koDur(str(n.last, 400)), meta: str(n.meta, 300),
+      now: n.now == null ? null : koText(str(n.now, 400)), last: n.last == null ? null : koText(str(n.last, 400)), meta: str(n.meta, 300),
       procs: Array.isArray(n.procs) ? n.procs.map(p => ({ pid: num(p && p.pid), cmd: str(p && p.cmd, 400), age: num(p && p.age), cpu: num(p && p.cpu), state: /^[RDSZT]$/.test(p && p.state) ? p.state : 'S', kid: str(p && p.kid, 200), bg: !!(p && p.bg) })) : [],
       hidden: num(n.hidden), parent, depth, kids: [], node: n, recvMs,
       // acts: server clock -> client clock (skew), junk dropped, sorted by t BEFORE the 12-item cut (ACTIVITY-ENG "Clock skew")
@@ -382,13 +381,15 @@ const R = (() => {
     for (const a of next.values()) { const p = prev.get(a.key); if (p === a) continue; mergeMsgs(a); if (p && sameActs(p.acts, a.acts)) A.at[a.key] = recvMs; else accumulate(a, recvMs); }   // a stale channel reuses its old object; an unchanged act list costs one compare   // every object built this poll (stale channels reuse the old object: skipped)
     let pruned = false;
     for (const k of Object.keys(A.at)) if (recvMs - A.at[k] > 864e5) { delete A.rooms[k]; delete A.at[k]; delete A.scroll[k]; delete A.mg[k]; pruned = true; }
+    let uPruned = false;   // per-room UI marks die with the room's data, or room.ui grows forever
+    for (const m of [U.seen, U.expanded, U.boardExp]) if (m && typeof m === 'object') for (const k of Object.keys(m)) if (!next.has(k) && !(k in A.at)) { delete m[k]; uPruned = true; }
+    if (uPruned) save();
     for (const [k, mp] of Object.entries(A.mg)) { for (const [id, m] of mp) if (recvMs - m.t > 864e5) { mp.delete(id); pruned = true; } if (!mp.size) delete A.mg[k]; }
     if (pruned) saveMsgs();
     // derived
     M.waiting = [...next.values()].filter(isWaiting);
     M.counts = {}; for (const a of next.values()) { M.counts[a.st] = (M.counts[a.st] || 0) + 1; M.counts.all = (M.counts.all || 0) + 1; }
     M.counts.waiting = M.waiting.length;
-    if (M.first || document.hasFocus()) M.focusCounts = { ...M.counts };   // '+N' deltas = new since the window was last focused
     M.first = false; M.loaded = true;
     emit('model', M);
     if (events.length) emit('events', events);
@@ -398,10 +399,9 @@ const R = (() => {
   const chan = id => M.channels.find(c => c.id === id);
   const chName = id => { const c = chan(id); return c ? c.name : (id || ''); };
   const isDead = id => { const c = chan(id); return !!c && (!!M.hubDown || c.state === 'error' || c.stale); };
-  const latency = c => c && c.t && M.states[c.id] ? Math.max(0, Math.round(M.states[c.id].recvMs - c.t)) : null;
 
   // ---------- polling ----------
-  let timer = 0, paused = false, inflight = false, ringT = 0;
+  let timer = 0, paused = false, inflight = false;
   async function getJSON(url) {
     const r = await fetch(url, { cache: 'no-store' });
     let body = null; try { body = await r.json(); } catch { }
@@ -535,10 +535,11 @@ const R = (() => {
     if (!location.hash) history.replaceState(null, '', U.route || '#/chat');   // parse() canonicalises old routes
     route();
     loadApp();
-    addEventListener('focus', () => { U.lastFocus = Date.now(); M.focusCounts = { ...M.counts }; save(); emit('focus'); emit('model', M); });
+    // window focus: a cheap 'focus' event; only an open room needs a re-run (it marks itself seen once the window has focus)
+    addEventListener('focus', () => { emit('focus'); if (U.room && !paused && M.loaded && active && active.update) active.update(M, params); });
     poll();
   }
-  return { BADPERM, esc, num, str, koDur, normalize, h, svgUse, text, attr, cls, stClass, $, $$, keyed, rovingList, keepScroll, isDead, setTimeFor, saveEvents, fmtDur, fmtLive, fmtAgo, sshHint, sshKind, sshFix, sshErr, fmtAbs, fmtHM, timeEl, setTime,
-           store, S, U, A, acts, msgs, mergeMsgs, saveTalks, saveMsgs, loadMsgs, validMsg, setFlow, accumulate, toolBase, KINDS, save, applySettings, on, emit, ST, ST_ORDER, LIVE, REST, OLD, BUCKET, isWaiting, waitCmp, waitT, M, agentsOf, chan, chName, latency,
-           refresh, loadPresets, apiPost, setPaused, isPaused: () => paused, view, go, openRoom, openDetail: openRoom, closeRoom, openChannel, route, params: () => params, key, keys, onEsc, updateTitle, boot };
+  return { BADPERM, esc, num, str, koDur, normalize, h, svgUse, text, attr, cls, stClass, $, $$, keyed, keepScroll, isDead, setTimeFor, saveEvents, fmtDur, fmtLive, fmtAgo, sshHint, sshKind, sshFix, sshErr, fmtAbs, fmtHM, timeEl, setTime,
+           store, S, U, A, acts, msgs, mergeMsgs, saveTalks, saveMsgs, loadMsgs, validMsg, setFlow, accumulate, toolBase, save, applySettings, on, emit, ST, LIVE, REST, OLD, isWaiting, waitCmp, waitT, M, agentsOf, chan, chName,
+           refresh, loadPresets, apiPost, setPaused, isPaused: () => paused, view, go, openRoom, closeRoom, openChannel, route, params: () => params, key, keys, onEsc, updateTitle, boot };
 })();

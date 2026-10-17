@@ -88,13 +88,13 @@ const ChatList = (() => {
   lscroll.insertBefore(appBn, lnote);
   function renderApp() { appBn.hidden = !(M.app && M.app.mode === 'browser' && !U.wv2Dismissed); }
   on('app', renderApp);
-  on('presets', () => { if (M.loaded) render(); });
+  on('presets', () => { if (R.isPaused()) return; if (M.loaded) render(); });
   const moreBtn = h('button.more.btn.link', { type: 'button', hidden: true, on: { click: () => { U.quietOpen = !U.quietOpen; R.save(); render(); } } }); lscroll.insertBefore(moreBtn, lempty);
   function patchItem(el, it) {
     if (it.room) {
       const a = it.room, g = it.ghost, w = !g && R.isWaiting(a), k = U.room === a.key;
       el._a = a; cls(el, 'ghost', !!g);
-      C.setRoomRow(el, a, { scoped: U.chFilter !== 'all', badge: g ? null : badgeOf(a, w), long: U.sort === 'long', kidOf: a.parent && w && M.agents.get(a.parent) ? M.agents.get(a.parent).name : '', ghost: g ? it.gat : 0 });
+      C.setRoomRow(el, a, { scoped: U.chFilter !== 'all', badge: g ? null : badgeOf(a, w), long: U.sort === 'long', ghost: g ? it.gat : 0 });
       attr(el, 'aria-selected', k ? 'true' : 'false'); cls(el, 'active', a.key === fkey);
       attr(el, 'aria-label', a.name + ', ' + R.ST[a.st] + (el.querySelector('.bdg.on') ? ', ' + el.querySelector('.bdg').getAttribute('aria-label') : ''));
     } else if (it.sec) {
@@ -218,9 +218,9 @@ const ChatList = (() => {
     return false;
   }
   on('route', () => { if (R.params().view === 'chat') { if (U.room) fkey = U.room; if (M.loaded) render(); } });
-  on('hubview', () => { if (M.loaded || M.hubDown) render(); });
+  on('hubview', () => { if (R.isPaused()) return; if (M.loaded || M.hubDown) render(); });
   on('pause', () => render());
-  document.addEventListener('visibilitychange', () => render()); addEventListener('focus', () => { forceApply = true; render(); forceApply = false; });
+  document.addEventListener('visibilitychange', () => { if (R.isPaused()) return; render(); }); addEventListener('focus', () => { if (R.isPaused()) return; forceApply = true; render(); forceApply = false; });
   const focusRow = () => { if (U.room) fkey = U.room; rooms.focus(); render(); };
   R.view('chat', { root: chat, show() { }, update() { render(); Room.update(); } });
   return { esc, render, focusRow, setFilter, badgeOf, visible: () => visKeys.slice() };

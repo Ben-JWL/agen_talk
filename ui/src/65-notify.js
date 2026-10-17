@@ -3,7 +3,7 @@
 (() => {
   const { h, text, attr, M, S, U, on, ST, LIVE } = R;
   // ---------- classification ----------
-  const toWait = e => (e.type === 'chan' && e.to === 'error') || e.type === 'status' && (e.to === 'user' || e.to === 'stall' || ((e.to === 'stopped' || e.to === 'dead') && (LIVE.has(e.from) || e.from === 'user')));
+  const toWait = e => (e.type === 'chan' && e.to === 'error') || e.type === 'start' && (e.to === 'user' || e.to === 'stall') || e.type === 'status' && (e.to === 'user' || e.to === 'stall' || ((e.to === 'stopped' || e.to === 'dead') && (LIVE.has(e.from) || e.from === 'user')));
   const longProc = e => e.type === 'proc-done' && e.dur >= S.longMin * 60;
   const notable = e => toWait(e) || longProc(e);                               // toast + Windows notification set
   const reason = e => { const a = e.agent || {}; if (e.type === 'talk') return ''; if (e.type === 'chan') { const c = R.chan(e.ch); return e.to === 'error' ? String(c && c.error || '').split('\n')[0] : ''; } return e.type === 'proc-done' ? String(e.cmd || '') : e.to === 'user' ? (a.now || a.why || '') : (a.why || ''); };

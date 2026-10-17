@@ -10,7 +10,7 @@ const Room = (() => {
   const dayLabel = ms => { const k = dayKey(ms), t = dayKey(Date.now()), y = dayKey(Date.now() - 864e5), d = new Date(ms); return k === t ? '오늘' : k === y ? '어제' : (d.getMonth() + 1) + '월 ' + d.getDate() + '일'; };
   const small = () => matchMedia('(max-width: 760px)').matches;
   const cache = new Map();                       // key -> last known agent (a session that disappeared keeps its room)
-  let key = null, a = null, prevIds = new Set(), opening = true, tailOk = false, wantFocus = false, sawAgent = false;
+  let key = null, a = null, prevIds = new Set(), lastId = null, opening = true, tailOk = false, wantFocus = false, sawAgent = false;
 
   // ---------- skeleton of the pane ----------
   const ptitle = h('h2.t-title.ptitle'), pmeta = h('div.pmeta.meta'), crumb = h('a.crumb.lnk', { href: '#/chat' }), back = h('button.back.btn.link', { type: 'button', on: { click: () => R.closeRoom() } }, '‹ 목록');
@@ -154,21 +154,22 @@ const Room = (() => {
     const lay = first || fresh.length > 0, was = lay ? near() : false;   // layout is read only when something was added: a quiet poll forces no reflow
     keyed(tlin, L, { key: i => i.id, create: mkItem, update: patch });
     C.measure(tlin);
-    prevIds = new Set(L.map(i => i.id));
-    if (first) {
-      const sv = R.A.scroll[key], n = L.length;
-      tl.scrollTop = sv && sv.n !== n && !sv.bottom ? sv.top : tl.scrollHeight; opening = false; newmsg.hidden = !(sv && sv.n !== n && !sv.bottom && !near());
+    prevIds = new Set(L.map(i => i.id)); lastId = L.length ? L[L.length - 1].id : null;
+    if (first) {   // a reader who scrolled up comes back to the same place; the pill only when something arrived since (ids, not counts: the list is capped)
+      const sv = R.A.scroll[key], up = !!sv && !sv.bottom;
+      tl.scrollTop = up ? sv.top : tl.scrollHeight; opening = false; newmsg.hidden = !(up && sv.last !== lastId && !near());
     } else if (fresh.length) { if (was) tl.scrollTop = tl.scrollHeight; else if (fresh.some(i => !i.sys || i.kind === 'status')) newmsg.hidden = false; }
-    if (lay) R.A.scroll[key] = { top: tl.scrollTop, bottom: near(), n: L.length };
+    if (lay) R.A.scroll[key] = { top: tl.scrollTop, bottom: near(), last: lastId };
   }
-  tl.addEventListener('scroll', () => { if (!key) return; const b = near(); if (b) newmsg.hidden = true; R.A.scroll[key] = { top: tl.scrollTop, bottom: b, n: prevIds.size }; }, { passive: true });
+  tl.addEventListener('scroll', () => { if (!key) return; const b = near(); if (b) newmsg.hidden = true; R.A.scroll[key] = { top: tl.scrollTop, bottom: b, last: lastId }; }, { passive: true });
 
   // terminal command: nothing agent-derived is pasted unless it is plain path characters (a hostile cwd must not become shell syntax)
   const termCmd = x => {
     const md = C.meta(x), c = R.chan(x.ch); if (!c) return '';
     const cwd = md.cwd && C.safeCwd.test(md.cwd) ? md.cwd : '';
     if (c.kind === 'local') return cwd ? 'cd ' + cwd : '';
-    const pi = (c.args || []).indexOf('-p'), port = pi >= 0 && /^\d{1,5}$/.test(String(c.args[pi + 1])) ? '-p ' + c.args[pi + 1] + ' ' : '', host = String(c.ssh || '');
+    const pi = (c.args || []).indexOf('-p'), pn = Number.isInteger(c.port) ? c.port : pi >= 0 && /^\d{1,5}$/.test(String(c.args[pi + 1])) ? +c.args[pi + 1] : 22;   // in-app servers carry `port`, not '-p' in args
+    const port = pn !== 22 ? '-p ' + pn + ' ' : '', host = String(c.ssh || '');
     return /^[\w.@%+-]+$/.test(host) ? 'ssh ' + port + host + " -t 'cd " + (cwd || '~') + "; exec $SHELL'" : '';
   };
   function copyTerm() { const c = a && termCmd(a); if (c) C.copy(c, bTerm, '터미널 명령 복사'); }
