@@ -5094,6 +5094,12 @@ def selftest():
 
 
 if __name__ == "__main__":
+    for _s in (sys.stdout, sys.stderr):   # a cp1252/cp437 console with strict errors must not crash on a Korean notice
+        if _s is not None and hasattr(_s, "reconfigure"):
+            try:
+                _s.reconfigure(errors="backslashreplace")
+            except (ValueError, OSError):
+                pass
     if sys.argv[1:2] == ["pipe"]:   # subcommands are argv[1] only: a flag anywhere else must not hijack them
         pipe()
     elif sys.argv[1:2] == ["hub"]:

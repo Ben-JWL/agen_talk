@@ -77,6 +77,12 @@ def setup_logging(state):
 
         def flush(self):
             pass
+    for s in (sys.stdout, sys.stderr):   # an inherited console/pipe may be cp1252 & strict: Korean notices must never crash the app
+        if s is not None and hasattr(s, "reconfigure"):
+            try:
+                s.reconfigure(errors="backslashreplace")
+            except (ValueError, OSError):
+                pass
     if sys.stdout is None:
         sys.stdout = Tee()
     if sys.stderr is None:
