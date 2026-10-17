@@ -272,8 +272,8 @@ html[data-motion=reduce] #chips .indet::after { animation: none; width: 100%; op
 .smenu button:hover, .smenu button:focus-visible { background: var(--canvas); }
 .smenu .ck { width: 14px; font-size: 12px; }
 .smenu hr { margin: 4px 0; border: 0; border-top: 1px solid var(--line); }
-.npw { position: sticky; top: 40px; z-index: 7; height: 0; display: flex; justify-content: center; overflow: visible; }
-.newpill { height: 28px; padding: 0 14px; border: 0; border-radius: 14px; background: var(--ink); color: var(--on-ink); font-size: 12.5px; font-weight: 600; box-shadow: var(--shadow-float); animation: fade var(--dur-fast) ease-out; }
+.npw { position: sticky; top: 4px; z-index: 7; height: 0; display: flex; justify-content: flex-end; padding-right: 12px; overflow: visible; }   /* docked in the sticky section header's empty right side: never covers a room title */
+.newpill { height: 24px; padding: 0 12px; border: 0; border-radius: 12px; background: var(--ink); color: var(--on-ink); font-size: 12.5px; font-weight: 600; box-shadow: var(--shadow-float); animation: fade var(--dur-fast) ease-out; }
 @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
 #lscroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 #rooms { outline: none; }
@@ -1531,6 +1531,7 @@ const C = (() => {
   const lastT = a => { const x = lastAct(a); return x ? x.t : a.lastAt != null ? a.lastAt : a.t0; };
   const isCmd = s => /^\$ /.test(s || '');
   const calm = a => a.st === 'user' && /^답변 끝남/.test(a.why || '');
+  const WAIT_WORD = { stall: '조용함', stopped: '중단됨', dead: '끊김' };   // the row's '…째 X' must agree with the ask box below it
   // what a waiting room asks of me: {head, body, mono, warn, cmd}
   function waitInfo(a) {
     if (a.st === 'user') {
@@ -1539,7 +1540,7 @@ const C = (() => {
     }
     if (a.st === 'stall') {
       const cpu = a.procs.length ? Math.max(...a.procs.map(p => p.cpu)) : null, q = a.age != null ? a.age : a.since;
-      return { head: '응답 없음', body: (q != null ? fmtDur(q) + '간 출력 없음' : a.why), warn: cpu != null ? 'CPU ' + cpu + ' %' : '', zero: cpu === 0 };
+      return { head: '응답 없음', body: (q != null ? fmtDur(q) + ' 동안 출력 없음' : a.why), warn: cpu != null ? 'CPU ' + cpu + ' %' : '', zero: cpu === 0 };
     }
     return { head: a.st === 'dead' ? '끊김' : '중단됨', body: a.why || ST[a.st] };
   }
@@ -1613,7 +1614,7 @@ const C = (() => {
     const par = a.parent && R.M.agents.get(a.parent), kid = !!a.parent && !o.ghost, xp = window.Detail && a.parent && Detail.isCross(a) ? '⇢ 다른 프로세스 · ' : '';
     rc.replaceChildren(...[dead ? svgUse('i-off', 'gl off') : null, kid ? '↳ ' + (par ? par.name : '') + ' 하위 · ' + xp : (o.scoped ? '' : R.chName(a.ch) + ' · ') + xp].filter(Boolean)); cls(rc, 'kidch', kid);
     cls(pp, 'fixed', kid || w); cls(el, 'islive', R.LIVE.has(a.st));
-    if (w) { const wi = waitInfo(a); text(pp, ''); R.setTimeFor(pt, R.waitT(a) || null, 'live', a.ch); pt.hidden = false; text(pe, '기다림'); attr(pp, 'title', null); }
+    if (w) { const wi = waitInfo(a); text(pp, ''); R.setTimeFor(pt, R.waitT(a) || null, 'live', a.ch); pt.hidden = false; text(pe, WAIT_WORD[a.st] || '기다림'); attr(pp, 'title', null); }
     else if (kid && !o.ghost) { text(pp, ST[a.st]); attr(pp, 'title', preview(a)); const tt = R.LIVE.has(a.st) ? (a.t0 != null ? a.t0 : a.lastAt) : a.lastAt; R.setTimeFor(pt, tt, R.LIVE.has(a.st) ? 'live' : 'ago', a.ch); pt.hidden = tt == null; text(pe, ''); }
     else { const pv = o.ghost ? '사라짐 · ' + R.fmtHM(o.ghost) : preview(a); text(pp, pv); attr(pp, 'title', pv); pt.hidden = true; text(pe, ''); }
     pe.hidden = !w;
@@ -1834,7 +1835,7 @@ const ChatList = (() => {
     const mode = M.hubDown ? 'down' : R.isPaused() ? 'pause' : 'ok';
     if (!sumtxt.firstChild) sumtxt.append(svgUse('g-dead', 'gl hubic'), h('span.sm'), h('button.btn.link.retry', { type: 'button', on: { click: () => R.refresh() } }, '다시 시도'));
     const [ic, sm, rb] = sumtxt.children; ic.style.display = mode === 'down' ? '' : 'none'; rb.hidden = mode !== 'down';
-    text(sm, mode === 'down' ? '허브에 연결할 수 없습니다 — agen-talk 창이 열려 있는지 확인하세요' : mode === 'pause' ? '일시정지 — p로 재개' : M.loaded ? '채널 ' + ok + '/' + M.channels.length + ' 연결' + (bad.length ? ' · ' + bad.join(', ') + ' 끊김' : '') : '불러오는 중…');
+    text(sm, mode === 'down' ? '허브에 연결할 수 없습니다 — 에겐 톡 창이 열려 있는지 확인하세요' : mode === 'pause' ? '일시정지 — p로 재개' : M.loaded ? '채널 ' + ok + '/' + M.channels.length + ' 연결' + (bad.length ? ' · ' + bad.join(', ') + ' 끊김' : '') : '불러오는 중…');
     cls(sumtxt, 'strong', mode !== 'ok'); cls(sumtxt, 'down', mode === 'down'); attr(sumtxt, 'title', sm.textContent);
     sortw.hidden = mode === 'down'; text(sortBtn.firstChild, SORTS.find(s => s[0] === U.sort)[1] + ' ▾'); sortWrap.hidden = false;
     // collector warnings (never hidden) for the channels in view
@@ -3080,7 +3081,7 @@ window.Importer = (() => {
     about() {
       const a = R.M.app, web = !!a && a.mode === 'webview', sec_ = R.$('#set-about', this.main), nav = this.links[this.links.length - 1];
       sec_.hidden = !a; nav.hidden = !a;
-      text(this.chDesc, web ? '서버 추가는 이 PC에 전용 키를 만들어 등록합니다. 포트·키 파일 같은 고급 설정은 설정 폴더의 channels.json 에서 고친 뒤 에겐 톡을 다시 시작하세요' : '서버 추가는 이 PC에 전용 키를 만들어 등록합니다. 포트·키 파일 같은 고급 설정은 channels.json(agen_talk.py 옆)에서 고친 뒤 agen-talk을 다시 시작하세요');
+      text(this.chDesc, web ? '서버 추가는 이 PC에 전용 키를 만들어 등록합니다. 포트·키 파일 같은 고급 설정은 설정 폴더의 channels.json 에서 고친 뒤 에겐 톡을 다시 시작하세요' : '서버 추가는 이 PC에 전용 키를 만들어 등록합니다. 포트·키 파일 같은 고급 설정은 channels.json(agen_talk.py 옆)에서 고친 뒤 에겐 톡을 다시 시작하세요');
       if (!a) return;
       text(this.ver, a.version ? '에겐 톡 ' + a.version : '—');
       const lr = this.logBtn.closest('.srow'); lr.hidden = !a.logdir; const note = lr.querySelector('.snote'); text(note, a.logdir); attr(note, 'title', a.logdir); this.logBtn.hidden = !web;

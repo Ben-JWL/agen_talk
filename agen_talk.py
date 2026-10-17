@@ -890,9 +890,7 @@ def selftest_codex():
 
 # ---------- claude ----------
 INTERRUPTED = "[Request interrupted by user"
-CL_NOISE = {"attachment", "api-request-blob", "ai-title", "last-prompt", "mode", "permission-mode", "atis-latch",
-            "cost-state", "file-history-snapshot", "file-history-delta", "agent-name", "agent-setting", "dev-mods",
-            "api-request-shape", "queue-operation", "hook_success"}
+CL_KEEP = {"user", "assistant", "system", "api-request"}   # the only record types the state rules read; Claude adds new bookkeeping types often (artifact-autoreact-ledger, custom-title, frame-link…)
 CL_QUIET = {"stop_hook_summary", "informational", "away_summary", "compact_boundary"}
 CL_WAIT = {"permission prompt": "권한 승인 대기", "input needed": "입력 필요", "worker request": "하위 에이전트 권한 요청",
            "sandbox request": "샌드박스 요청", "goal proposal": "목표 제안 확인", "dialog open": "대화상자 열림"}
@@ -903,7 +901,7 @@ CL_END = ("end_turn", "stop_sequence")
 def claude_lines(path):
     """Significant transcript lines, newest first (file order, never timestamps); 64 KB tail, 1 MB if that holds none."""
     for size in (65536, 1 << 20):
-        out = [d for d in tail(path, size) if d.get("type") not in CL_NOISE and isinstance(d.get("message", {}), dict)
+        out = [d for d in tail(path, size) if d.get("type") in CL_KEEP and isinstance(d.get("message", {}), dict)
                and not (d.get("type") == "system" and d.get("subtype") in CL_QUIET)]
         if out:
             return out
@@ -1543,6 +1541,14 @@ def selftest_claude():
             (j.parents[3] / "workflows/wf_9.json").write_text('{"status": "completed"}')
             w = claude_workflow(j, [], {}, NOW)
             assert w["st"] == "done" and w["kids"][1]["why"] == "워크플로 끝남"
+            # bookkeeping records after the last answer (unknown types too) never become the newest line
+            tr = Path(d) / "t.jsonl"
+            tr.write_text("\n".join(json.dumps(e) for e in [usr("go", ago=9), asst([{"type": "text", "text": "done"}], "end_turn", ago=8)]
+                                    + [{"type": t, "sessionId": "s"} for t in ("artifact-autoreact-ledger", "custom-title", "frame-link", "some-future-type")]
+                                    + [{"type": "attachment", "attachment": {"type": "x"}}]) + "\n", encoding="utf-8")
+            ls = claude_lines(tr)
+            assert [x["type"] for x in ls] == ["assistant", "user"], ls
+            assert claude_state(ls, "main", {"status": "idle"}, [], {})[:2] == ("user", "답변 끝남 · 입력 기다림")
     finally:
         proc_entry = real
     print("claude ok")
@@ -3420,7 +3426,7 @@ def hub_running(port, secret=""):
 if getattr(sys, "frozen", False):
     APP_VERSION = bundle("VERSION").read_text(encoding="utf-8").strip()
 else:
-    APP_VERSION = "0.4.0"
+    APP_VERSION = "0.0.0-dev"   # source checkout; the frozen app reads build/VERSION (set from the git tag)
 APP_INFO = {"version": APP_VERSION, "mode": "cli"}   # app.py sets mode to "webview" / "browser"; GET /api/app serves it
 
 

@@ -67,6 +67,7 @@ const C = (() => {
   const lastT = a => { const x = lastAct(a); return x ? x.t : a.lastAt != null ? a.lastAt : a.t0; };
   const isCmd = s => /^\$ /.test(s || '');
   const calm = a => a.st === 'user' && /^답변 끝남/.test(a.why || '');
+  const WAIT_WORD = { stall: '조용함', stopped: '중단됨', dead: '끊김' };   // the row's '…째 X' must agree with the ask box below it
   // what a waiting room asks of me: {head, body, mono, warn, cmd}
   function waitInfo(a) {
     if (a.st === 'user') {
@@ -75,7 +76,7 @@ const C = (() => {
     }
     if (a.st === 'stall') {
       const cpu = a.procs.length ? Math.max(...a.procs.map(p => p.cpu)) : null, q = a.age != null ? a.age : a.since;
-      return { head: '응답 없음', body: (q != null ? fmtDur(q) + '간 출력 없음' : a.why), warn: cpu != null ? 'CPU ' + cpu + ' %' : '', zero: cpu === 0 };
+      return { head: '응답 없음', body: (q != null ? fmtDur(q) + ' 동안 출력 없음' : a.why), warn: cpu != null ? 'CPU ' + cpu + ' %' : '', zero: cpu === 0 };
     }
     return { head: a.st === 'dead' ? '끊김' : '중단됨', body: a.why || ST[a.st] };
   }
@@ -149,7 +150,7 @@ const C = (() => {
     const par = a.parent && R.M.agents.get(a.parent), kid = !!a.parent && !o.ghost, xp = window.Detail && a.parent && Detail.isCross(a) ? '⇢ 다른 프로세스 · ' : '';
     rc.replaceChildren(...[dead ? svgUse('i-off', 'gl off') : null, kid ? '↳ ' + (par ? par.name : '') + ' 하위 · ' + xp : (o.scoped ? '' : R.chName(a.ch) + ' · ') + xp].filter(Boolean)); cls(rc, 'kidch', kid);
     cls(pp, 'fixed', kid || w); cls(el, 'islive', R.LIVE.has(a.st));
-    if (w) { const wi = waitInfo(a); text(pp, ''); R.setTimeFor(pt, R.waitT(a) || null, 'live', a.ch); pt.hidden = false; text(pe, '기다림'); attr(pp, 'title', null); }
+    if (w) { const wi = waitInfo(a); text(pp, ''); R.setTimeFor(pt, R.waitT(a) || null, 'live', a.ch); pt.hidden = false; text(pe, WAIT_WORD[a.st] || '기다림'); attr(pp, 'title', null); }
     else if (kid && !o.ghost) { text(pp, ST[a.st]); attr(pp, 'title', preview(a)); const tt = R.LIVE.has(a.st) ? (a.t0 != null ? a.t0 : a.lastAt) : a.lastAt; R.setTimeFor(pt, tt, R.LIVE.has(a.st) ? 'live' : 'ago', a.ch); pt.hidden = tt == null; text(pe, ''); }
     else { const pv = o.ghost ? '사라짐 · ' + R.fmtHM(o.ghost) : preview(a); text(pp, pv); attr(pp, 'title', pv); pt.hidden = true; text(pe, ''); }
     pe.hidden = !w;

@@ -149,7 +149,7 @@ const ChatList = (() => {
     const mode = M.hubDown ? 'down' : R.isPaused() ? 'pause' : 'ok';
     if (!sumtxt.firstChild) sumtxt.append(svgUse('g-dead', 'gl hubic'), h('span.sm'), h('button.btn.link.retry', { type: 'button', on: { click: () => R.refresh() } }, '다시 시도'));
     const [ic, sm, rb] = sumtxt.children; ic.style.display = mode === 'down' ? '' : 'none'; rb.hidden = mode !== 'down';
-    text(sm, mode === 'down' ? '허브에 연결할 수 없습니다 — agen-talk 창이 열려 있는지 확인하세요' : mode === 'pause' ? '일시정지 — p로 재개' : M.loaded ? '채널 ' + ok + '/' + M.channels.length + ' 연결' + (bad.length ? ' · ' + bad.join(', ') + ' 끊김' : '') : '불러오는 중…');
+    text(sm, mode === 'down' ? '허브에 연결할 수 없습니다 — 에겐 톡 창이 열려 있는지 확인하세요' : mode === 'pause' ? '일시정지 — p로 재개' : M.loaded ? '채널 ' + ok + '/' + M.channels.length + ' 연결' + (bad.length ? ' · ' + bad.join(', ') + ' 끊김' : '') : '불러오는 중…');
     cls(sumtxt, 'strong', mode !== 'ok'); cls(sumtxt, 'down', mode === 'down'); attr(sumtxt, 'title', sm.textContent);
     sortw.hidden = mode === 'down'; text(sortBtn.firstChild, SORTS.find(s => s[0] === U.sort)[1] + ' ▾'); sortWrap.hidden = false;
     // collector warnings (never hidden) for the channels in view

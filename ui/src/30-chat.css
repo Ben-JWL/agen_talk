@@ -32,8 +32,8 @@ html[data-motion=reduce] #chips .indet::after { animation: none; width: 100%; op
 .smenu button:hover, .smenu button:focus-visible { background: var(--canvas); }
 .smenu .ck { width: 14px; font-size: 12px; }
 .smenu hr { margin: 4px 0; border: 0; border-top: 1px solid var(--line); }
-.npw { position: sticky; top: 40px; z-index: 7; height: 0; display: flex; justify-content: center; overflow: visible; }
-.newpill { height: 28px; padding: 0 14px; border: 0; border-radius: 14px; background: var(--ink); color: var(--on-ink); font-size: 12.5px; font-weight: 600; box-shadow: var(--shadow-float); animation: fade var(--dur-fast) ease-out; }
+.npw { position: sticky; top: 4px; z-index: 7; height: 0; display: flex; justify-content: flex-end; padding-right: 12px; overflow: visible; }   /* docked in the sticky section header's empty right side: never covers a room title */
+.newpill { height: 24px; padding: 0 12px; border: 0; border-radius: 12px; background: var(--ink); color: var(--on-ink); font-size: 12.5px; font-weight: 600; box-shadow: var(--shadow-float); animation: fade var(--dur-fast) ease-out; }
 @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
 #lscroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 #rooms { outline: none; }

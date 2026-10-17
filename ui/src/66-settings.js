@@ -136,7 +136,7 @@
     about() {
       const a = R.M.app, web = !!a && a.mode === 'webview', sec_ = R.$('#set-about', this.main), nav = this.links[this.links.length - 1];
       sec_.hidden = !a; nav.hidden = !a;
-      text(this.chDesc, web ? '서버 추가는 이 PC에 전용 키를 만들어 등록합니다. 포트·키 파일 같은 고급 설정은 설정 폴더의 channels.json 에서 고친 뒤 에겐 톡을 다시 시작하세요' : '서버 추가는 이 PC에 전용 키를 만들어 등록합니다. 포트·키 파일 같은 고급 설정은 channels.json(agen_talk.py 옆)에서 고친 뒤 agen-talk을 다시 시작하세요');
+      text(this.chDesc, web ? '서버 추가는 이 PC에 전용 키를 만들어 등록합니다. 포트·키 파일 같은 고급 설정은 설정 폴더의 channels.json 에서 고친 뒤 에겐 톡을 다시 시작하세요' : '서버 추가는 이 PC에 전용 키를 만들어 등록합니다. 포트·키 파일 같은 고급 설정은 channels.json(agen_talk.py 옆)에서 고친 뒤 에겐 톡을 다시 시작하세요');
       if (!a) return;
       text(this.ver, a.version ? '에겐 톡 ' + a.version : '—');
       const lr = this.logBtn.closest('.srow'); lr.hidden = !a.logdir; const note = lr.querySelector('.snote'); text(note, a.logdir); attr(note, 'title', a.logdir); this.logBtn.hidden = !web;
