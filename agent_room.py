@@ -340,9 +340,16 @@ def win_procs(text):
 
 def fds(pid):
     try:
-        return [os.readlink(f"/proc/{pid}/fd/{f}") for f in os.listdir(f"/proc/{pid}/fd")]
+        names = os.listdir(f"/proc/{pid}/fd")
     except OSError:
         return []
+    out = []
+    for f in names:   # an fd closed between listdir and readlink must not drop the others
+        try:
+            out.append(os.readlink(f"/proc/{pid}/fd/{f}"))
+        except OSError:
+            pass
+    return out
 
 
 def cwd(pid):
