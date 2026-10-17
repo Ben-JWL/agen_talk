@@ -125,10 +125,16 @@ const C = (() => {
     const x = lastAct(a); if (x) return actText(x);
     return a.last || a.why || ST[a.st];
   }
+  // project chip (OVERVIEW-CONTRACT §3): repo name, branch + root in the tooltip; textContent only
+  function setProj(el, a) {
+    if (!el) return;
+    const p = a && a.project; el.hidden = !p; if (!p) return;
+    text(el, p.name); attr(el, 'title', '프로젝트 ' + p.name + (p.branch ? ' · 브랜치 ' + p.branch : '') + (p.root ? ' · ' + p.root : ''));
+  }
   function roomRow(a, kind) {
     const ask = askBubble(true);
     const el = h('div.room', { role: kind === 'card' ? 'button' : 'option', tabindex: kind === 'card' ? '-1' : null, class: kind === 'card' ? 'card bcard' : '' },
-      h('div.rrow', avatar(a), h('div.rmain', h('div.l1', h('span.rt'), h('span.rtm')),
+      h('div.rrow', avatar(a), h('div.rmain', h('div.l1', h('span.rt'), h('span.pj', { hidden: true }), h('span.rtm')),
         h('div.l2', h('span.rch'), h('span.pp'), timeEl(Date.now(), 'live', 'pt rel'), h('span.pe'), h('span.rb', timeEl(Date.now(), 'live', 'rlong rel'), h('span.bdg'))))), ask,
       kind === 'card' ? h('div.cfoot', h('button.btn.sm', { type: 'button', tabindex: '-1', 'aria-hidden': 'true' }, '방 열기')) : null);
     el._ask = ask; return el;
@@ -139,6 +145,7 @@ const C = (() => {
     stClass(el, a.st); cls(el, 'waiting', w); cls(el, 'rest', R.REST.has(a.st) && !w); cls(el, 'stale', dead); cls(el, 'kidrow', !!a.parent);
     setAvatar(el.querySelector('.av'), a);
     const t = el.querySelector('.rt'); text(t, prefix(a) + a.name); attr(t, 'title', a.name);
+    setProj(el.querySelector('.pj'), a);
     const tm = el.querySelector('.rtm'), lt = lastT(a), c = R.chan(a.ch), st = R.M.states[a.ch];
     text(tm, dead ? '마지막 수집 ' + (c && c.t ? R.fmtHM(c.t) : st && st.time ? st.time.slice(0, 5) : '—') : lt != null ? R.fmtHM(lt) : ''); attr(tm, 'title', !dead && lt != null ? R.fmtAbs(lt) : null);
     // line 2 (CHAT-UX §4, Fable review): [channel · | ↳ parent 하위 ·] [preview | status] [elapsed] — only the preview may ellipsize
@@ -195,5 +202,5 @@ const C = (() => {
   }
 
   const kbd = k => h('kbd', k);
-  return { safeCwd: SAFE_CWD, glyph, setGlyph, chIcon, meta, parseAct, nowDoing, lastAct, lastT, waitInfo, isCmd, copy, badge, avatar, setAvatar, askBubble, setAsk, roomRow, setRoomRow, preview, actText, prefix, procRow, setProcRow, kbd, clampBody, clampBtn, setClamp, measure };
+  return { setProj, safeCwd: SAFE_CWD, glyph, setGlyph, chIcon, meta, parseAct, nowDoing, lastAct, lastT, waitInfo, isCmd, copy, badge, avatar, setAvatar, askBubble, setAsk, roomRow, setRoomRow, preview, actText, prefix, procRow, setProcRow, kbd, clampBody, clampBtn, setClamp, measure };
 })();

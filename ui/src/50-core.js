@@ -148,7 +148,7 @@ const R = (() => {
     set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { } },
   };
   // settings (room.settings) — DIRECTION §6
-  const S = Object.assign({ theme: 'system', motion: 'system', notify: false, titleBadge: true, interval: 3, stallMin: 5, longMin: 30, talkOn: true }, store.get('room.settings', {}));
+  const S = Object.assign({ theme: 'system', motion: 'system', notify: false, titleBadge: true, interval: 3, stallMin: 5, longMin: 30, talkOn: true, fun: false, ovTheme: 'claude' }, store.get('room.settings', {}));   // fun = 재미 모드 (픽셀 오피스), ovTheme = 오버뷰 팬 테마 (OVERVIEW-CONTRACT §3)
   delete S.showKids;   // moved to U.showKids (CHAT-UX §3)
   // per-user UI state (room.ui) — CHAT-UX §3: chip filter, sort, open room, drawer, last-viewed marks, 하위 rows, 조용함 expand
   const U = Object.assign({ expanded: {}, chFilter: 'all', sort: 'recent', room: null, drawer: false, seen: {}, showKids: false, quietOpen: false, flowText: false }, store.get('room.ui', {}));
@@ -313,6 +313,8 @@ const R = (() => {
     return out;
   }
   const normTalk = t => !t || typeof t !== 'object' ? null : { ok: t.ok === true, reason: str(t.reason, 40), hold: t.hold === true, max: Number.isInteger(t.max) && t.max > 0 && t.max <= 4000 ? t.max : 4000 };
+  // project (OVERVIEW-CONTRACT §1): {name, branch, key, root} from the collector's git lookup; optional. Untrusted text: length caps here, textContent at render.
+  const normProject = p => { if (!p || typeof p !== 'object' || typeof p.name !== 'string' || !p.name.trim()) return null; const name = str(p.name.trim(), 120); return { name, branch: typeof p.branch === 'string' ? str(p.branch, 120) : '', key: typeof p.key === 'string' && p.key ? str(p.key, 300) : 'name:' + name, root: typeof p.root === 'string' ? str(p.root, 300) : '' }; };
   function mergeMsgs(a) {
     if (!a.msgs.length) return;
     const mp = A.mg[a.key] || (A.mg[a.key] = new Map());
@@ -334,6 +336,7 @@ const R = (() => {
       hidden: num(n.hidden), parent, depth, kids: [], node: n, recvMs,
       // acts: server clock -> client clock (skew), junk dropped, sorted by t BEFORE the 12-item cut (ACTIVITY-ENG "Clock skew")
       acts: normActs(n.acts, skew), msgs: normMsgs(n.msgs, skew, ch), talk: normTalk(n.talk),
+      project: normProject(n.project) || (parent && out.get(parent) ? out.get(parent).project : null),   // a subagent without its own repo inherits the parent's
     };
     a.t0 = a.since == null ? null : recvMs - a.since * 1000;
     a.lastAt = a.age == null ? null : recvMs - a.age * 1000;
@@ -514,6 +517,8 @@ const R = (() => {
   const qs = new URLSearchParams(location.search);
   if (qs.get('theme')) S.theme = qs.get('theme');
   if (qs.get('motion')) S.motion = qs.get('motion');
+  if (qs.get('fun')) S.fun = qs.get('fun') === '1';                                  // overview mode (재미 모드)
+  if (qs.get('ovtheme')) S.ovTheme = qs.get('ovtheme');                               // overview fan theme (validated in 70-overview)
 
   // server presets (ADD-SERVER-ENG §10): GET /api/presets -> [{name, host, port, added}]; refreshed when the channel list changes
   let presetSig = '';

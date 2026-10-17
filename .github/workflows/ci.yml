@@ -56,6 +56,10 @@ jobs:
           python-version: "3.12"
       - run: python tools/check_ui.py
       - run: python tools/scan.py
+      - name: Sprites match their sources (pixel-exact v2 decode, fresh build, size budget)
+        run: python art/sprites/check_v2.py
+      - name: Sprite motion rules
+        run: python art/sprites/validate_motion.py
       - name: UI selftest (dev build, headless Chrome)
         # ui/src/89-selftest.dev.js logs "SELFTEST ok" or "SELFTEST FAIL <why>" to the console; talkfx replaces the hub with a fake one.
         # The page title is overwritten by the next render, so the console log (Chrome's stderr) is what counts.

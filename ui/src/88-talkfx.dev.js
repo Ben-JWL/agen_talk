@@ -64,6 +64,14 @@
   const CL = nd('cl-cloud', 'claude', '클라우드 배치 점검', 'work', '응답 생성 중', 30, 600, { meta: 'pid 900 · ~/bench · claude-opus-4', talk: TOK, acts: acts([700, 'user', '배치 상태를 점검해 줘.'], [600, 'say', '점검 중입니다.']) });
   const WN = nd('cl-win', 'claude', '윈도 빌드 스크립트', 'work', '응답 생성 중', 6, 400, { meta: 'pid 11234 · C:\\Users\\me\\proj · claude-opus-4', talk: { ok: false, reason: 'windows' }, acts: acts([500, 'user', '빌드 스크립트를 손봐 줘.'], [400, 'say', '수정 중입니다.']) });
 
+  // project (OVERVIEW-CONTRACT §1): generic repos; one subagent in another repo, two roots without a project (기타), one name that looks like markup
+  const PJ = (name, branch, key, root) => ({ name, branch, key, root });
+  const PAG = PJ('agen_talk', 'feat/overview', 'github.com/example/agen_talk', '~/work/agen_talk'), PDATA = PJ('data-pipeline', 'main', 'github.com/example/data-pipeline', '~/work/data');
+  P.project = PDATA; MM.project = PDATA; P.kids[1].project = PJ('stats-lib', '@1a2b3c4', 'github.com/example/stats-lib', '~/work/stats-lib');
+  BY.project = PAG; B.project = { ...PAG, branch: 'release/0.2' }; WN.project = { ...PAG, branch: 'main', root: 'C:\Users\me\agen_talk' };
+  WA.project = PJ('ops-scripts', null, 'local:~/work/logs', '~/work/logs'); CD.project = PJ('report-tools', 'main', 'github.com/example/report-tools', '~/work/aff'); CN.project = CD.project;
+  AG.project = PJ('문서-사이트', 'main', 'local:~/work/문서-사이트', '~/work/문서-사이트'); CL.project = PJ('infra-scripts', 'ops/cron', 'github.com/example/infra-scripts', '~/infra');
+  D[1].project = PJ('<b>lab</b>', 'x', 'local:~/work/x', '~/work/x');
   const ROOTS = { s01: [P, MM, BY, WA, CD, CN, ...D, AG, B], pc: [WN], cloud: [CL] };
   const chans = () => [{ id: 's01', name: 'gpu-01', kind: 'ssh', state: 'ok', error: null, t: Date.now() / 1000, ssh: 'gpu.example.com', ssh_args: [] }, { id: 'pc', name: '내 PC', kind: 'local', state: 'ok', error: null, t: Date.now() / 1000 },
     { id: 'cloud', name: 'cloud-a', kind: 'ssh', state: 'error', error: 'ssh: connect to host cloud.example.com port 22: Connection timed out', t: Date.now() / 1000 - 120, ssh: 'cloud.example.com', ssh_args: [] }];

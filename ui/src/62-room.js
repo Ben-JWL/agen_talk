@@ -13,13 +13,13 @@ const Room = (() => {
   let key = null, a = null, prevIds = new Set(), lastId = null, opening = true, tailOk = false, wantFocus = false, sawAgent = false;
 
   // ---------- skeleton of the pane ----------
-  const ptitle = h('h2.t-title.ptitle'), pmeta = h('div.pmeta.meta'), crumb = h('a.crumb.lnk', { href: '#/chat' }), back = h('button.back.btn.link', { type: 'button', on: { click: () => R.closeRoom() } }, '‹ 목록');
+  const ptitle = h('h2.t-title.ptitle'), pproj = h('span.pj', { hidden: true }), pmeta = h('div.pmeta.meta'), crumb = h('a.crumb.lnk', { href: '#/chat' }), back = h('button.back.btn.link', { type: 'button', on: { click: () => R.closeRoom() } }, '‹ 목록');
   const lkKids = h('button.lnk.hk', { type: 'button', on: { click: () => { setDrawer(true); const s = $('.dsec.kids', drawer); s && s.scrollIntoView({ block: 'start' }); } } }), lkPar = h('button.lnk.hp', { type: 'button' });
   const info = h('button.ibtn.info', { type: 'button', 'aria-pressed': 'false', 'aria-label': '세션 정보', title: '세션 정보 (i)', on: { click: () => setDrawer(!U.drawer) } }, svgUse('i-info'));
   const av = C.avatar(null);
   const segB = ['대화', '흐름'].map((l, i) => h('button', { type: 'button', 'aria-pressed': i ? 'false' : 'true', 'aria-keyshortcuts': i ? 'f' : null, title: i ? '흐름 보기 (f)' : null, on: { click: () => R.setFlow(!!i) } }, l));
   const seg = h('div.seg.fseg', { role: 'group', 'aria-label': '보기', hidden: true }, ...segB);   // 대화 | 흐름 (TALK-UX §4): only when the room's tree has children
-  const phead = h('header.phead', back, crumb, h('div.hrow', av, h('div.htxt', ptitle, pmeta), h('div.hlinks', seg, lkKids, lkPar, info)));
+  const phead = h('header.phead', back, crumb, h('div.hrow', av, h('div.htxt', ptitle, h('div.pmrow', pproj, pmeta)), h('div.hlinks', seg, lkKids, lkPar, info)));
   const tl = h('div#tl', { role: 'log', 'aria-live': 'polite', 'aria-relevant': 'additions', tabindex: '-1', 'aria-label': '대화' }), tlin = h('div.tlin');
   tl.append(tlin);
   const newmsg = h('button.newmsg', { type: 'button', hidden: true, on: { click: () => { tl.scrollTop = tl.scrollHeight; newmsg.hidden = true; } } }, '새 메시지 ↓');
@@ -175,7 +175,7 @@ const Room = (() => {
   function copyTerm() { const c = a && termCmd(a); if (c) C.copy(c, bTerm, '터미널 명령 복사'); }
   function renderHead(a) {
     const md = C.meta(a), par = a.parent && M.agents.get(a.parent), subs = Detail.subtree(a);
-    C.setAvatar(av, a); text(ptitle, a.name); attr(ptitle, 'title', a.name);
+    C.setAvatar(av, a); text(ptitle, a.name); attr(ptitle, 'title', a.name); C.setProj(pproj, a);
     const mtxt = [a.tool, md.model, R.chName(a.ch), md.pid && (/^\d+$/.test(md.pid) ? 'pid ' + md.pid : md.pid), md.cwd].filter(Boolean).join(' · '); text(pmeta, mtxt); attr(pmeta, 'title', a.meta || null);
     crumb.hidden = !par; if (par) { text(crumb, '‹ ' + par.name); attr(crumb, 'href', '#/chat/' + encodeURIComponent(par.ch) + '/' + encodeURIComponent(par.id)); }
     lkKids.hidden = !subs.length; text(lkKids, '하위 ' + subs.length + ' ›');
@@ -230,6 +230,7 @@ const Room = (() => {
   const eGl = C.glyph('done'), eT = h('h2.t-title'), eS = h('p.meta'), eH = h('p.meta.hint', '↑↓로 방을 고르고 Enter로 엽니다');
   pempty.append(h('div.pe', eGl, eT, eS, eH));
   function renderEmpty() {
+    if (Overview.render()) return;   // 70-overview: 배선 지도 / 픽셀 오피스 takes the pane once the model is loaded
     const w = M.waiting.length;
     if (!M.loaded) { text(eT, '불러오는 중…'); text(eS, ''); eGl.style.display = 'none'; eH.hidden = true; return; }
     eGl.style.display = ''; eH.hidden = false;

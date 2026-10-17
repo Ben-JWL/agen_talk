@@ -18,7 +18,7 @@
     sync.push(() => { const cur = get(); let any = false; btns.forEach(b => { const on = b.dataset.v === cur; any = any || on; attr(b, 'aria-checked', on ? 'true' : 'false'); b.tabIndex = on ? 0 : -1; }); if (!any) btns[0].tabIndex = 0; });
     return { g, btns };
   }
-  const FOR = new Set(['notify', 'badge', 'talk', 'interval', 'stall', 'long']);
+  const FOR = new Set(['notify', 'badge', 'talk', 'interval', 'stall', 'long', 'fun']);
   const row = (id, label, control, note) => h('div.srow', h('div.slab', h(FOR.has(id) ? 'label' : 'span', { id: 'l-' + id, for: FOR.has(id) ? id : null }, label), note && h('div.snote', { id: 'n-' + id }, note)), h('div.sctl', control));
   const select = (id, label, vals, unit, key) => {
     const s = h('select.sel', { id, 'aria-label': label, 'aria-describedby': 'n-' + id }, vals.map(v => h('option', { value: v }, v + unit)));
@@ -93,6 +93,7 @@
       const imp = Importer.make({ block: false }); this.imp = imp;
       const th = radios('테마', [['system', '시스템'], ['light', '라이트'], ['dark', '다크']], () => S.theme, v => S.theme = v);
       const mo = radios('움직임', [['system', '시스템'], ['reduce', '줄이기']], () => S.motion === 'reduce' ? 'reduce' : 'system', v => S.motion = v);
+      const ot = radios('오버뷰 테마', Overview.themes, () => S.ovTheme, v => S.ovTheme = v);   // fan themes style the overview pane only (OVERVIEW-CONTRACT §3)
       const chList = h('ul.clist'), keyList = h('ul.klist'), preList = h('ul.plist'); this.preList = preList;
       chList.append(this.noSsh = h('li.meta', { hidden: true }, '아직 서버가 없습니다 — 서버 추가로 첫 서버를 등록하세요'));   // unkeyed: R.keyed leaves it alone
       this.chList = chList; this.keyList = keyList;
@@ -100,7 +101,9 @@
       const main = h('div.card.smain',
         sec('screen', '화면',
           row('theme', '테마', th.g, '시스템을 고르면 Windows의 라이트/다크 설정을 따릅니다'),
-          row('motion', '움직임', mo.g, '입력 중 점의 움직임과 패널·서랍 전환 애니메이션을 끕니다')),
+          row('motion', '움직임', mo.g, '입력 중 점의 움직임과 패널·서랍 전환 애니메이션을 끕니다'),
+          row('fun', '재미 모드 (픽셀 오피스)', toggle('fun', '재미 모드 (픽셀 오피스)', 'fun'), '방을 열지 않았을 때 오른쪽 칸을 배선 지도 대신 픽셀 사무실로 보여 줍니다'),
+          row('ovtheme', '오버뷰 테마', ot.g, '오버뷰 칸에만 적용됩니다 — 라이트/다크는 위의 테마를 따릅니다. 팬 테마이며 로고·상표는 쓰지 않습니다')),
         sec('notify', '알림',
           row('notify', 'Windows 알림', toggle('notify', 'Windows 알림', 'notify', setNotify), '입력 대기·응답 없음·중단됨·끊김으로 바뀔 때, 긴 프로세스가 끝날 때'),
           denied,

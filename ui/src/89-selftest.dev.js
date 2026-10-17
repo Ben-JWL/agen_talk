@@ -106,6 +106,45 @@
     R.A.mg = oldMg; R.saveMsgs(true);
     for (const k of [...tm.values(), ...fm.values()]) { R.M.agents.delete(k.key); delete R.A.mg[k.key]; } delete R.A.talks['tt:P']; R.saveTalks();
     A(Talk.stateOf({ st: 'held', hat: Date.now() - 301000 }).k === 'exp' && Talk.stateOf({ st: 'held', hat: Date.now() - 1000 }).k === 'held' && Talk.stateOf({ st: 'refused', why: 'duplicate' }).t.includes('같은 내용'), 'held expires after 5 min (UI timer)');
-    console.log('SELFTEST ok'); document.title = 'SELFTEST ok';
+    // project (OVERVIEW-CONTRACT §1): sanitised in normalize, inherited by a subagent without its own repo, absent stays null
+    const pm = new Map(); R.normalize('pj', { id: 'A', project: { name: 'repo', branch: 'main', key: 'k1', root: '/r' }, kids: [{ id: 'B' }, { id: 'C', project: { name: 'other', key: 'k2' } }] }, null, 0, pm, 0);
+    R.normalize('pj', { id: 'D', project: { name: 7 } }, null, 0, pm, 0);
+    A(pm.get('pj:A').project.key === 'k1' && pm.get('pj:B').project.name === 'repo' && pm.get('pj:C').project.key === 'k2' && pm.get('pj:C').project.branch === '' && pm.get('pj:D').project === null, 'project normalised, inherited, rejected');
+    // the overview needs the polled model: finish asynchronously (talkfx serves it), then report
+    const wait = (cond, ms = 6000) => new Promise((ok, no) => { const t0 = Date.now(); (function poll() { if (cond()) ok(); else if (Date.now() - t0 > ms) no(new Error('selftest: timeout')); else setTimeout(poll, 50); })(); });
+    const tick = () => new Promise(r => setTimeout(r, 30));
+    (async () => {
+      try {
+        const S = R.S, fun0 = S.fun;
+        S.fun = false; R.applySettings();
+        if (location.hash !== '#/chat') { R.closeRoom(); await tick(); }
+        await wait(() => R.M.loaded && document.querySelector('#pempty .ov [data-agent]'));
+        const ov = document.querySelector('#pempty .ov');
+        A(ov && !document.querySelector('#pempty').hidden && Overview.mode === 'wire', 'overview (배선 지도) fills the empty pane by default');
+        A(ov.querySelectorAll('.ovw [data-agent]').length >= [...R.M.roots.s01 || []].length && ov.querySelector('[data-agent="s01:cl-data"]'), 'wiring map has a card per agent');
+        A([...ov.querySelectorAll('.ovn.prj .nm')].some(x => x.textContent === 'data-pipeline') && [...ov.querySelectorAll('.ovn.prj .nm')].some(x => x.textContent === '기타'), 'grouped by project (기타 for agents without one)');
+        const lab = [...ov.querySelectorAll('.ovn.prj .nm')].find(x => x.textContent === '<b>lab</b>');
+        A(lab && !lab.querySelector('b'), 'project names on the map are text, not markup');
+        const card = ov.querySelector('[data-agent="s01:cl-data"]');
+        A(/데이터셋 정리/.test(card.getAttribute('aria-label')) && /프로젝트 data-pipeline/.test(card.getAttribute('aria-label')), 'agent card has an aria label with project');
+        // mode toggle: header radio -> 재미 모드 (office if sprites exist, else the map with a note); back
+        ov.querySelector('.ov-seg [data-v=office]').click(); await tick();
+        A(S.fun === true && (typeof OvOffice !== 'undefined' && OvOffice.available() ? Overview.mode === 'office' && ov.querySelector('.ovo canvas') : Overview.mode === 'wire' && !ov.querySelector('.ov-note').hidden), 'mode toggle switches to 픽셀 오피스 (or explains the fallback)');
+        ov.querySelector('.ov-seg [data-v=wire]').click(); await tick();
+        A(S.fun === false && Overview.mode === 'wire', 'mode toggle back to 배선 지도');
+        // clicking an agent routes to its room
+        ov.querySelector('[data-agent="s01:cl-data"]').click();
+        await wait(() => location.hash === '#/chat/s01/cl-data' && !document.querySelector('#proom').hidden);
+        const hc = document.querySelector('#proom .pmrow .pj');
+        A(hc && hc.textContent === 'data-pipeline' && /main/.test(hc.title), 'room header shows the project chip');
+        R.closeRoom(); await wait(() => !document.querySelector('#pempty').hidden);
+        // project chip in room rows uses textContent
+        const rowOf = k => { const ag = R.M.agents.get(k), el = C.roomRow(ag); C.setRoomRow(el, ag); return el.querySelector('.pj'); };
+        const c1 = rowOf('s01:cl-print'), c2 = rowOf('s01:cl-data'), c3 = rowOf('s01:cl-nosock');
+        A(c1.textContent === '<b>lab</b>' && !c1.querySelector('b') && c2.textContent === 'data-pipeline' && /data-pipeline · 브랜치 main/.test(c2.title) && c3.hidden, 'room rows: project chip text uses textContent (hidden without a project)');
+        S.fun = fun0; R.applySettings();
+        console.log('SELFTEST ok'); document.title = 'SELFTEST ok';
+      } catch (e) { console.log('SELFTEST FAIL ' + e.message); document.title = 'SELFTEST FAIL'; }
+    })();
   } catch (e) { console.log('SELFTEST FAIL ' + e.message); document.title = 'SELFTEST FAIL'; }
 })();
