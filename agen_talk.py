@@ -160,6 +160,96 @@ def node(nid, tool, name, st, why, ts, sub=False, since=None, **kw):
     return n
 
 
+# ---------- project (git) of an agent's working directory: files only, never `git` ----------
+GITP = {}   # cwd -> (expires, project or None)
+
+
+def git_dir_of(top):
+    """`top/.git` resolved: a directory, or a `gitdir: …` file (worktree, submodule); None when neither."""
+    g = os.path.join(top, ".git")
+    if os.path.isdir(g):
+        return g
+    try:
+        with open(g, encoding="utf-8", errors="replace") as f:
+            line = f.readline(4096).strip()
+    except OSError:
+        return None
+    if line.startswith("gitdir:"):
+        d = line[7:].strip()
+        return os.path.normpath(d if os.path.isabs(d) else os.path.join(top, d))
+    return None
+
+
+def git_remote_key(url):
+    """'https://user:pw@example.com:443/Ben/x.git' / 'git@example.com:Ben/x.git' -> 'example.com/ben/x' (no scheme, credentials, port, .git)."""
+    u = str(url or "").strip()
+    m = re.match(r"(?i)^[a-z][a-z0-9+.-]*://(?:[^@/]*@)?([^/:]+)(?::\d+)?/(.+)$", u) or re.match(r"^(?:[^@/]+@)?([^/:\\]{2,}):(?!//)(.+)$", u)   # scp-like; a 1-letter "host" is a Windows drive
+    if not m:
+        return None
+    path = re.sub(r"(?i)\.git/?$", "", m.group(2).strip("/"))
+    return (m.group(1) + "/" + path).lower() if path else None
+
+
+def git_project(cwd_, ttl=30):
+    """{name, branch, key, root} of the git repository containing cwd_ (walking up), or None. Cached per directory."""
+    if not cwd_:
+        return None
+    hit = GITP.get(cwd_)
+    if hit and hit[0] > NOW:
+        return hit[1]
+    proj, d = None, os.path.abspath(str(cwd_))
+    for _ in range(40):
+        g = git_dir_of(d)
+        if g:
+            common = g
+            try:
+                with open(os.path.join(g, "commondir"), encoding="utf-8", errors="replace") as f:
+                    c = f.readline(4096).strip()
+                common = os.path.normpath(c if os.path.isabs(c) else os.path.join(g, c))
+            except OSError:
+                pass
+            branch = None
+            try:
+                with open(os.path.join(g, "HEAD"), encoding="utf-8", errors="replace") as f:
+                    head = f.readline(4096).strip()
+                branch = head[16:] if head.startswith("ref: refs/heads/") else ("@" + head[:7]) if re.fullmatch(r"[0-9a-f]{40,64}", head) else None
+            except OSError:
+                pass
+            url = None
+            try:
+                with open(os.path.join(common, "config"), encoding="utf-8", errors="replace") as f:
+                    sec = None
+                    for ln in f.read(1 << 16).splitlines():
+                        ln = ln.strip()
+                        if ln.startswith("["):
+                            sec = ln
+                        elif sec and re.fullmatch(r'\[remote\s+"origin"\]', sec) and re.match(r"url\s*=", ln):
+                            url = ln.split("=", 1)[1].strip()
+                            break
+            except OSError:
+                pass
+            key = git_remote_key(url)
+            name = key.rsplit("/", 1)[-1] if key else os.path.basename(d) or d
+            proj = {"name": line1(name, 80), "branch": line1(branch, 120) or None, "key": key or "local:" + d, "root": short(d)}
+            break
+        up = os.path.dirname(d)
+        if up == d:
+            break
+        d = up
+    GITP[cwd_] = (NOW + ttl, proj)
+    if len(GITP) > 512:
+        GITP.clear()
+    return proj
+
+
+def project_fill(ns, inherited=None):
+    """Subagents without their own project (no cwd, or the same repo) take their parent's."""
+    for n in ns:
+        if not n.get("project") and inherited:
+            n["project"] = inherited
+        project_fill(n.get("kids") or [], n.get("project") or inherited)
+
+
 def fold(n):
     """Hide finished subtrees idle > OLD, keep a count; a kid with procs stays."""
     keep = [k for k in n["kids"] if k["st"] not in REST or (k["age"] or 0) <= OLD or k["kids"] or k["procs"]]
@@ -775,7 +865,7 @@ def codex_node(t):
     lines = seen + list(g)   # ponytail: the whole 256 KB tail is parsed every poll now (3-5 ms per thread); stop codex_msgs early if that shows in collect time
     n = node(t, "codex", apath.rsplit("/", 1)[-1] if sub and apath else line1(title or first), st, why, ts or mtime(path),
              sub=sub or source == "exec", since=since, now=now, last=last, acts=acts_fin(codex_acts(lines)), msgs=codex_msgs(t, lines),
-             meta=" · ".join(filter(None, ["pid %d" % pid if pid else "", short(cwd_), model, role if sub else ""])))
+             meta=" · ".join(filter(None, ["pid %d" % pid if pid else "", short(cwd_), model, role if sub else ""])), project=git_project(cwd_))
     c0 = (c0 or [NOW])[0] or NOW  # oldest pending call; processes that predate it are leftovers, not the call
     n["procs"] = [proc_entry(p, bg=st != "tool" or PROC[p]["started"] < c0 - 5) for p in tagged]
     for k in kids:
@@ -1537,9 +1627,12 @@ def claude_collect(roots):
         if (p and (comm.startswith("claude") or comm == "node" if WIN else comm == "claude") and p["state"] not in "ZX"
                 and same_proc_start(p, s.get("procStart"))):
             roots[pid] = [claude_node(s, proc_shells(pid))]
+            pj = git_project(s.get("cwd"))
+            if pj:
+                roots[pid][0]["project"] = pj
         elif NOW - su < FRESH:
             roots[None].append(node(sid, "claude", s.get("name"), "dead", "claude 프로세스 없음", su, False,
-                                    meta="pid %s · %s" % (pid, short(s.get("cwd")))))
+                                    meta="pid %s · %s" % (pid, short(s.get("cwd"))), project=git_project(s.get("cwd"))))
 
 
 def selftest_claude():
@@ -1889,7 +1982,8 @@ def agy_collect(roots):
             st = "idle"               # nobody is at the prompt: agy exited, the conversation just sits there
         n = node(cid, "agy", r[1] or task or line1(r[2]) or r[6], st, why, ts, sub,
                  since=agy_t(r[10]) if st in LIVE and not sub else None, now=now,
-                 meta=" · ".join(filter(None, ["pid %d" % host if host else "", short(cwd(host)) if host else "", r[6], "%s steps" % r[3]])))
+                 meta=" · ".join(filter(None, ["pid %d" % host if host else "", short(cwd(host)) if host else "", r[6], "%s steps" % r[3]])),
+                 project=git_project(cwd(host)) if host and not sub else None)
         n["kids"] = sk
         for k in sk:   # a subagent's messages name their parent only now that the parent node exists
             for m in k.get("msgs", ()):
@@ -2350,7 +2444,7 @@ def collect_unlocked():
     except Exception as e:
         WARN.append("프로세스 연결 오류: %s: %s" % (type(e).__name__, line1(str(e), 120)))
         forest = [n for v in roots.values() for n in v]
-    for name, f in (("talk", talk_fill), ("msgs", msgs_post)):
+    for name, f in (("talk", talk_fill), ("msgs", msgs_post), ("project", project_fill)):
         try:
             f(forest)
         except Exception as e:
@@ -4099,6 +4193,47 @@ def hub(args):
         stop()
 
 
+def selftest_project():
+    """git_project: plain repo, worktree (gitdir file + commondir), detached HEAD, no remote, credential-free keys; cached per cwd."""
+    import tempfile
+    global NOW
+    NOW = time.time()
+    assert git_remote_key("https://user:pw@example.com:443/Ben-JWL/agen_talk.git") == "example.com/ben-jwl/agen_talk"
+    assert git_remote_key("git@example.com:Ben-JWL/agen_talk.git") == "example.com/ben-jwl/agen_talk"
+    assert git_remote_key("ssh://git@example.org:2222/team/proj.git") == "example.org/team/proj"
+    assert git_remote_key("C:/local/repo") is None and git_remote_key("") is None and git_remote_key("/srv/git/x.git") is None
+    nl = chr(10)
+    with tempfile.TemporaryDirectory() as d:
+        r = Path(d) / "repo"
+        (r / ".git").mkdir(parents=True)
+        (r / ".git" / "HEAD").write_text("ref: refs/heads/feat/x" + nl, encoding="utf-8")
+        (r / ".git" / "config").write_text(nl.join(["[core]", "    bare = false", '[remote "origin"]', "    url = https://tok:secret@example.com/acme/widget.git", ""]), encoding="utf-8")
+        (r / "src" / "deep").mkdir(parents=True)
+        p_ = git_project(str(r / "src" / "deep"))
+        assert p_ and p_["name"] == "widget" and p_["branch"] == "feat/x" and p_["key"] == "example.com/acme/widget" and "secret" not in json.dumps(p_), p_
+        w = Path(d) / "wt"   # a worktree: .git is a file pointing into the main repo's worktrees/<name>, which names its commondir
+        (r / ".git" / "worktrees" / "wt").mkdir(parents=True)
+        (r / ".git" / "worktrees" / "wt" / "HEAD").write_text("0123456789abcdef0123456789abcdef01234567" + nl, encoding="utf-8")
+        (r / ".git" / "worktrees" / "wt" / "commondir").write_text("../.." + nl, encoding="utf-8")
+        w.mkdir()
+        (w / ".git").write_text("gitdir: %s%s" % (r / ".git" / "worktrees" / "wt", nl), encoding="utf-8")
+        pw = git_project(str(w))
+        assert pw and pw["name"] == "widget" and pw["branch"] == "@0123456" and pw["key"] == p_["key"], pw
+        n = Path(d) / "plain"
+        (n / ".git").mkdir(parents=True)
+        (n / ".git" / "HEAD").write_text("ref: refs/heads/main" + nl, encoding="utf-8")
+        pn = git_project(str(n))
+        assert pn["name"] == "plain" and pn["key"].startswith("local:") and pn["branch"] == "main", pn
+        assert git_project(str(Path(d))) is None and git_project("") is None
+        (r / ".git" / "HEAD").write_text("ref: refs/heads/other" + nl, encoding="utf-8")
+        assert git_project(str(r / "src" / "deep"))["branch"] == "feat/x", "cached for the TTL"
+    kid = {"id": "k", "kids": []}
+    root = {"id": "r", "project": {"name": "a"}, "kids": [kid, {"id": "o", "project": {"name": "b"}, "kids": []}]}
+    project_fill([root])
+    assert kid["project"]["name"] == "a" and root["kids"][1]["project"]["name"] == "b"
+    print("project ok")
+
+
 def selftest_srv():
     ic = install_cmd("ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIabc agen-talk@PC")   # restricted line; the duplicate check matches the key, with or without options
     assert "echo '%s ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIabc agen-talk@PC'" % AUTH_OPTS in ic and "grep -qF 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIabc'" in ic
@@ -5086,7 +5221,7 @@ def selftest():
     assert list(pb(bytes([0x0A, 0x03]) + b"abc")) == [((1,), "abc")]
     t0 = time.time()
     assert t0 <= collect()["ts"] <= time.time() + 1   # clock-skew anchor: the server's own time at collect
-    for k in "proc claude codex agy hub http".split():
+    for k in "proc claude codex agy hub http project".split():
         globals()["selftest_" + k]()
     if not WIN and not getattr(sys, "frozen", False):
         selftest_talk()   # last: it leaves the collector's module state to be cleared, not restored
