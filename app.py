@@ -9,7 +9,7 @@ Windowed PyInstaller build (--onedir): there is no console, so stdout/stderr go 
 pywebview is optional at import time (guarded); without it, or without WebView2, the app falls back to a Chrome/Edge --app
 window and shuts down after 120 s without any /api request. Python 3.8+.
 """
-import json, logging, logging.handlers, os, sys, threading, time
+import hashlib, json, logging, logging.handlers, os, socket, sys, threading, time, urllib.request
 from pathlib import Path
 
 try:   # not installed on Linux / in tests; the fallback path covers it
@@ -47,6 +47,11 @@ def read_json(path, default=None):
         return default
 
 
+def loopback_open(req, timeout):
+    """urlopen for 127.0.0.1 with no proxies: a manual (env/registry) corporate proxy would receive the secret URL and X-AT-Token."""
+    return urllib.request.build_opener(urllib.request.ProxyHandler({})).open(req, timeout=timeout)
+
+
 def setup_logging(state):
     """Rotating log (~1 MB x 3); stdout/stderr (None in a windowed exe) are sent to it too."""
     state = Path(state)
@@ -58,10 +63,16 @@ def setup_logging(state):
         h.setFormatter(logging.Formatter("%(asctime)s %(message)s"))
         log.addHandler(h)
 
+    busy = threading.local()
+
     class Tee:   # file-like for print()
         def write(self, s):
-            if s.strip():
-                log.info(s.rstrip())
+            if s.strip() and not getattr(busy, "on", False):   # a failing handler reports to sys.stderr (= this Tee): drop it, no recursion
+                busy.on = True
+                try:
+                    log.info(s.rstrip())
+                finally:
+                    busy.on = False
             return len(s)
 
         def flush(self):
@@ -69,22 +80,26 @@ def setup_logging(state):
     if sys.stdout is None:
         sys.stdout = Tee()
     if sys.stderr is None:
+        logging.raiseExceptions = False   # no real stderr: a handler error must never turn into a "lost sys.stderr" crash
         sys.stderr = Tee()
+    for h in logging.getLogger("pywebview").handlers:   # created at import, while sys.stderr was still None
+        if isinstance(h, logging.StreamHandler) and not isinstance(h, logging.FileHandler) and (h.stream is None or getattr(h.stream, "closed", False)):
+            h.setStream(sys.stderr)
     return log
 
 
 def other_instance(state, timeout=2):
     """If a live instance answers, ask it to show its window and return True."""
-    from urllib.request import Request, urlopen
+    from urllib.request import Request
     run = read_json(Path(state) / "run.json")
     if not run or not all(k in run for k in ("port", "secret", "token")):
         return False
     base = "http://127.0.0.1:%s/%s/api/" % (run["port"], run["secret"])
     try:
-        d = json.load(urlopen(base + "channels", timeout=timeout))
+        d = json.load(loopback_open(base + "channels", timeout))
         if not isinstance(d, list):
             return False
-        r = urlopen(Request(base + "show", data=b"{}", method="POST", headers={"Content-Type": "application/json", "X-AT-Token": run["token"]}), timeout=timeout)
+        r = loopback_open(Request(base + "show", data=b"{}", method="POST", headers={"Content-Type": "application/json", "X-AT-Token": run["token"]}), timeout)
         return r.status == 200 and json.load(r).get("ok") is True   # only OUR hub (secret + token) answers like this: a stranger on a reused port does not
     except (OSError, ValueError, AttributeError):
         return False   # stale run.json: the old process is gone (or the port now belongs to someone else)
@@ -158,12 +173,21 @@ def notice_once(state, name, text):
 def acquire_single(state):
     """Only one hub may start. POSIX: flock on a lock file (released when the process dies, so never stale). Windows: a named mutex.
     Returns a handle to keep alive, or None when another instance holds it."""
-    if ar.WIN:
+    if ar.WIN:   # owned, not merely existing: a closing instance holds it until it exits, then a waiting launch can take it
         import ctypes
-        h = ctypes.windll.kernel32.CreateMutexW(None, False, "Local\\AgenTalkHub")
-        if ctypes.windll.kernel32.GetLastError() == 183:   # ERROR_ALREADY_EXISTS
+        from ctypes import wintypes
+        k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        k32.CreateMutexW.argtypes, k32.CreateMutexW.restype = [ctypes.c_void_p, wintypes.BOOL, wintypes.LPCWSTR], wintypes.HANDLE
+        k32.WaitForSingleObject.argtypes, k32.WaitForSingleObject.restype = [wintypes.HANDLE, wintypes.DWORD], wintypes.DWORD
+        k32.CloseHandle.argtypes, k32.CloseHandle.restype = [wintypes.HANDLE], wintypes.BOOL
+        # one name per state folder: a selftest (temp state) never collides with the running app
+        h = k32.CreateMutexW(None, False, "Local\\AgenTalkHub-" + hashlib.sha1(str(Path(state).resolve()).lower().encode("utf-8")).hexdigest()[:12])
+        if not h:
             return None
-        return h
+        if k32.WaitForSingleObject(h, 0) in (0, 0x80):   # WAIT_OBJECT_0, or WAIT_ABANDONED (the previous owner died): ours now
+            return h
+        k32.CloseHandle(h)
+        return None
     import fcntl
     Path(state).mkdir(parents=True, exist_ok=True)
     f = open(str(Path(state) / "app.lock"), "w")
@@ -230,12 +254,16 @@ def run_app(cfg_dir=None, state_dir=None, port=None, win_mod="default", idle=IDL
     state = Path(state_dir or ar.state_dir())
     log = setup_logging(state)
     lock = acquire_single(state)   # held until this function returns
-    if lock is None:   # a near-simultaneous launch: the other one is starting its hub; wait for its run.json, then ask it to show
-        end = time.time() + 8
-        while time.time() < end and not other_instance(state):
-            time.sleep(0.2)
-        log.info("another instance holds the lock: %s", "asked it to show" if time.time() < end else "it did not answer")
-        return 1 if smoke_gui or time.time() >= end else 0
+    end = time.time() + 8
+    while lock is None:   # the other one is starting (wait for its run.json, ask it to show) or shutting down (the lock frees: start normally)
+        if other_instance(state):
+            log.info("another instance holds the lock: asked it to show")
+            return 1 if smoke_gui else 0
+        if time.time() >= end:
+            log.info("another instance holds the lock: it did not answer")
+            return 1
+        time.sleep(0.2)
+        lock = acquire_single(state)
     if other_instance(state):
         log.info("already running: asked it to show its window")
         return 1 if smoke_gui else 0
@@ -252,6 +280,8 @@ def run_app(cfg_dir=None, state_dir=None, port=None, win_mod="default", idle=IDL
                     getattr(w, f)()
                 except Exception as e:
                     log.info("show: %s", e)
+        elif ar.APP_INFO.get("mode") == "browser":   # fallback: the browser window may be closed or buried; open it again
+            ar.open_app(holder["url"], quiet=True)
 
     try:
         srv, url, stop = ar.hub_start(cfg_dir / "channels.json", port=port, secret=secret, on_show=on_show, token=token)
@@ -261,6 +291,7 @@ def run_app(cfg_dir=None, state_dir=None, port=None, win_mod="default", idle=IDL
             import ctypes
             ctypes.windll.user32.MessageBoxW(0, str(e), TITLE, 0x10)
         return 1
+    holder["url"] = url
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     run_json = state / "run.json"
     write_private(run_json, {"port": srv.server_address[1], "secret": secret, "token": token, "pid": os.getpid()})
@@ -359,7 +390,9 @@ def selftest():
         (t / "cfg").mkdir()
         write_private(t / "cfg" / "channels.json", {"port": 8765, "presets": [], "channels": [{"id": "pc", "name": "pc", "kind": "local"}]})
         res = mock_lifecycle(t / "cfg", t / "state")
-        assert res["second_launch_showed"] and res["run_json_gone"] and res["server_closed"], res
+        assert res.get("code") == 0 and "run" in res, "mock lifecycle: run_app did not reach the window: %r" % res
+        assert res["second_launch_showed"] and res["page_ok"] and res["run_json_gone"] and res["server_closed"], res
+        assert read_json(t / "cfg" / "ui.json") == {"width": 1000, "height": 700, "x": 10, "y": 20}, "the closing handler did not save ui.json"
         assert res["start_kw"] == {"private_mode": False, "storage_path": str(Path(t) / "state" / "webview")}
     print("app ok")
 
@@ -368,8 +401,9 @@ class FakeWindow:
     width, height, x, y = 1000, 700, 10, 20
 
     def __init__(self):
-        self.shown = 0
-        self.events = type("E", (), {"closing": type("H", (), {"__iadd__": lambda s, f: s})()})()
+        self.shown, self.closing = 0, []   # win.events.closing += f stores f; FakeWV.start fires them like a real close
+        hook = type("H", (), {"__iadd__": lambda s, f: (self.closing.append(f), s)[1]})()
+        self.events = type("E", (), {"closing": hook})()
 
     def restore(self):
         self.shown += 1
@@ -378,9 +412,8 @@ class FakeWindow:
         self.shown += 1
 
 
-def mock_lifecycle(cfg, state, poke=None):
+def mock_lifecycle(cfg, state):
     """run_app with a fake webview whose start() 'runs the window', pokes the hub, then returns (= the user closed the window)."""
-    from urllib.request import urlopen
     out = {}
     win = FakeWindow()
 
@@ -394,17 +427,22 @@ def mock_lifecycle(cfg, state, poke=None):
             run = read_json(Path(state) / "run.json")
             out["run"] = dict(run)
             out["second_launch_showed"] = other_instance(state) and _wait(lambda: win.shown >= 1)
-            out["page_ok"] = b"at-token" in urlopen(out["url"], timeout=3).read()
-            if poke:
-                poke(out, run)
+            page = loopback_open(out["url"], 3).read()
+            out["page_ok"] = run["token"].encode() in page and b"__AT_TOKEN__" not in page   # the token really was injected
+            for f in win.closing:
+                f()
     code = run_app(cfg, state, port=0, win_mod=FakeWV())
     out["code"] = code
     out["run_json_gone"] = not (Path(state) / "run.json").exists()
-    try:
-        urlopen("http://127.0.0.1:%s/" % out["run"]["port"], timeout=1)
+    if "run" not in out:
+        return out
+    try:   # any answer (even an HTTP 404) means it still serves; only a refused connect means the server is gone
+        socket.create_connection(("127.0.0.1", out["run"]["port"]), timeout=5).close()   # 5 s: Windows retries a refused loopback SYN for ~2 s
         out["server_closed"] = False
-    except OSError:
+    except ConnectionRefusedError:
         out["server_closed"] = True
+    except OSError:
+        out["server_closed"] = False
     return out
 
 
@@ -426,6 +464,8 @@ def main(argv):
             selftest()
         except BaseException:
             log.exception("selftest FAILED")
+            if getattr(sys, "frozen", False):   # re-raising makes the windowed bootloader show a modal error dialog (hangs CI)
+                return 1
             raise
         log.info("selftest ok")
         return 0
