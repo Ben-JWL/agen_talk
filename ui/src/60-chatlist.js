@@ -22,7 +22,7 @@ const ChatList = (() => {
   // ---------- which rooms, in which order ----------
   const match = a => { if (!q) return true; const s = [a.name, a.why, a.now, a.last, a.meta, R.chName(a.ch)].join('\n').toLowerCase(); return s.includes(q); };
   const inFilter = a => U.chFilter === 'all' || a.ch === U.chFilter;
-  const listed = a => !a.parent || R.isWaiting(a) || U.showKids;
+  const listed = a => !R.isHidden(a) && (!a.parent || R.isWaiting(a) || U.showKids);
   const holding = () => !forceApply && (rooms.contains(document.activeElement) || Date.now() - lastScroll < 1200 || !document.hasFocus());
   const cmpBy = sort => sort === 'name' ? (x, y) => x.name.localeCompare(y.name, 'ko') || (x.key < y.key ? -1 : 1)
     : sort === 'long' ? (x, y) => (y.since == null ? -1 : y.since) - (x.since == null ? -1 : x.since) || lt(y) - lt(x) || (x.key < y.key ? -1 : 1)
@@ -90,6 +90,12 @@ const ChatList = (() => {
   on('app', renderApp);
   on('presets', () => { if (R.isPaused()) return; if (M.loaded) render(); });
   const moreBtn = h('button.more.btn.link', { type: 'button', hidden: true, on: { click: () => { U.quietOpen = !U.quietOpen; R.save(); render(); } } }); lscroll.insertBefore(moreBtn, lempty);
+  // 정리: hide every finished room in one go (they come back by themselves when the session works or waits again)
+  let tidyKeys = [], hiddenN = 0;
+  const tidyBtn = h('button.more.tidy.btn.link', { type: 'button', hidden: true, title: '끝났거나 중단·끊긴 방을 목록과 오버뷰에서 숨깁니다', on: { click: () => R.hideRooms(tidyKeys) } });
+  const unhideBtn = h('button.more.unhide.btn.link', { type: 'button', hidden: true, on: { click: () => R.unhideAll() } });
+  lscroll.insertBefore(h('div.tidyrow', tidyBtn, unhideBtn), lempty);
+  on('hidden', () => render());
   function patchItem(el, it) {
     if (it.room) {
       const a = it.room, g = it.ghost, w = !g && R.isWaiting(a), k = U.room === a.key;
@@ -125,6 +131,10 @@ const ChatList = (() => {
     R.keepScroll(lscroll, anchor, () => keyed(rooms, items, { key: i => i.k, create: mkItem, update: patchItem }));
     const ae = fkey && rooms.querySelector('[data-key="' + CSS.escape(fkey) + '"]'); attr(rooms, 'aria-activedescendant', ae ? ae.id : null);
     renderChrome(P); renderPresets(); moreBtn.hidden = !moreN; text(moreBtn, U.quietOpen ? '접기' : moreN + '개 더 보기');
+    const scope = [...M.agents.values()].filter(a => inFilter(a));
+    tidyKeys = scope.filter(a => R.canHide(a) && !R.isHidden(a)).map(a => a.key); hiddenN = scope.filter(a => R.isHidden(a)).length;
+    tidyBtn.hidden = !tidyKeys.length; text(tidyBtn, '완료된 방 ' + tidyKeys.length + '개 정리');
+    unhideBtn.hidden = !hiddenN; text(unhideBtn, '숨긴 방 ' + hiddenN + '개 다시 보기');
     attr(rooms, 'aria-busy', M.loaded ? null : 'true');
     cls(rooms, 'dimmed', !!M.hubDown);
     const np = pending > 0 && !M.hubDown; newpill.hidden = !np; if (np) text(newpill, '새 활동 ' + pending + ' ↑');

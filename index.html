@@ -366,8 +366,8 @@ html[data-motion=reduce] #chips .indet::after { animation: none; width: 100%; op
 .hlinks { display: flex; align-items: center; gap: 12px; flex: none; }
 .crumb { font-size: 12.5px; line-height: 18px; color: var(--ink-2); text-decoration: none; margin-bottom: 2px; align-self: flex-start; }
 .crumb:hover { color: var(--ink); text-decoration: underline; }
-.back { display: none; align-self: flex-start; padding: 0; margin-bottom: 2px; font-size: 12.5px; color: var(--ink-2); }
-@media (max-width: 760px) { .back { display: inline-flex; } }
+.back { display: inline-flex; align-self: flex-start; padding: 0; margin-bottom: 2px; font-size: 12.5px; color: var(--ink-2); }   /* always: wide windows go back to the overview, narrow ones to the list */
+.hidebtn { white-space: nowrap; }
 .tlwrap { position: relative; flex: 1; min-height: 0; }
 #tl { position: absolute; inset: 0; overflow-y: auto; overscroll-behavior: contain; padding: 8px 24px 20px; outline: none; }
 #tl.dimmed { opacity: .6; }
@@ -1305,6 +1305,12 @@ const R = (() => {
   const OLD = 600;                               // s; stopped/dead younger than this still count as "waiting for me"
   // waiting for me = user + stall + unexpected (recent) stopped/dead
   const isWaiting = a => a.st === 'user' || a.st === 'stall' || ((a.st === 'stopped' || a.st === 'dead') && a.age < OLD);
+  // 정리 (tidy up): a finished room the user hid. Only rest states can stay hidden: a session that works or waits again comes back by itself.
+  const FINISHED = new Set(['done', 'stopped', 'dead']);
+  const canHide = a => !!a && FINISHED.has(a.st) && !isWaiting(a);
+  const isHidden = a => !!(a && U.hidden && U.hidden[a.key]) && REST.has(a.st) && !isWaiting(a);
+  const hideRooms = keys => { if (!U.hidden || typeof U.hidden !== 'object') U.hidden = {}; for (const k of keys) U.hidden[k] = Date.now(); save(); emit('hidden'); };
+  const unhideAll = () => { U.hidden = {}; save(); emit('hidden'); };
   // 나를 기다림 order: blockers first (oldest-waiting first inside a rank); '답변 끝남' rows last, newest first
   const calm = a => a.st === 'user' && /^답변 끝남/.test(a.why);
   const waitT = a => a.lastAt != null ? a.lastAt : a.t0 != null ? a.t0 : 0;
@@ -1418,7 +1424,8 @@ const R = (() => {
     let pruned = false;
     for (const k of Object.keys(A.at)) if (recvMs - A.at[k] > 864e5) { delete A.rooms[k]; delete A.at[k]; delete A.scroll[k]; delete A.mg[k]; pruned = true; }
     let uPruned = false;   // per-room UI marks die with the room's data, or room.ui grows forever
-    for (const m of [U.seen, U.expanded, U.boardExp]) if (m && typeof m === 'object') for (const k of Object.keys(m)) if (!next.has(k) && !(k in A.at)) { delete m[k]; uPruned = true; }
+    for (const m of [U.seen, U.expanded, U.boardExp, U.hidden]) if (m && typeof m === 'object') for (const k of Object.keys(m)) if (!next.has(k) && !(k in A.at)) { delete m[k]; uPruned = true; }
+    if (U.hidden && typeof U.hidden === 'object') for (const k of Object.keys(U.hidden)) { const a = next.get(k); if (a && !REST.has(a.st)) { delete U.hidden[k]; uPruned = true; } }   // working or waiting again: show it
     if (uPruned) save();
     for (const [k, mp] of Object.entries(A.mg)) { for (const [id, m] of mp) if (recvMs - m.t > 864e5) { mp.delete(id); pruned = true; } if (!mp.size) delete A.mg[k]; }
     if (pruned) saveMsgs();
@@ -1431,7 +1438,7 @@ const R = (() => {
     if (events.length) emit('events', events);
   }
   // counts helpers for views
-  const agentsOf = ch => [...M.agents.values()].filter(a => !ch || ch === 'all' || a.ch === ch);
+  const agentsOf = ch => [...M.agents.values()].filter(a => (!ch || ch === 'all' || a.ch === ch) && !isHidden(a));
   const chan = id => M.channels.find(c => c.id === id);
   const chName = id => { const c = chan(id); return c ? c.name : (id || ''); };
   const isDead = id => { const c = chan(id); return !!c && (!!M.hubDown || c.state === 'error' || c.stale); };
@@ -1578,7 +1585,7 @@ const R = (() => {
     poll();
   }
   return { BADPERM, esc, num, str, koDur, normalize, h, svgUse, text, attr, cls, stClass, $, $$, keyed, keepScroll, isDead, setTimeFor, saveEvents, fmtDur, fmtLive, fmtAgo, sshHint, sshKind, sshFix, sshErr, fmtAbs, fmtHM, timeEl, setTime,
-           store, S, U, A, acts, msgs, mergeMsgs, saveTalks, saveMsgs, loadMsgs, validMsg, setFlow, accumulate, toolBase, save, applySettings, on, emit, ST, LIVE, REST, OLD, isWaiting, waitCmp, waitT, M, agentsOf, chan, chName,
+           store, S, U, A, acts, msgs, mergeMsgs, saveTalks, saveMsgs, loadMsgs, validMsg, setFlow, accumulate, toolBase, save, applySettings, on, emit, ST, LIVE, REST, OLD, isWaiting, canHide, isHidden, hideRooms, unhideAll, waitCmp, waitT, M, agentsOf, chan, chName,
            refresh, loadPresets, apiPost, setPaused, isPaused: () => paused, view, go, openRoom, closeRoom, openChannel, route, params: () => params, key, keys, onEsc, updateTitle, boot };
 })();
 
@@ -1832,7 +1839,7 @@ const ChatList = (() => {
   // ---------- which rooms, in which order ----------
   const match = a => { if (!q) return true; const s = [a.name, a.why, a.now, a.last, a.meta, R.chName(a.ch)].join('\n').toLowerCase(); return s.includes(q); };
   const inFilter = a => U.chFilter === 'all' || a.ch === U.chFilter;
-  const listed = a => !a.parent || R.isWaiting(a) || U.showKids;
+  const listed = a => !R.isHidden(a) && (!a.parent || R.isWaiting(a) || U.showKids);
   const holding = () => !forceApply && (rooms.contains(document.activeElement) || Date.now() - lastScroll < 1200 || !document.hasFocus());
   const cmpBy = sort => sort === 'name' ? (x, y) => x.name.localeCompare(y.name, 'ko') || (x.key < y.key ? -1 : 1)
     : sort === 'long' ? (x, y) => (y.since == null ? -1 : y.since) - (x.since == null ? -1 : x.since) || lt(y) - lt(x) || (x.key < y.key ? -1 : 1)
@@ -1900,6 +1907,12 @@ const ChatList = (() => {
   on('app', renderApp);
   on('presets', () => { if (R.isPaused()) return; if (M.loaded) render(); });
   const moreBtn = h('button.more.btn.link', { type: 'button', hidden: true, on: { click: () => { U.quietOpen = !U.quietOpen; R.save(); render(); } } }); lscroll.insertBefore(moreBtn, lempty);
+  // 정리: hide every finished room in one go (they come back by themselves when the session works or waits again)
+  let tidyKeys = [], hiddenN = 0;
+  const tidyBtn = h('button.more.tidy.btn.link', { type: 'button', hidden: true, title: '끝났거나 중단·끊긴 방을 목록과 오버뷰에서 숨깁니다', on: { click: () => R.hideRooms(tidyKeys) } });
+  const unhideBtn = h('button.more.unhide.btn.link', { type: 'button', hidden: true, on: { click: () => R.unhideAll() } });
+  lscroll.insertBefore(h('div.tidyrow', tidyBtn, unhideBtn), lempty);
+  on('hidden', () => render());
   function patchItem(el, it) {
     if (it.room) {
       const a = it.room, g = it.ghost, w = !g && R.isWaiting(a), k = U.room === a.key;
@@ -1935,6 +1948,10 @@ const ChatList = (() => {
     R.keepScroll(lscroll, anchor, () => keyed(rooms, items, { key: i => i.k, create: mkItem, update: patchItem }));
     const ae = fkey && rooms.querySelector('[data-key="' + CSS.escape(fkey) + '"]'); attr(rooms, 'aria-activedescendant', ae ? ae.id : null);
     renderChrome(P); renderPresets(); moreBtn.hidden = !moreN; text(moreBtn, U.quietOpen ? '접기' : moreN + '개 더 보기');
+    const scope = [...M.agents.values()].filter(a => inFilter(a));
+    tidyKeys = scope.filter(a => R.canHide(a) && !R.isHidden(a)).map(a => a.key); hiddenN = scope.filter(a => R.isHidden(a)).length;
+    tidyBtn.hidden = !tidyKeys.length; text(tidyBtn, '완료된 방 ' + tidyKeys.length + '개 정리');
+    unhideBtn.hidden = !hiddenN; text(unhideBtn, '숨긴 방 ' + hiddenN + '개 다시 보기');
     attr(rooms, 'aria-busy', M.loaded ? null : 'true');
     cls(rooms, 'dimmed', !!M.hubDown);
     const np = pending > 0 && !M.hubDown; newpill.hidden = !np; if (np) text(newpill, '새 활동 ' + pending + ' ↑');
@@ -2557,13 +2574,15 @@ const Room = (() => {
   let key = null, a = null, prevIds = new Set(), lastId = null, opening = true, tailOk = false, wantFocus = false, sawAgent = false;
 
   // ---------- skeleton of the pane ----------
-  const ptitle = h('h2.t-title.ptitle'), pproj = h('span.pj', { hidden: true }), pmeta = h('div.pmeta.meta'), crumb = h('a.crumb.lnk', { href: '#/chat' }), back = h('button.back.btn.link', { type: 'button', on: { click: () => R.closeRoom() } }, '‹ 목록');
+  const ptitle = h('h2.t-title.ptitle'), pproj = h('span.pj', { hidden: true }), pmeta = h('div.pmeta.meta'), crumb = h('a.crumb.lnk', { href: '#/chat' }), back = h('button.back.btn.link', { type: 'button', title: '오버뷰로 (Esc)', on: { click: () => R.closeRoom() } }, '‹ 오버뷰');
   const lkKids = h('button.lnk.hk', { type: 'button', on: { click: () => { setDrawer(true); const s = $('.dsec.kids', drawer); s && s.scrollIntoView({ block: 'start' }); } } }), lkPar = h('button.lnk.hp', { type: 'button' });
   const info = h('button.ibtn.info', { type: 'button', 'aria-pressed': 'false', 'aria-label': '세션 정보', title: '세션 정보 (i)', on: { click: () => setDrawer(!U.drawer) } }, svgUse('i-info'));
   const av = C.avatar(null);
   const segB = ['대화', '흐름'].map((l, i) => h('button', { type: 'button', 'aria-pressed': i ? 'false' : 'true', 'aria-keyshortcuts': i ? 'f' : null, title: i ? '흐름 보기 (f)' : null, on: { click: () => R.setFlow(!!i) } }, l));
   const seg = h('div.seg.fseg', { role: 'group', 'aria-label': '보기', hidden: true }, ...segB);   // 대화 | 흐름 (TALK-UX §4): only when the room's tree has children
-  const phead = h('header.phead', back, crumb, h('div.hrow', av, h('div.htxt', ptitle, h('div.pmrow', pproj, pmeta)), h('div.hlinks', seg, lkKids, lkPar, info)));
+  // 정리: a finished room can be hidden from the list and the overview (it returns by itself if the session works or waits again)
+  const hideBtn = h('button.btn.sm.hidebtn', { type: 'button', hidden: true, title: '끝난 방을 목록과 오버뷰에서 숨깁니다', on: { click: () => { if (a && R.canHide(a)) { R.hideRooms([a.key]); R.closeRoom(); } } } }, '목록에서 숨기기');
+  const phead = h('header.phead', back, crumb, h('div.hrow', av, h('div.htxt', ptitle, h('div.pmrow', pproj, pmeta)), h('div.hlinks', seg, lkKids, lkPar, hideBtn, info)));
   const tl = h('div#tl', { role: 'log', 'aria-live': 'polite', 'aria-relevant': 'additions', tabindex: '-1', 'aria-label': '대화' }), tlin = h('div.tlin');
   tl.append(tlin);
   const newmsg = h('button.newmsg', { type: 'button', hidden: true, on: { click: () => { tl.scrollTop = tl.scrollHeight; newmsg.hidden = true; } } }, '새 메시지 ↓');
@@ -2802,6 +2821,7 @@ const Room = (() => {
     const ghost = !a && cache.get(key);
     if (!M.loaded) { proom.hidden = true; pempty.hidden = false; document.body.classList.remove('room-composer'); renderEmpty(); return; }
     pempty.hidden = true; proom.hidden = false;
+    text(back, small() ? '‹ 목록' : '‹ 오버뷰'); hideBtn.hidden = !(a && R.canHide(a));
     if (a || ghost) renderHead(a || ghost); else { text(ptitle, key.slice(key.indexOf(':') + 1)); text(pmeta, R.chName(key.split(':')[0])); lkKids.hidden = lkPar.hidden = crumb.hidden = true; }
     const rt = a && M.agents.get(a.root), tree = !!rt && Detail.subtree(rt).length > 0, was = flowOn;
     flowOn = tree && !!R.params().flow; seg.hidden = !tree; segB.forEach((b, i) => attr(b, 'aria-pressed', (i ? flowOn : !flowOn) ? 'true' : 'false'));
@@ -2962,6 +2982,7 @@ const Room = (() => {
     },
     update() { render(); },
   });
+  on('hidden', () => { if (R.params().view === 'board') render(); });
   on('arrow', e => { if (R.params().view !== 'board') return; const c = navCards().find(x => x.tabIndex === 0) || navCards()[0]; if (c) { e.preventDefault(); pick(c); } });
 })();
 
@@ -3827,7 +3848,7 @@ const Overview = (() => {
     let s = seen.get(a.key);
     if (!s) seen.set(a.key, s = { st: a.st, t: -1e9 });
     else if (s.st !== a.st) { s.st = a.st; s.t = now; }
-    const kids = a.kids.map(k => M.agents.get(k)).filter(Boolean);
+    const kids = a.kids.map(k => M.agents.get(k)).filter(k => k && !R.isHidden(k));   // tidied subagents go too
     return { key: a.key, id: a.key, ch: a.ch, aid: a.id, tool: a.tool, name: a.name, st: a.st, why: a.why, a, p: projOf(a), project: pid, server: a.ch, enteredPerf: s.t,
       waiting: R.isWaiting(a), parentName, nKids: kids.length, kids: depth < 1 ? kids.map(k => node(k, pid, depth + 1, a.name)) : [],
       talk: a.msgs.some(m => m.kind === 'talk' && Date.now() - m.t < 1800e3) };
@@ -3838,6 +3859,7 @@ const Overview = (() => {
       servers.push({ id: c.id, name: c.name, kind: c.kind, state: c.state === 'error' || c.stale || M.hubDown ? 'error' : c.state === 'connecting' ? 'connecting' : 'ok' });
       const byKey = new Map();
       for (const a of M.roots[c.id] || []) {
+        if (R.isHidden(a)) continue;   // tidied away (정리): the whole tree goes with its root
         const p = projOf(a), k = p ? p.key || 'name:' + p.name : '';
         let pr = byKey.get(k);
         if (!pr) byKey.set(k, pr = { id: c.id + '|' + (k || '~'), server: c.id, name: p ? p.name : ETC, branch: p ? p.branch : '', key: k, root: p ? p.root : '', other: !p, agents: [] });
@@ -3861,7 +3883,7 @@ const Overview = (() => {
   function header() {
     const n = M.waiting.length;
     text(turn, '나를 기다림 ' + n); turn.dataset.n = String(n); attr(turn, 'aria-disabled', n ? null : 'true');
-    const c = {}; for (const a of M.agents.values()) c[a.st] = (c[a.st] || 0) + 1;
+    const c = {}; for (const a of M.agents.values()) if (!R.isHidden(a)) c[a.st] = (c[a.st] || 0) + 1;
     sum.replaceChildren(...['work', 'tool', 'child', 'idle', 'done'].filter(k => c[k]).map(k => h('span', C.glyph(k), ST[k] + ' ', h('b', String(c[k])))),
       h('span', '서버 ' + M.channels.filter(x => x.state === 'ok').length + '/' + M.channels.length + ' 연결'));
     segBtns.forEach(b => { const on_ = (b.dataset.v === 'office') === S.fun; attr(b, 'aria-checked', on_ ? 'true' : 'false'); b.tabIndex = on_ ? 0 : -1; });
@@ -3903,6 +3925,7 @@ const Overview = (() => {
   addEventListener('focus', () => { blurAt = 0; kick(); });
   addEventListener('blur', () => { blurAt = Date.now(); setTimeout(kick, 61000); });
   on('pause', kick); on('route', () => { hideTip(); setTimeout(kick, 0); });
+  on('hidden', () => { if (root.isConnected && M.loaded && visible()) render(); });   // 정리 / 다시 보기 takes effect at once, not at the next poll
   let prevSig = '';
   on('settings', () => { const sig = S.fun + S.ovTheme + dark() + reduced(); if (sig === prevSig) return; prevSig = sig; root.dataset.ovt = S.ovTheme; if (typeof OvOffice !== 'undefined') OvOffice.invalidate(); if (root.isConnected && M.loaded && visible()) render(); });
   new ResizeObserver(() => { if (visible()) relayout(); }).observe(pempty);

@@ -94,7 +94,7 @@ const Overview = (() => {
     let s = seen.get(a.key);
     if (!s) seen.set(a.key, s = { st: a.st, t: -1e9 });
     else if (s.st !== a.st) { s.st = a.st; s.t = now; }
-    const kids = a.kids.map(k => M.agents.get(k)).filter(Boolean);
+    const kids = a.kids.map(k => M.agents.get(k)).filter(k => k && !R.isHidden(k));   // tidied subagents go too
     return { key: a.key, id: a.key, ch: a.ch, aid: a.id, tool: a.tool, name: a.name, st: a.st, why: a.why, a, p: projOf(a), project: pid, server: a.ch, enteredPerf: s.t,
       waiting: R.isWaiting(a), parentName, nKids: kids.length, kids: depth < 1 ? kids.map(k => node(k, pid, depth + 1, a.name)) : [],
       talk: a.msgs.some(m => m.kind === 'talk' && Date.now() - m.t < 1800e3) };
@@ -105,6 +105,7 @@ const Overview = (() => {
       servers.push({ id: c.id, name: c.name, kind: c.kind, state: c.state === 'error' || c.stale || M.hubDown ? 'error' : c.state === 'connecting' ? 'connecting' : 'ok' });
       const byKey = new Map();
       for (const a of M.roots[c.id] || []) {
+        if (R.isHidden(a)) continue;   // tidied away (정리): the whole tree goes with its root
         const p = projOf(a), k = p ? p.key || 'name:' + p.name : '';
         let pr = byKey.get(k);
         if (!pr) byKey.set(k, pr = { id: c.id + '|' + (k || '~'), server: c.id, name: p ? p.name : ETC, branch: p ? p.branch : '', key: k, root: p ? p.root : '', other: !p, agents: [] });
@@ -128,7 +129,7 @@ const Overview = (() => {
   function header() {
     const n = M.waiting.length;
     text(turn, '나를 기다림 ' + n); turn.dataset.n = String(n); attr(turn, 'aria-disabled', n ? null : 'true');
-    const c = {}; for (const a of M.agents.values()) c[a.st] = (c[a.st] || 0) + 1;
+    const c = {}; for (const a of M.agents.values()) if (!R.isHidden(a)) c[a.st] = (c[a.st] || 0) + 1;
     sum.replaceChildren(...['work', 'tool', 'child', 'idle', 'done'].filter(k => c[k]).map(k => h('span', C.glyph(k), ST[k] + ' ', h('b', String(c[k])))),
       h('span', '서버 ' + M.channels.filter(x => x.state === 'ok').length + '/' + M.channels.length + ' 연결'));
     segBtns.forEach(b => { const on_ = (b.dataset.v === 'office') === S.fun; attr(b, 'aria-checked', on_ ? 'true' : 'false'); b.tabIndex = on_ ? 0 : -1; });
@@ -170,6 +171,7 @@ const Overview = (() => {
   addEventListener('focus', () => { blurAt = 0; kick(); });
   addEventListener('blur', () => { blurAt = Date.now(); setTimeout(kick, 61000); });
   on('pause', kick); on('route', () => { hideTip(); setTimeout(kick, 0); });
+  on('hidden', () => { if (root.isConnected && M.loaded && visible()) render(); });   // 정리 / 다시 보기 takes effect at once, not at the next poll
   let prevSig = '';
   on('settings', () => { const sig = S.fun + S.ovTheme + dark() + reduced(); if (sig === prevSig) return; prevSig = sig; root.dataset.ovt = S.ovTheme; if (typeof OvOffice !== 'undefined') OvOffice.invalidate(); if (root.isConnected && M.loaded && visible()) render(); });
   new ResizeObserver(() => { if (visible()) relayout(); }).observe(pempty);

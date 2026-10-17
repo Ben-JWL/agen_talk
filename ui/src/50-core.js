@@ -272,6 +272,12 @@ const R = (() => {
   const OLD = 600;                               // s; stopped/dead younger than this still count as "waiting for me"
   // waiting for me = user + stall + unexpected (recent) stopped/dead
   const isWaiting = a => a.st === 'user' || a.st === 'stall' || ((a.st === 'stopped' || a.st === 'dead') && a.age < OLD);
+  // 정리 (tidy up): a finished room the user hid. Only rest states can stay hidden: a session that works or waits again comes back by itself.
+  const FINISHED = new Set(['done', 'stopped', 'dead']);
+  const canHide = a => !!a && FINISHED.has(a.st) && !isWaiting(a);
+  const isHidden = a => !!(a && U.hidden && U.hidden[a.key]) && REST.has(a.st) && !isWaiting(a);
+  const hideRooms = keys => { if (!U.hidden || typeof U.hidden !== 'object') U.hidden = {}; for (const k of keys) U.hidden[k] = Date.now(); save(); emit('hidden'); };
+  const unhideAll = () => { U.hidden = {}; save(); emit('hidden'); };
   // 나를 기다림 order: blockers first (oldest-waiting first inside a rank); '답변 끝남' rows last, newest first
   const calm = a => a.st === 'user' && /^답변 끝남/.test(a.why);
   const waitT = a => a.lastAt != null ? a.lastAt : a.t0 != null ? a.t0 : 0;
@@ -385,7 +391,8 @@ const R = (() => {
     let pruned = false;
     for (const k of Object.keys(A.at)) if (recvMs - A.at[k] > 864e5) { delete A.rooms[k]; delete A.at[k]; delete A.scroll[k]; delete A.mg[k]; pruned = true; }
     let uPruned = false;   // per-room UI marks die with the room's data, or room.ui grows forever
-    for (const m of [U.seen, U.expanded, U.boardExp]) if (m && typeof m === 'object') for (const k of Object.keys(m)) if (!next.has(k) && !(k in A.at)) { delete m[k]; uPruned = true; }
+    for (const m of [U.seen, U.expanded, U.boardExp, U.hidden]) if (m && typeof m === 'object') for (const k of Object.keys(m)) if (!next.has(k) && !(k in A.at)) { delete m[k]; uPruned = true; }
+    if (U.hidden && typeof U.hidden === 'object') for (const k of Object.keys(U.hidden)) { const a = next.get(k); if (a && !REST.has(a.st)) { delete U.hidden[k]; uPruned = true; } }   // working or waiting again: show it
     if (uPruned) save();
     for (const [k, mp] of Object.entries(A.mg)) { for (const [id, m] of mp) if (recvMs - m.t > 864e5) { mp.delete(id); pruned = true; } if (!mp.size) delete A.mg[k]; }
     if (pruned) saveMsgs();
@@ -398,7 +405,7 @@ const R = (() => {
     if (events.length) emit('events', events);
   }
   // counts helpers for views
-  const agentsOf = ch => [...M.agents.values()].filter(a => !ch || ch === 'all' || a.ch === ch);
+  const agentsOf = ch => [...M.agents.values()].filter(a => (!ch || ch === 'all' || a.ch === ch) && !isHidden(a));
   const chan = id => M.channels.find(c => c.id === id);
   const chName = id => { const c = chan(id); return c ? c.name : (id || ''); };
   const isDead = id => { const c = chan(id); return !!c && (!!M.hubDown || c.state === 'error' || c.stale); };
@@ -545,6 +552,6 @@ const R = (() => {
     poll();
   }
   return { BADPERM, esc, num, str, koDur, normalize, h, svgUse, text, attr, cls, stClass, $, $$, keyed, keepScroll, isDead, setTimeFor, saveEvents, fmtDur, fmtLive, fmtAgo, sshHint, sshKind, sshFix, sshErr, fmtAbs, fmtHM, timeEl, setTime,
-           store, S, U, A, acts, msgs, mergeMsgs, saveTalks, saveMsgs, loadMsgs, validMsg, setFlow, accumulate, toolBase, save, applySettings, on, emit, ST, LIVE, REST, OLD, isWaiting, waitCmp, waitT, M, agentsOf, chan, chName,
+           store, S, U, A, acts, msgs, mergeMsgs, saveTalks, saveMsgs, loadMsgs, validMsg, setFlow, accumulate, toolBase, save, applySettings, on, emit, ST, LIVE, REST, OLD, isWaiting, canHide, isHidden, hideRooms, unhideAll, waitCmp, waitT, M, agentsOf, chan, chName,
            refresh, loadPresets, apiPost, setPaused, isPaused: () => paused, view, go, openRoom, closeRoom, openChannel, route, params: () => params, key, keys, onEsc, updateTitle, boot };
 })();

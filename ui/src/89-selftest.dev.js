@@ -142,6 +142,25 @@
         const rowOf = k => { const ag = R.M.agents.get(k), el = C.roomRow(ag); C.setRoomRow(el, ag); return el.querySelector('.pj'); };
         const c1 = rowOf('s01:cl-print'), c2 = rowOf('s01:cl-data'), c3 = rowOf('s01:cl-nosock');
         A(c1.textContent === '<b>lab</b>' && !c1.querySelector('b') && c2.textContent === 'data-pipeline' && /data-pipeline · 브랜치 main/.test(c2.title) && c3.hidden, 'room rows: project chip text uses textContent (hidden without a project)');
+        // the way back: a visible '‹ 오버뷰' button on wide windows, and Esc
+        ov.querySelector('[data-agent="s01:cl-data"]').click();
+        await wait(() => !document.querySelector('#proom').hidden);
+        const bk = document.querySelector('#proom .back');
+        A(bk && getComputedStyle(bk).display !== 'none' && bk.textContent === '‹ 오버뷰', 'room header shows the way back to the overview');
+        bk.click(); await wait(() => !document.querySelector('#pempty').hidden && location.hash === '#/chat');
+        // 정리: hide all finished rooms, they leave list + overview; a hidden room that works again comes back; 다시 보기 restores
+        const fin = [...R.M.agents.values()].filter(R.canHide);
+        A(fin.length > 0 && fin.every(x => ['done', 'stopped', 'dead'].includes(x.st) && !R.isWaiting(x)), 'canHide: finished, not waiting');
+        A(![...R.M.agents.values()].some(x => (x.st === 'user' || x.st === 'work') && R.canHide(x)), 'canHide: never a working or waiting room');
+        const cards0 = ov.querySelectorAll('[data-agent]').length;
+        document.querySelector('.tidy').click();
+        await wait(() => ov.querySelectorAll('[data-agent]').length < cards0);
+        A(fin.every(x => R.isHidden(x)) && !fin.some(x => document.querySelector('#rooms [data-key="' + CSS.escape(x.key) + '"]')), 'tidy hides finished rooms from the list');
+        A(/숨긴 방 \d+개 다시 보기/.test(document.querySelector('.unhide').textContent) && document.querySelector('.tidy').hidden, 'restore button replaces the tidy button');
+        const back0 = { ...fin[0] }; fin[0].st = 'work'; A(!R.isHidden(fin[0]), 'a hidden room that works again is shown'); Object.assign(fin[0], back0);
+        document.querySelector('.unhide').click();
+        await wait(() => ov.querySelectorAll('[data-agent]').length === cards0);
+        A(!fin.some(R.isHidden), '다시 보기 restores every hidden room');
         S.fun = fun0; R.applySettings();
         console.log('SELFTEST ok'); document.title = 'SELFTEST ok';
       } catch (e) { console.log('SELFTEST FAIL ' + e.message); document.title = 'SELFTEST FAIL'; }

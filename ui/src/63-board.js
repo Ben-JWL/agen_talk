@@ -127,5 +127,6 @@
     },
     update() { render(); },
   });
+  on('hidden', () => { if (R.params().view === 'board') render(); });
   on('arrow', e => { if (R.params().view !== 'board') return; const c = navCards().find(x => x.tabIndex === 0) || navCards()[0]; if (c) { e.preventDefault(); pick(c); } });
 })();

@@ -13,13 +13,15 @@ const Room = (() => {
   let key = null, a = null, prevIds = new Set(), lastId = null, opening = true, tailOk = false, wantFocus = false, sawAgent = false;
 
   // ---------- skeleton of the pane ----------
-  const ptitle = h('h2.t-title.ptitle'), pproj = h('span.pj', { hidden: true }), pmeta = h('div.pmeta.meta'), crumb = h('a.crumb.lnk', { href: '#/chat' }), back = h('button.back.btn.link', { type: 'button', on: { click: () => R.closeRoom() } }, '‹ 목록');
+  const ptitle = h('h2.t-title.ptitle'), pproj = h('span.pj', { hidden: true }), pmeta = h('div.pmeta.meta'), crumb = h('a.crumb.lnk', { href: '#/chat' }), back = h('button.back.btn.link', { type: 'button', title: '오버뷰로 (Esc)', on: { click: () => R.closeRoom() } }, '‹ 오버뷰');
   const lkKids = h('button.lnk.hk', { type: 'button', on: { click: () => { setDrawer(true); const s = $('.dsec.kids', drawer); s && s.scrollIntoView({ block: 'start' }); } } }), lkPar = h('button.lnk.hp', { type: 'button' });
   const info = h('button.ibtn.info', { type: 'button', 'aria-pressed': 'false', 'aria-label': '세션 정보', title: '세션 정보 (i)', on: { click: () => setDrawer(!U.drawer) } }, svgUse('i-info'));
   const av = C.avatar(null);
   const segB = ['대화', '흐름'].map((l, i) => h('button', { type: 'button', 'aria-pressed': i ? 'false' : 'true', 'aria-keyshortcuts': i ? 'f' : null, title: i ? '흐름 보기 (f)' : null, on: { click: () => R.setFlow(!!i) } }, l));
   const seg = h('div.seg.fseg', { role: 'group', 'aria-label': '보기', hidden: true }, ...segB);   // 대화 | 흐름 (TALK-UX §4): only when the room's tree has children
-  const phead = h('header.phead', back, crumb, h('div.hrow', av, h('div.htxt', ptitle, h('div.pmrow', pproj, pmeta)), h('div.hlinks', seg, lkKids, lkPar, info)));
+  // 정리: a finished room can be hidden from the list and the overview (it returns by itself if the session works or waits again)
+  const hideBtn = h('button.btn.sm.hidebtn', { type: 'button', hidden: true, title: '끝난 방을 목록과 오버뷰에서 숨깁니다', on: { click: () => { if (a && R.canHide(a)) { R.hideRooms([a.key]); R.closeRoom(); } } } }, '목록에서 숨기기');
+  const phead = h('header.phead', back, crumb, h('div.hrow', av, h('div.htxt', ptitle, h('div.pmrow', pproj, pmeta)), h('div.hlinks', seg, lkKids, lkPar, hideBtn, info)));
   const tl = h('div#tl', { role: 'log', 'aria-live': 'polite', 'aria-relevant': 'additions', tabindex: '-1', 'aria-label': '대화' }), tlin = h('div.tlin');
   tl.append(tlin);
   const newmsg = h('button.newmsg', { type: 'button', hidden: true, on: { click: () => { tl.scrollTop = tl.scrollHeight; newmsg.hidden = true; } } }, '새 메시지 ↓');
@@ -258,6 +260,7 @@ const Room = (() => {
     const ghost = !a && cache.get(key);
     if (!M.loaded) { proom.hidden = true; pempty.hidden = false; document.body.classList.remove('room-composer'); renderEmpty(); return; }
     pempty.hidden = true; proom.hidden = false;
+    text(back, small() ? '‹ 목록' : '‹ 오버뷰'); hideBtn.hidden = !(a && R.canHide(a));
     if (a || ghost) renderHead(a || ghost); else { text(ptitle, key.slice(key.indexOf(':') + 1)); text(pmeta, R.chName(key.split(':')[0])); lkKids.hidden = lkPar.hidden = crumb.hidden = true; }
     const rt = a && M.agents.get(a.root), tree = !!rt && Detail.subtree(rt).length > 0, was = flowOn;
     flowOn = tree && !!R.params().flow; seg.hidden = !tree; segB.forEach((b, i) => attr(b, 'aria-pressed', (i ? flowOn : !flowOn) ? 'true' : 'false'));
