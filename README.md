@@ -1,130 +1,141 @@
-# agen_talk
+# 에겐 톡 · Agen Talk
 
-**에겐 톡 (Agen Talk)** is a desktop dashboard for the AI coding agents (Codex, Claude Code, Antigravity CLI)
-running on your PC and on the Linux servers you can SSH into. Every agent gets a chat-like room that shows what
-it is for, what it is doing now, and whether it is really working. Rooms that are waiting for you (approval,
-question, stalled) are pinned on top with a red badge, and Windows notifications tell you when something needs you.
+[![CI](https://github.com/Ben-JWL/agen_talk/actions/workflows/ci.yml/badge.svg)](https://github.com/Ben-JWL/agen_talk/actions/workflows/ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/Ben-JWL/agen_talk?include_prereleases&sort=semver)](https://github.com/Ben-JWL/agen_talk/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/Ben-JWL/agen_talk/total)](https://github.com/Ben-JWL/agen_talk/releases)
+![Windows 10 | 11](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-<!-- screenshots: add the files under docs/ and uncomment -->
-<!-- ![Rooms](docs/screenshot-rooms.png) -->
-<!-- ![Add server](docs/screenshot-add-server.png) -->
+**English** · [한국어](README.ko.md)
 
-Windows 10/11, no admin rights, nothing installed on your servers.
+**All the AI coding agents you are running — Claude Code, Codex, Antigravity — in one window, like a chat app.**
+
+## See it in action
+
+![Overview, pixel office, a room and the board](docs/img/demo.gif)
+
+<sub>Sample data. The app's interface is in Korean; [What the buttons mean](#what-the-buttons-mean) has the translations.</sub>
 
 ## Install
 
-1. Open the [Releases](../../releases) page and download `AgenTalk-Setup-<version>.exe`.
-2. Run it. It installs per user (`%LOCALAPPDATA%\Programs\AgenTalk`), adds a Start-menu entry and optionally a desktop shortcut.
-3. Check the download against `SHA256SUMS` from the same release (`certutil -hashfile <file> SHA256`).
+- **Windows installer (recommended):** download `AgenTalk-Setup-<version>.exe` from the [latest release](https://github.com/Ben-JWL/agen_talk/releases/latest) and run it.
+  - No admin rights needed: it installs for your user only.
+  - The installer is not code-signed yet, so Windows may say *"Windows protected your PC"*. Click **More info → Run anyway**. See [Code signing policy](#code-signing-policy).
+  - To update, run the new installer over the old one. Your servers and settings are kept.
+- **Portable:** download `AgenTalk-<version>-portable.zip`, unzip it anywhere and run `AgenTalk.exe`.
+- **From source** (Python 3.8+, any OS for the collector, Windows for the app window): see [Development](#development).
 
-**SmartScreen.** The installer is not code-signed yet, so Windows shows "Windows protected your PC".
-Click **More info**, then **Run anyway**.
+Windows 10 or 11 (64-bit) with Microsoft Edge WebView2, which current Windows versions already have. To watch a server you only need SSH access and `python3` 3.8+ there. Nothing gets installed on the server.
 
-**Company policy blocks it?** Some organisations block unsigned apps. Use one of these instead:
-- the **portable zip** (`AgenTalk-<version>-portable.zip`): unzip anywhere and run `AgenTalk.exe` (may still be blocked), or
-- **run from source** with Python 3.8+: `python app.py` (the window needs `pip install pywebview`; without it a Chrome/Edge app window is used. SSH uses the in-app client when `pip install paramiko` is done, and falls back to OpenSSH when paramiko is not installed; its console may ask you to confirm the fingerprint and enter the password.)
+## Features
 
-The window uses Microsoft Edge WebView2, which is part of current Windows 10/11. If it is missing the app falls
-back to a Chrome/Edge window and tells you how to install WebView2.
+- **One room per agent.** Every Claude Code, Codex and Antigravity session on your PC and on your SSH servers shows up on its own. Each room says what the agent is for, what it is doing right now, and whether it is really working.
+- **Needs me, on top.** Approval requests, questions and stalled agents get a red badge and a Windows notification. A button copies the command an agent is waiting to run.
+- **Overview.** When no room is open, a wiring map shows every server → project → agent → subagent, live.
+- **Pixel office (fun mode).** Optional: the overview becomes an animated pixel-art office, one room per project, with five fan themes (Claude, ChatGPT, Gemini, Grok, Muse style) in light and dark.
+- **Projects.** Agents are grouped by the git repository they work in, read from the repo's files, so the same repo groups together across machines.
+- **Who told whom.** Instructions from a main agent to its subagents, and their reports, appear as cards and as a flow tree.
+- **Talk.** You can send a short message into a running Claude Code or Codex session on a Linux server.
+- **Tidy up.** Hide finished rooms in one click; they come back by themselves if the session wakes up.
+- **Private by design.** No account, no cloud, no telemetry. Data moves only over your own SSH connections.
 
-## First run
+## Screenshots
 
-1. Start **에겐 톡 (Agen Talk)**. Your own PC is already listed.
-2. Add a server: **서버 추가** (add server), enter the server address, account, and password in the app. On first contact,
-   compare the displayed server fingerprint with one from its administrator before confirming. The app creates a dedicated key
-   and trust store under `%APPDATA%\AgenTalk` (`id_ed25519` and `known_hosts`), registers the key, and never asks for the
-   password again. If the server allows password login but refuses key login, choose the session-password option; that password
-   stays in memory until the app closes.
-3. If someone shared a server list with you (a `presets.json` file), choose **서버 목록 가져오기** (import server list) and pick the file.
-   The servers then appear with a **연결하기** (connect) button. Nothing like this ships in the app: the list stays private to whoever made it.
-   Format: `{"presets": [{"name": "GPU box", "host": "gpu.example.com", "port": 22}]}`.
-4. Settings: turn on **Windows 알림** to be told about waiting, stalled, or disconnected agents.
+| | |
+|---|---|
+| [![Overview: wiring map](docs/img/overview.png)](docs/img/overview.png) **Overview**: server → project → agent | [![Pixel office](docs/img/office.png)](docs/img/office.png) **Pixel office**: fun mode, Claude style |
+| [![Pixel office, dark](docs/img/office-dark.png)](docs/img/office-dark.png) **Pixel office**: Gemini style, dark | [![A room](docs/img/room.png)](docs/img/room.png) **A room** with sent talks and their delivery state |
+| [![Board](docs/img/board.png)](docs/img/board.png) **Board**: needs me, working, waiting, done | [![Settings](docs/img/settings.png)](docs/img/settings.png) **Settings**: theme, fun mode, notifications, servers |
 
-The installed app uses its in-app SSH client (paramiko). OpenSSH is used only as a fallback: when a source run has no
-paramiko, or for a server whose hand-edited `ssh_args` in `channels.json` use an option other than `-i`, `-p` or
-`-o IdentitiesOnly=...` (for example `-o ProxyJump=...`).
+## Getting started
 
-### OpenSSH fallback: "Bad owner or permissions" on an Entra-joined PC
+1. **See your agents.** Start your agents as usual and open **에겐 톡 (Agen Talk)** from the Start menu. Agents on this PC appear right away; the ones that need you are listed first under **나를 기다림** (needs me).
+2. **Add a Linux server (optional).** Click the **gear** (Settings), then **서버 추가** (Add server). Enter the address, your account and password.
+   - The first time, the app shows the server's *fingerprint*, a short code that identifies that machine. Compare it with the one from your administrator if you have it.
+   - The app then installs its own key, forgets the password and connects without asking from then on.
+   - If the server refuses key login, choose the session password option: it stays in memory until the app closes.
+   - Got a server list from a teammate? Use **서버 목록 가져오기** (Import server list) with their `presets.json`, which looks like `{"presets": [{"name": "GPU box", "host": "gpu.example.com", "port": 22}]}`.
+3. **Notifications.** Settings → **Windows 알림** → on.
+4. **Overview and fun mode.** Close a room (**‹ 오버뷰** or Esc) to see the overview. Switch between **배선 지도** (wiring map) and **픽셀 오피스** (pixel office) at the top right; Settings → 화면 has **재미 모드** (fun mode) and **오버뷰 테마** (overview theme).
+5. **Tidy up.** At the bottom of the list, **완료된 방 N개 정리** hides every finished room. **숨긴 방 N개 다시 보기** brings them back.
+6. **Talk (optional).** In the room of a Claude Code or Codex session on a Linux server, type a message and press **Enter** twice: once to confirm, once to send.
+   - The agent receives it as a message *from another session* and can never approve a prompt with it.
+   - Sessions on the Windows PC itself, subagents and Antigravity cannot receive talks yet; the room says why.
 
-On work PCs joined to Entra ID the SSH config file often has the wrong owner. This only matters for the OpenSSH
-fallback (the in-app client never reads `~/.ssh/config`). The app shows a copy button with this fix; run it in PowerShell:
+## What the buttons mean
 
-```powershell
-$f = "$env:USERPROFILE\.ssh\config"; $me = whoami; icacls $f /setowner $me; icacls $f /inheritance:r /grant:r "${me}:F"
+| Korean | Meaning |
+|---|---|
+| 오버뷰 · 배선 지도 · 픽셀 오피스 | Overview · wiring map · pixel office |
+| 재미 모드 · 오버뷰 테마 | Fun mode · overview theme |
+| 나를 기다림 | Needs me (approval, question or input) |
+| 승인 요청 · 명령 복사 | Approval request · copy the command |
+| 작업 중 / 진행 중 | Working |
+| 응답 없음 / 조용함 | Stalled / quiet for a while |
+| 하위 대기 · 하위 에이전트 | Waiting on subagents · subagent |
+| 끝남 / 완료 | Done |
+| 중단됨 / 끊김 | Stopped / disconnected |
+| 프로젝트 · 기타 | Project · other (no git repository) |
+| 완료된 방 N개 정리 · 숨긴 방 N개 다시 보기 · 목록에서 숨기기 | Tidy N finished rooms · show N hidden rooms · hide this room |
+| 보드 · 설정 | Board · Settings |
+| 서버 추가 · 서버 목록 가져오기 · 연결하기 | Add server · import server list · connect |
+| 내 PC · 채널 | This PC · a connected machine |
+| 톡 · 보내기 · 전달됨 | Talk · send · delivered |
+| 흐름 · 세션 정보 · 터미널 명령 복사 | Flow · session info · copy the command to open its terminal |
+
+Keyboard: **↑/↓** move between rooms, **Enter** opens, **Esc** goes back, **b** board, **,** settings, **r** refresh, **?** all shortcuts.
+
+## Troubleshooting
+
+- **An agent doesn't show up.** It must run under your Windows user, or under the same account on a server you added. Quiet rooms are collapsed under **N개 더 보기** (show N more); hidden ones under **숨긴 방 다시 보기**.
+- **"SSH 연결이 끊겼습니다" (SSH disconnected).** Check the address, port and VPN. The card shows the SSH error; **지금 확인** (Check now) retries at once, and the app retries by itself at most once a minute.
+- **"서버에 python3 가 없습니다" (no python3).** Ask for Python 3.8+ on the server. If it is named differently (for example `python3.11`), set the server's `python` field in `%APPDATA%\AgenTalk\channels.json`.
+- **It opened in Chrome/Edge instead of its own window.** WebView2 is missing: install the *Evergreen Runtime* from Microsoft and start the app again.
+- **Projects show as 기타 (other).** The agent was started in a folder that is not inside a git repository.
+- **Logs** are in `%LOCALAPPDATA%\AgenTalk\agen-talk.log` (Settings → 정보 shows the folder).
+
+## Development
+
+```bash
+git clone https://github.com/Ben-JWL/agen_talk.git && cd agen_talk
+pip install pywebview paramiko     # optional: without them a Chrome/Edge window and OpenSSH are used
+python app.py                      # the desktop app
+python agen_talk.py                # one-shot text view of your agents (--board, --json); stdlib only
+python agen_talk.py --selftest && python app.py --selftest
+python tools/check_ui.py           # ui/src must match index.html; rebuild with: python ui/build.py
+python art/sprites/build.py        # pixel-art sources -> ui/src/72-sprites.js
 ```
 
-## Talk (톡)
+[Architecture](docs/ARCHITECTURE.md) · [Overview contract](docs/OVERVIEW-CONTRACT.md) · [Pixel art](art/sprites/README.md) · [Third-party notices](THIRD_PARTY_NOTICES.md)
 
-**Seeing instructions.** When an agent hands work to a child, the child's room shows the parent's instruction as a card
-(follow-ups too), and the parent's room shows the child's report. The **흐름** toggle in a room header draws the whole
-tree of who told whom. Codex encrypts its instruction bodies, so those cards show as locked (🔒) with no text.
+Releases are built by GitHub Actions when a `v*` tag is pushed (`.github/workflows/release.yml`).
 
-**Sending a talk.** In some rooms you can type a message and send it to the agent (Enter opens a confirm card, Enter again sends; Shift+Enter adds a line).
+## Code signing policy
 
-- **Claude Code**: the main (interactive) session of a Claude Code running on a Linux server. The message arrives as a message
-  from another session, with reduced (peer) authority. It never appears as your own input and can never approve a permission prompt.
-  If the session was started with `--dangerously-skip-permissions`, the message is held until you approve it in that terminal
-  (the room shows 터미널에서 승인 대기, and 만료됨 after about 5 minutes). Otherwise the room shows 전달됨 once it lands.
-- **Codex**: only threads hosted by the codex app-server daemon can be reached. A TUI started with `--no-daemon` is view-only.
-  The app never answers a codex approval or any other request from codex: if one reaches its connection, it disconnects and leaves the prompt to your own codex window.
-- **Not supported in v1**: sessions on the local Windows PC, subagents, and Antigravity CLI. The room shows why the box is disabled.
+The Windows installer and executable are **not code-signed yet**, which is why SmartScreen warns. Instead:
 
-**Privacy and safety.**
-- Settings > **톡 보내기 허용** turns sending off everywhere; the hub enforces it too. Viewing the flow stays on.
-- The message text is never written to the app log; each send leaves one audit line (target, length, outcome).
-- The window keeps a local cache so rooms survive a restart: the talks you sent, the agents' instructions and reports, and
-  the activity lines shown in rooms (including commands the agents ran). It lives in the WebView2 profile under
-  `%LOCALAPPDATA%\AgenTalk\webview`, is kept about 24 hours and is pruned on the next start (the 알림 feed, which can
-  include process command lines, keeps up to 500 entries for 7 days). In the Chrome/Edge fallback window the same data
-  sits in that browser's site data for `127.0.0.1`.
-- Obvious secrets (API keys, tokens, private keys, `password=` values) are masked as `[가려짐]` in displayed instructions.
-- The page is served with a strict Content-Security-Policy.
-- Whether a Claude Code session accepts messages from other sessions is that session's own choice: the `crossSessionInbound`
-  setting (`accept`, `hold` or `refuse`) in Claude Code's settings. The app reads it and respects it; it never changes it.
+- Every release is built from this repository by GitHub Actions, never on a personal machine. The build log is public.
+- Each release ships `SHA256SUMS`. Check a download with `certutil -hashfile AgenTalk-Setup-<version>.exe SHA256`.
+- Each file carries a signed build-provenance attestation. With the GitHub CLI, run `gh attestation verify AgenTalk-Setup-<version>.exe --repo Ben-JWL/agen_talk`; it proves the file was built by this repository's workflow.
+- Build dependencies are pinned by hash (`packaging/requirements-build.lock`) and all workflow actions are pinned to commit SHAs.
 
-## How the server side works
+The project will sign releases when a code-signing certificate is available.
 
-Nothing is installed on the servers. For each server the app uses its built-in SSH connection and streams its own collector
-(`agen_talk.py`, pure Python standard library) to `python3 -c` over that session. The collector reads your agents'
-state read-only (`/proc`, `~/.codex`, `~/.claude`, `~/.gemini`) and prints one JSON line per request. When the window
-closes or the connection drops, the session ends and the collector exits with it. Requirement: `python3` 3.8 or newer on the server.
+### Privacy policy
 
-## Security model
+- **No telemetry, no account, no cloud.** The app does not send anything anywhere except over SSH to servers you add yourself.
+- **Local only.** The dashboard listens on `127.0.0.1` under a random path that changes every launch. The first page load starts a session cookie, so a copied URL is useless. Changing requests also need a per-launch token. Do not run `agen_talk.py hub --insecure` on a shared machine: in that mode every local account can read your agents' text.
+- **Passwords are never stored.** The server password is used once to register the app's key. The session password option keeps it in memory until the app closes.
+- **Your key.** The app's SSH key is kept unencrypted in `%APPDATA%\AgenTalk\id_ed25519`, readable only by your Windows user. On servers it is installed with `no-port-forwarding,no-agent-forwarding,no-X11-forwarding,no-pty`. Uninstalling does not remove it: delete the line ending in `agen-talk@<your PC name>` from each server's `~/.ssh/authorized_keys` when you stop using the app.
+- **What stays on your PC.** For about 24 hours the window caches room contents so they survive a restart: agents' instructions, reports, activity lines including commands, and the talks you sent. They are kept in `%LOCALAPPDATA%\AgenTalk\webview`, unencrypted. Common secret patterns (API keys, tokens, private keys, passwords in URLs or `password=` values) are masked as `[가려짐]` in agent text, but masking is pattern-based and cannot catch everything.
+- **Full removal.** Uninstall from Windows Settings → Apps, then delete `%APPDATA%\AgenTalk` and `%LOCALAPPDATA%\AgenTalk`.
 
-- The dashboard listens on `127.0.0.1` only, on a free port.
-- Every launch makes a new random secret and serves everything under `http://127.0.0.1:<port>/<secret>/`. Any other path is a 404, so other users on the same PC (fast user switching, remote desktop) cannot read the dashboard.
-- Changing requests need a per-launch token and a matching `Host`; an `Origin` header, if sent, must match, and the talk endpoints require it.
-- No data leaves your PC except over your own SSH connections to servers you added. There is no telemetry, no account, no cloud service.
-- The server password is entered in the app and held only while the add-server job runs; the session-password option lasts only until the app closes. Unknown server fingerprints require confirmation; changed fingerprints are rejected.
-- The dedicated key and trusted server fingerprints live at `%APPDATA%\AgenTalk\id_ed25519` and `%APPDATA%\AgenTalk\known_hosts`. If paramiko is unavailable, OpenSSH fallback uses `%USERPROFILE%\.ssh\agen_talk_ed25519`.
-- Config lives in `%APPDATA%\AgenTalk\channels.json`; logs (`agen-talk.log`) and the window's WebView2 profile (`webview\`, see Privacy above) live in `%LOCALAPPDATA%\AgenTalk`.
+Found a security problem? Please report it privately through the repository's [Security](https://github.com/Ben-JWL/agen_talk/security) tab instead of a public issue.
 
-## Uninstall
+## Credits
 
-Settings > Apps > Installed apps > 에겐 톡 (Agen Talk) > Uninstall. The uninstaller removes the program only. Your servers and
-settings in `%APPDATA%\AgenTalk` and the logs and cached room contents in `%LOCALAPPDATA%\AgenTalk` are kept. For a full
-removal delete both folders yourself.
-
-To also revoke access, remove the line ending in `agen-talk@<your PC name>` from `~/.ssh/authorized_keys` on each server,
-then delete `%APPDATA%\AgenTalk\id_ed25519`, `%APPDATA%\AgenTalk\id_ed25519.pub`, and `%APPDATA%\AgenTalk\known_hosts` on your PC.
-If you ever used the OpenSSH fallback, also delete `%USERPROFILE%\.ssh\agen_talk_ed25519` and `%USERPROFILE%\.ssh\agen_talk_ed25519.pub`
-(that key carries the same `agen-talk@<your PC name>` comment).
-
-## Build from source
-
-```
-python ui/build.py                      # ui/src -> ui/dist/index.html (copy over index.html when you change the UI)
-python agen_talk.py --selftest         # collector + hub tests
-python app.py --selftest
-pip install -r packaging/requirements-build.txt
-python packaging/make_icon.py
-pyinstaller packaging/agen_talk.spec --noconfirm --distpath build/dist --workpath build/work
-iscc /DAppVersion=0.1.0 packaging\installer.iss     # needs Inno Setup 6
-```
-
-Releases are built by `.github/workflows/release.yml` when a `v*` tag is pushed. See `docs/ARCHITECTURE.md` for how the pieces fit.
-Dashboard only, without the app: `python agen_talk.py hub` (Python 3.8+, standard library only).
+Pixel art (characters, office, animation) was made for this project by Claude Opus 5.5 with GPT-6.1-sol and gpt-6-astra passes. Sea of Stars, Eastward and the Octopath Traveler series were style references only; no assets were used. The fan themes borrow colours and moods from AI products; they use no logos or trademarks and are not affiliated with or endorsed by those companies.
 
 ## License
 
-[MIT](LICENSE). Third-party components: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+[MIT](LICENSE).

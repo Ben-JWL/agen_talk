@@ -140,7 +140,7 @@
         R.closeRoom(); await wait(() => !document.querySelector('#pempty').hidden);
         // project chip in room rows uses textContent
         const rowOf = k => { const ag = R.M.agents.get(k), el = C.roomRow(ag); C.setRoomRow(el, ag); return el.querySelector('.pj'); };
-        const c1 = rowOf('s01:cl-print'), c2 = rowOf('s01:cl-data'), c3 = rowOf('s01:cl-nosock');
+        const c1 = rowOf('cloud:cl-cloud'), c2 = rowOf('s01:cl-data'), c3 = rowOf('s01:cl-nosock');
         A(c1.textContent === '<b>lab</b>' && !c1.querySelector('b') && c2.textContent === 'data-pipeline' && /data-pipeline · 브랜치 main/.test(c2.title) && c3.hidden, 'room rows: project chip text uses textContent (hidden without a project)');
         // the way back: a visible '‹ 오버뷰' button on wide windows, and Esc
         ov.querySelector('[data-agent="s01:cl-data"]').click();

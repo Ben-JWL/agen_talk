@@ -1,125 +1,120 @@
-# agen_talk
+# 에겐 톡 · Agen Talk
 
-**에겐 톡 (Agen Talk)** 은 내 PC와 SSH로 접속하는 리눅스 서버에서 돌아가는 AI 코딩 에이전트(Codex, Claude Code, Antigravity CLI)를
-한 화면에서 보는 데스크톱 대시보드입니다. 에이전트마다 채팅방이 하나씩 생기고, 무엇을 위한 작업인지, 지금 무엇을 하는지,
-정말 일하고 있는지 보여 줍니다. 나를 기다리는 방(승인·질문·멈춤)은 맨 위에 빨간 배지로 고정되고, Windows 알림으로도 알려 줍니다.
+[![CI](https://github.com/Ben-JWL/agen_talk/actions/workflows/ci.yml/badge.svg)](https://github.com/Ben-JWL/agen_talk/actions/workflows/ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/Ben-JWL/agen_talk?include_prereleases&sort=semver)](https://github.com/Ben-JWL/agen_talk/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/Ben-JWL/agen_talk/total)](https://github.com/Ben-JWL/agen_talk/releases)
+![Windows 10 | 11](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-<!-- 스크린샷: docs/ 아래에 파일을 넣고 주석을 풀어 주세요 -->
-<!-- ![채팅방 목록](docs/screenshot-rooms.png) -->
-<!-- ![서버 추가](docs/screenshot-add-server.png) -->
+[English](README.md) · **한국어**
 
-Windows 10/11, 관리자 권한 불필요, 서버에는 아무것도 설치하지 않습니다.
+**돌리고 있는 AI 코딩 에이전트(Claude Code, Codex, Antigravity)를 메신저처럼 한 화면에서 봅니다.**
+
+## 미리 보기
+
+![오버뷰, 픽셀 오피스, 방, 보드](docs/img/demo.gif)
+
+<sub>샘플 데이터로 찍은 화면입니다.</sub>
 
 ## 설치
 
-1. [Releases](../../releases) 페이지에서 `AgenTalk-Setup-<버전>.exe` 를 받습니다.
-2. 실행하면 사용자 계정에만 설치됩니다(`%LOCALAPPDATA%\Programs\AgenTalk`). 시작 메뉴에 등록되고 바탕 화면 바로 가기는 선택입니다.
-3. 같은 릴리스의 `SHA256SUMS` 와 비교해 확인할 수 있습니다(`certutil -hashfile <파일> SHA256`).
+- **Windows 설치 파일 (추천):** [최신 릴리스](https://github.com/Ben-JWL/agen_talk/releases/latest)에서 `AgenTalk-Setup-<버전>.exe`를 내려받아 실행합니다.
+  - 관리자 권한이 필요 없습니다. 내 사용자 계정에만 설치됩니다.
+  - 아직 코드 서명을 하지 않아서 *"Windows의 PC 보호"* 창이 뜰 수 있습니다. **추가 정보 → 실행**을 누르세요. [코드 서명 정책](#코드-서명-정책)을 참고하세요.
+  - 업데이트할 때는 새 설치 파일을 그냥 실행하면 됩니다. 서버 목록과 설정은 그대로 남습니다.
+- **포터블:** `AgenTalk-<버전>-portable.zip`을 아무 곳에 풀고 `AgenTalk.exe`를 실행합니다.
+- **소스에서 실행** (Python 3.8 이상): [개발](#개발)을 보세요.
 
-**SmartScreen 안내.** 설치 파일은 아직 코드 서명이 없어서 "Windows의 PC 보호" 창이 뜹니다.
-**추가 정보** 를 누른 뒤 **실행** 을 누르세요.
+Windows 10/11(64비트)과 Microsoft Edge WebView2가 필요한데, 요즘 Windows에는 이미 들어 있습니다. 서버를 보려면 SSH 접속과 서버의 `python3` 3.8 이상만 있으면 되고, 서버에는 아무것도 설치하지 않습니다.
 
-**회사 정책으로 막히면?** 서명 없는 앱을 막는 회사가 있습니다. 이 경우:
-- **포터블 zip**(`AgenTalk-<버전>-portable.zip`)을 아무 폴더에 풀고 `AgenTalk.exe` 를 실행하거나(이것도 막힐 수 있음),
-- **소스로 실행**: Python 3.8 이상에서 `python app.py` (창을 쓰려면 `pip install pywebview`, 없으면 Chrome/Edge 앱 창으로 열립니다. `pip install paramiko` 를 해 두면 SSH는 앱 내장 클라이언트를 쓰고, paramiko가 없으면 OpenSSH 대체 경로를 사용하며 이때 콘솔에서 지문 확인과 비밀번호 입력을 요청할 수 있습니다).
+## 기능
 
-창은 Microsoft Edge WebView2 를 씁니다. 최신 Windows 10/11 에는 들어 있고, 없으면 Chrome/Edge 창으로 대신 열면서 설치 방법을 알려 줍니다.
+- **에이전트마다 방이 하나씩.** 내 PC와 SSH 서버의 Claude Code, Codex, Antigravity 세션이 각각 방으로 나타납니다. 무엇을 위한 에이전트인지, 지금 무엇을 하는지, 정말 일하고 있는지 보입니다.
+- **나를 기다리는 방이 맨 위에.** 승인 요청, 질문, 멈춘 에이전트에 빨간 배지와 Windows 알림이 뜹니다. 에이전트가 실행하려는 명령은 버튼 하나로 복사됩니다.
+- **오버뷰.** 방을 열지 않았을 때 서버 → 프로젝트 → 에이전트 → 하위 에이전트를 배선 지도로 실시간 보여 줍니다.
+- **픽셀 오피스 (재미 모드).** 원하면 오버뷰가 움직이는 픽셀 아트 사무실로 바뀝니다. 프로젝트마다 방이 하나씩 있고, 다섯 가지 팬 테마(Claude·ChatGPT·Gemini·Grok·Muse 풍)를 라이트/다크로 고를 수 있습니다.
+- **프로젝트.** 에이전트가 일하는 git 저장소를 파일에서 읽어 묶습니다. 여러 서버의 같은 저장소도 한 프로젝트로 묶입니다.
+- **누가 누구에게 시켰나.** 메인 에이전트가 하위 에이전트에게 준 지시와 받은 보고가 카드와 흐름 트리로 보입니다.
+- **톡.** 리눅스 서버에서 돌고 있는 Claude Code나 Codex 세션에 짧은 메시지를 보낼 수 있습니다.
+- **정리.** 끝난 방을 한 번에 숨깁니다. 세션이 다시 움직이면 저절로 돌아옵니다.
+- **개인정보 우선.** 계정, 클라우드, 사용 통계 전송이 없습니다. 데이터는 내 SSH 연결로만 오갑니다.
 
-## 처음 실행
+## 스크린샷
 
-1. **에겐 톡 (Agen Talk)** 을 시작합니다. 내 PC는 이미 목록에 있습니다.
-2. **서버 추가** 를 눌러 서버 주소, 계정, 비밀번호를 앱에 입력합니다. 처음 연결할 때는 화면에 표시된 서버 지문이
-   관리자가 알려 준 값과 같은지 확인한 뒤 승인하세요. 앱은 `%APPDATA%\AgenTalk` 아래에 전용 키와 신뢰 저장소
-   (`id_ed25519`, `known_hosts`)를 만들고 서버에 키를 등록하므로 이후에는 비밀번호를 다시 묻지 않습니다. 서버가 키 로그인을
-   허용하지 않으면 세션 비밀번호 옵션을 선택할 수 있으며, 비밀번호는 앱을 닫을 때까지만 메모리에 남습니다.
-3. 회사나 팀에서 서버 목록(`presets.json`)을 공유받았다면 **서버 목록 가져오기** 로 그 파일을 고르세요.
-   서버마다 **연결하기** 버튼이 생깁니다. 이 목록은 앱에 들어 있지 않고, 만든 사람만 가지고 있습니다.
-   형식: `{"presets": [{"name": "GPU 서버", "host": "gpu.example.com", "port": 22}]}`
-4. 설정에서 **Windows 알림** 을 켜 두면 입력 대기·응답 없음·끊김을 알려 줍니다.
+| | |
+|---|---|
+| [![오버뷰: 배선 지도](docs/img/overview.png)](docs/img/overview.png) **오버뷰**: 서버 → 프로젝트 → 에이전트 | [![픽셀 오피스](docs/img/office.png)](docs/img/office.png) **픽셀 오피스**: 재미 모드, Claude 풍 |
+| [![픽셀 오피스 다크](docs/img/office-dark.png)](docs/img/office-dark.png) **픽셀 오피스**: Gemini 풍, 다크 | [![방](docs/img/room.png)](docs/img/room.png) **방**: 보낸 톡과 전달 상태 |
+| [![보드](docs/img/board.png)](docs/img/board.png) **보드**: 나를 기다림, 작업 중, 하위 대기, 끝남 | [![설정](docs/img/settings.png)](docs/img/settings.png) **설정**: 테마, 재미 모드, 알림, 서버 |
 
-설치된 앱은 앱 내장 SSH 클라이언트(paramiko)를 사용합니다. OpenSSH는 대체 경로로만 씁니다. paramiko 없이 소스로 실행할 때,
-또는 `channels.json` 에 직접 적은 `ssh_args` 에 `-i`, `-p`, `-o IdentitiesOnly=...` 외의 옵션(예: `-o ProxyJump=...`)이 있는 서버일 때입니다.
+## 사용법
 
-### OpenSSH 대체 경로: Entra 가입 PC의 "Bad owner or permissions" 오류
+1. **에이전트 보기.** 에이전트는 평소처럼 실행하고, 시작 메뉴에서 **에겐 톡 (Agen Talk)** 을 엽니다. 내 PC의 에이전트가 바로 나타나고, 나를 기다리는 방은 **나를 기다림** 아래에 먼저 나옵니다.
+2. **리눅스 서버 추가 (선택).** 왼쪽 아래 **톱니바퀴(설정)** → **서버 추가**를 누르고 주소, 계정, 비밀번호를 입력합니다.
+   - 처음 한 번은 서버의 *지문(fingerprint)* 이 나옵니다. 그 서버를 알아보는 짧은 고유 코드입니다. 관리자에게 받은 값이 있으면 같은지 비교하세요.
+   - 그다음 앱이 전용 키를 설치하고 비밀번호는 잊습니다. 다음부터는 묻지 않고 연결합니다.
+   - 서버가 키 로그인을 막아 두었다면 **이번 세션 동안만 비밀번호로 연결**을 고르세요. 비밀번호는 앱을 닫을 때까지 메모리에만 있습니다.
+   - 동료에게 서버 목록 파일을 받았다면 **서버 목록 가져오기**로 `presets.json`을 고르세요. 형식은 `{"presets": [{"name": "GPU 서버", "host": "gpu.example.com", "port": 22}]}`입니다.
+3. **알림.** 설정 → **Windows 알림** → 켜기.
+4. **오버뷰와 재미 모드.** 방을 닫으면(**‹ 오버뷰** 또는 Esc) 오버뷰가 보입니다. 오른쪽 위에서 **배선 지도**와 **픽셀 오피스**를 바꿀 수 있고, 설정 → 화면에 **재미 모드**와 **오버뷰 테마**가 있습니다.
+5. **정리.** 목록 맨 아래 **완료된 방 N개 정리**를 누르면 끝난 방을 모두 숨기고, **숨긴 방 N개 다시 보기**로 되돌립니다.
+6. **톡 (선택).** 리눅스 서버의 Claude Code나 Codex 세션 방에서 메시지를 쓰고 **Enter**를 두 번 누르세요. 첫 번째는 확인, 두 번째에 보냅니다.
+   - 에이전트는 이 메시지를 *다른 세션이 보낸 메시지*로 받고, 권한 승인은 절대 대신하지 못합니다.
+   - Windows PC 자체의 세션, 하위 에이전트, Antigravity에는 아직 보낼 수 없습니다. 이유는 방에 표시됩니다.
 
-회사 Entra ID 가입 PC에서는 OpenSSH 설정 파일의 소유자가 어긋나는 일이 흔합니다. OpenSSH 대체 경로에서만 필요한 수정입니다
-(앱 내장 클라이언트는 `~/.ssh/config` 를 읽지 않습니다). 앱에도 이 명령을 복사하는 버튼이 있습니다.
-PowerShell 에서 실행하세요(사용자 이름은 자동으로 들어갑니다).
+단축키: **↑/↓** 방 이동, **Enter** 열기, **Esc** 뒤로, **b** 보드, **,** 설정, **r** 새로고침, **?** 전체 단축키.
 
-```powershell
-$f = "$env:USERPROFILE\.ssh\config"; $me = whoami; icacls $f /setowner $me; icacls $f /inheritance:r /grant:r "${me}:F"
+## 문제 해결
+
+- **에이전트가 안 보여요.** 내 Windows 사용자, 또는 추가한 서버의 같은 계정으로 실행 중이어야 합니다. 조용한 방은 **N개 더 보기**, 숨긴 방은 **숨긴 방 다시 보기** 아래에 있습니다.
+- **"SSH 연결이 끊겼습니다".** 주소, 포트, VPN을 확인하세요. 카드에 SSH 오류가 나오고, **지금 확인**을 누르면 바로 다시 시도합니다. 앱도 최대 1분 간격으로 알아서 다시 연결합니다.
+- **"서버에 python3 가 없습니다".** 서버에 Python 3.8 이상을 요청하세요. 이름이 다르다면(예: `python3.11`) `%APPDATA%\AgenTalk\channels.json`에서 그 서버의 `python` 값을 고치면 됩니다.
+- **전용 창 대신 Chrome/Edge 창으로 열려요.** WebView2가 없는 경우입니다. Microsoft에서 *Evergreen Runtime*을 설치한 뒤 다시 실행하세요.
+- **프로젝트가 기타로 나와요.** 에이전트를 git 저장소 밖의 폴더에서 실행한 경우입니다.
+- **로그**는 `%LOCALAPPDATA%\AgenTalk\agen-talk.log`에 있습니다(설정 → 정보에서도 폴더를 볼 수 있습니다).
+
+## 개발
+
+```bash
+git clone https://github.com/Ben-JWL/agen_talk.git && cd agen_talk
+pip install pywebview paramiko     # 선택: 없으면 Chrome/Edge 창과 OpenSSH로 동작
+python app.py                      # 데스크톱 앱
+python agen_talk.py                # 내 에이전트를 터미널에 한 번 출력 (--board, --json), 표준 라이브러리만 사용
+python agen_talk.py --selftest && python app.py --selftest
+python tools/check_ui.py           # ui/src와 index.html이 같아야 함 (재생성: python ui/build.py)
+python art/sprites/build.py        # 픽셀 아트 원본 -> ui/src/72-sprites.js
 ```
 
-## 톡
+[구조](docs/ARCHITECTURE.md) · [오버뷰 계약](docs/OVERVIEW-CONTRACT.md) · [픽셀 아트](art/sprites/README.md) · [서드파티 고지](THIRD_PARTY_NOTICES.md)
 
-**지시 전파 보기.** 에이전트가 하위 에이전트에게 일을 맡기면, 하위 방에는 부모의 지시가(추가 지시도) 카드로, 부모 방에는 하위의 보고가
-카드로 보입니다. 방 위쪽의 **흐름** 전환 버튼을 누르면 누가 누구에게 지시했는지 전체 트리로 볼 수 있습니다.
-Codex는 지시 본문을 암호화하므로 해당 카드는 잠금(🔒)으로만 표시되고 내용은 보이지 않습니다.
+`v*` 태그를 push하면 GitHub Actions가 릴리스를 빌드해 올립니다(`.github/workflows/release.yml`).
 
-**톡 보내기.** 일부 방에서는 에이전트에게 메시지를 직접 보낼 수 있습니다(Enter를 누르면 확인 카드가 뜨고, 한 번 더 누르면 보냅니다. Shift+Enter는 줄바꿈입니다).
+## 코드 서명 정책
 
-- **Claude Code**: 리눅스 서버에서 실행 중인 Claude Code의 메인(대화형) 세션만 대상입니다. 메시지는 다른 세션이 보낸 메시지로,
-  낮춘(peer) 권한으로 도착합니다. 내가 직접 입력한 것으로 처리되지 않으며, 권한 승인 요청을 대신 승인하는 일도 절대 없습니다.
-  `--dangerously-skip-permissions` 로 시작한 세션이면 그 터미널에서 내가 승인할 때까지 보류됩니다(방에 "터미널에서 승인 대기",
-  약 5분 뒤 "만료됨"). 그 외에는 도착하면 "전달됨" 이 표시됩니다.
-- **Codex**: codex app-server 데몬이 호스팅하는 스레드만 닿습니다. `--no-daemon` 으로 시작한 TUI는 보기만 가능합니다.
-  앱은 codex의 승인 요청이나 다른 어떤 요청에도 답하지 않습니다. 앱 연결로 요청이 오면 연결을 끊고, 프롬프트는 사용자의 codex 창에 남깁니다.
-- **v1에서 지원하지 않음**: 내 Windows PC의 세션, 하위 에이전트(subagent), Antigravity CLI. 입력칸이 비활성인 이유는 방에 표시됩니다.
+Windows 설치 파일과 실행 파일은 **아직 코드 서명이 되어 있지 않습니다.** 그래서 SmartScreen 경고가 뜹니다. 대신 다음을 제공합니다.
 
-**개인정보와 안전.**
-- 설정의 **톡 보내기 허용** 을 끄면 모든 방에서 보내기가 꺼지고, 허브도 이를 강제합니다. 흐름 보기는 그대로입니다.
-- 메시지 본문은 앱 로그에 기록하지 않습니다. 보낼 때마다 대상·길이·결과만 담은 감사 로그 한 줄이 남습니다.
-- 다시 실행해도 방 내용이 남도록 창이 로컬 캐시를 둡니다. 내가 보낸 톡, 에이전트의 지시·보고, 방에 보이는 활동 줄(에이전트가 실행한
-  명령 포함)이 `%LOCALAPPDATA%\AgenTalk\webview` 의 WebView2 프로필에 저장되며, 약 24시간 보관되고 다음 실행 때 정리됩니다
-  (프로세스 명령줄이 들어갈 수 있는 알림 목록은 최대 500개, 7일). Chrome/Edge 대체 창에서는 같은 데이터가 그 브라우저의
-  `127.0.0.1` 사이트 데이터에 남습니다.
-- 표시되는 지시에서 뚜렷한 비밀값(API 키, 토큰, 개인 키, `password=` 값 등)은 `[가려짐]` 으로 가립니다.
-- 페이지는 엄격한 Content-Security-Policy 로 제공됩니다.
-- Claude Code 세션이 다른 세션의 메시지를 받을지는 그 세션의 설정 `crossSessionInbound`(`accept`, `hold`, `refuse`)로 사용자가 정합니다.
-  앱은 이 값을 읽어 따르기만 하고 바꾸지 않습니다.
+- 모든 릴리스는 개인 PC가 아니라 GitHub Actions가 이 저장소에서 직접 빌드합니다. 빌드 기록은 공개되어 있습니다.
+- 릴리스마다 `SHA256SUMS`가 함께 올라갑니다. `certutil -hashfile AgenTalk-Setup-<버전>.exe SHA256`으로 확인하세요.
+- 파일마다 서명된 빌드 출처 증명(attestation)이 있습니다. GitHub CLI로 `gh attestation verify AgenTalk-Setup-<버전>.exe --repo Ben-JWL/agen_talk`를 실행하면 이 저장소의 워크플로가 만든 파일인지 확인됩니다.
+- 빌드 의존성은 해시로 고정되어 있고(`packaging/requirements-build.lock`), 워크플로의 액션은 모두 커밋 SHA로 고정되어 있습니다.
 
-## 서버 쪽은 어떻게 동작하나요
+코드 서명 인증서가 생기면 릴리스에 서명할 예정입니다.
 
-서버에는 아무것도 설치하지 않습니다. 앱이 서버마다 내장 SSH 연결을 열어, 수집기(`agen_talk.py`, 파이썬 표준 라이브러리만 사용)를
-그 세션으로 흘려 보내 `python3 -c` 로 실행합니다. 수집기는 에이전트 상태를 읽기 전용으로 읽고(`/proc`, `~/.codex`, `~/.claude`, `~/.gemini`)
-요청마다 JSON 한 줄을 돌려줍니다. 창을 닫거나 연결이 끊기면 세션이 끝나면서 수집기도 함께 끝납니다.
-서버 조건: `python3` 3.8 이상.
+### 개인정보 정책
 
-## 보안 모델
+- **사용 통계, 계정, 클라우드가 없습니다.** 내가 추가한 서버로 가는 SSH 연결 말고는 아무 데도 데이터를 보내지 않습니다.
+- **이 PC 안에서만.** 화면은 `127.0.0.1`에서, 실행할 때마다 바뀌는 무작위 경로 아래에서만 열립니다. 처음 열 때 세션 쿠키가 생기므로 주소를 복사해 가도 쓸 수 없습니다. 무언가를 바꾸는 요청에는 실행마다 새로 만드는 토큰도 필요합니다. 여러 사람이 쓰는 컴퓨터에서는 `agen_talk.py hub --insecure`를 쓰지 마세요. 이 모드에서는 그 컴퓨터의 모든 계정이 내 에이전트 내용을 읽을 수 있습니다.
+- **비밀번호는 저장하지 않습니다.** 서버 비밀번호는 앱 전용 키를 등록할 때 한 번만 씁니다. "이번 세션 동안만" 옵션은 앱을 닫을 때까지 메모리에만 둡니다.
+- **앱 전용 키.** 키는 `%APPDATA%\AgenTalk\id_ed25519`에 암호화 없이 저장되며 내 Windows 사용자만 읽을 수 있습니다. 서버에는 `no-port-forwarding,no-agent-forwarding,no-X11-forwarding,no-pty` 제한을 붙여 설치합니다. 앱을 지워도 서버의 키는 남으니, 더 이상 쓰지 않으면 각 서버의 `~/.ssh/authorized_keys`에서 `agen-talk@<내 PC 이름>`으로 끝나는 줄을 지우세요.
+- **내 PC에 남는 것.** 앱을 다시 켜도 방 내용이 보이도록 약 24시간 동안 캐시를 둡니다: 에이전트의 지시와 보고, 실행한 명령을 포함한 활동 줄, 내가 보낸 톡. 위치는 `%LOCALAPPDATA%\AgenTalk\webview`이고 암호화되어 있지 않습니다. 에이전트 글에 있는 흔한 비밀 값(API 키, 토큰, 개인 키, URL 속 비밀번호, `password=` 값)은 `[가려짐]`으로 가리지만, 정해진 패턴만 찾으므로 모든 것을 잡지는 못합니다.
+- **완전히 지우기.** Windows 설정 → 앱에서 제거한 뒤 `%APPDATA%\AgenTalk`와 `%LOCALAPPDATA%\AgenTalk`도 지우세요.
 
-- 대시보드는 `127.0.0.1` 의 빈 포트에서만 열립니다.
-- 실행할 때마다 새 비밀 문자열이 만들어지고 모든 주소가 `http://127.0.0.1:<포트>/<비밀>/` 아래에 놓입니다. 그 밖의 경로는 404 이므로
-  같은 PC의 다른 사용자(빠른 사용자 전환, 원격 데스크톱)는 대시보드를 볼 수 없습니다.
-- 변경 요청에는 실행마다 다른 토큰과 일치하는 `Host`가 필요합니다. `Origin` 헤더를 보내면 값이 일치해야 하며, 톡 엔드포인트에는 필수입니다.
-- 내가 추가한 서버로 가는 내 SSH 연결 말고는 데이터가 PC 밖으로 나가지 않습니다. 원격 측정, 계정, 클라우드 서비스가 없습니다.
-- 서버 비밀번호는 앱에서 입력하며 등록 작업 동안에만 메모리에 보관합니다. 세션 비밀번호 옵션도 앱을 닫으면 사라집니다. 처음 보는 서버 지문은 확인을 받아야 하며, 기록된 지문이 바뀌면 연결을 거부합니다.
-- 전용 키와 서버 지문은 `%APPDATA%\AgenTalk\id_ed25519`, `%APPDATA%\AgenTalk\known_hosts` 에 있습니다. paramiko를 쓸 수 없어 OpenSSH 대체 경로를 쓰면 `%USERPROFILE%\.ssh\agen_talk_ed25519` 키를 씁니다.
-- 설정은 `%APPDATA%\AgenTalk\channels.json`, 로그(`agen-talk.log`)와 창의 WebView2 프로필(`webview\`, 위의 개인정보 참고)은 `%LOCALAPPDATA%\AgenTalk` 에 있습니다.
+보안 문제를 발견하셨다면 공개 이슈 대신 저장소의 [Security](https://github.com/Ben-JWL/agen_talk/security) 탭으로 비공개 제보해 주세요.
 
-## 제거
+## 만든 이들
 
-설정 > 앱 > 설치된 앱 > 에겐 톡 (Agen Talk) > 제거. 제거 프로그램은 프로그램만 지웁니다. `%APPDATA%\AgenTalk` 의 서버 목록과 설정,
-`%LOCALAPPDATA%\AgenTalk` 의 로그와 방 내용 캐시는 남습니다. 완전히 지우려면 두 폴더를 직접 삭제하세요.
-
-접속 권한까지 없애려면 각 서버의 `~/.ssh/authorized_keys` 에서 `agen-talk@<내 PC 이름>` 으로 끝나는 줄을 지운 뒤,
-내 PC의 `%APPDATA%\AgenTalk\id_ed25519`, `id_ed25519.pub`, `known_hosts` 파일을 지웁니다.
-OpenSSH 대체 경로를 쓴 적이 있다면 `%USERPROFILE%\.ssh\agen_talk_ed25519`, `agen_talk_ed25519.pub` 도 지웁니다(이 키도 주석이 `agen-talk@<내 PC 이름>` 입니다).
-
-## 소스에서 빌드
-
-```
-python ui/build.py                      # ui/src -> ui/dist/index.html (UI를 고쳤으면 index.html 에 덮어쓰기)
-python agen_talk.py --selftest
-python app.py --selftest
-pip install -r packaging/requirements-build.txt
-python packaging/make_icon.py
-pyinstaller packaging/agen_talk.spec --noconfirm --distpath build/dist --workpath build/work
-iscc /DAppVersion=0.1.0 packaging\installer.iss     # Inno Setup 6 필요
-```
-
-릴리스는 `v*` 태그를 푸시하면 `.github/workflows/release.yml` 이 빌드합니다. 구조는 `docs/ARCHITECTURE.md` 를 보세요.
-앱 없이 대시보드만: `python agen_talk.py hub` (Python 3.8 이상, 표준 라이브러리만).
+픽셀 아트(캐릭터, 사무실, 애니메이션)는 이 프로젝트를 위해 Claude Opus 5.5가 만들고 GPT-6.1-sol, gpt-6-astra가 다듬었습니다. Sea of Stars, Eastward, Octopath Traveler 시리즈는 스타일 참고로만 삼았고 에셋은 쓰지 않았습니다. 팬 테마는 AI 제품들의 색과 분위기만 빌렸으며, 로고나 상표는 쓰지 않았고 해당 회사들과 관련이 없습니다.
 
 ## 라이선스
 
-[MIT](LICENSE). 서드파티: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+[MIT](LICENSE).
