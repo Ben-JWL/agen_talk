@@ -81,7 +81,7 @@ def mix(a, b, t):
 SKIN = {
     'claude': ['#995d57', '#cf8e79', '#efbc9e', '#ffdfbd', '#e8a18f'],
     'codex':  ['#784b48', '#b37b61', '#d9a17d', '#f1cba3', '#ce8974'],
-    'agy':    ['#98717b', '#d09c96', '#f2c9b2', '#ffe9cd', '#eaa6a4'],
+    'agy':    ['#9b665e', '#d09a87', '#f2c9b2', '#ffe9cd', '#e7a193'],
 }
 HAIR = {
     'claude': ['#5c3740', '#895044', '#b4744c', '#d99b63', '#efbd83'],
@@ -142,15 +142,15 @@ LOOK_IDX = '1abcdefghijklmnstwz'   # palette slots a look overrides (outline + h
 SKIN_IDX = '23456'
 # hair mids per family: base first (its hand-picked ramp above), then 4 alternatives that keep the family's mood
 HAIR_LOOK = {
-    'claude': [None, '#6e4434', '#3f3238', '#c46a3c', '#c9a476'],     # dark brown, near-black, copper, ash blonde
-    'codex':  [None, '#2c2a30', '#6e4c3a', '#9ca2ae', '#3c6a70'],     # black, chestnut, silver, deep teal
-    'agy':    [None, '#e6a2bc', '#9fd4c4', '#a6b8ea', '#ece0cc'],     # pink, mint, sky, platinum
+    'claude': [None, '#735043', '#42393e', '#b76d49', '#c6a67f'],     # walnut, soft black, copper, ash blonde
+    'codex':  [None, '#34333d', '#755441', '#a0a7b4', '#466b71'],     # ink, chestnut, silver, deep teal
+    'agy':    [None, '#dda5b8', '#a2c9bb', '#a9b8da', '#e2d5bd'],     # rose, sage mint, sky, champagne
 }
 # skin: 0 = the family's own ramp, then a shared fair / tan / deep set (deep step, shade, base, light, blush)
 SKIN_LOOK = [None,
-             ['#a06a66', '#d8a292', '#f8d8c6', '#fff2e6', '#f2b2a6'],
-             ['#6e4234', '#a46c50', '#cf9870', '#ecc49a', '#d08470'],
-             ['#3e2622', '#6a4032', '#956048', '#bb8664', '#a65a4c']]
+             ['#a16b62', '#d6a08c', '#f4d2bd', '#ffedda', '#eaaa98'],
+             ['#75473b', '#a66e53', '#cf9975', '#ecc5a0', '#ca8570'],
+             ['#482c29', '#704539', '#9c6850', '#c49370', '#aa6554']]
 # outfit candidates per theme (cloth mid, second cloth mid): every look stays inside the theme's colour mood
 THEME_CLOTH = {
     'claude':  [('#3e5a7a', '#efe0c6'), ('#7d9a6a', '#f2e4c8'), ('#8a4a6a', '#f6e6d6'), ('#d8a548', '#5e4a3c'),
@@ -175,6 +175,46 @@ def look_outfit(theme, fam, look):
     return cand[(FAM_OFF[fam] + look - 1) % len(cand)]
 
 
+def fabric(mid, n, theme, secondary=False):
+    """Woven cloth: reserve white for the key light, with a blue/lilac fold plane.
+
+    Near-neutrals need a little authored chroma: rotating an achromatic hue alone
+    cannot separate a white sleeve from a pale wall. Keep the centre below .90
+    so the two lit steps remain distinct rather than clipping together.
+    """
+    L, C, H = to_oklch(mid)
+    tr = THEME_RAMP[theme]
+    if L > 0.86:
+        L = min(L, 0.895)
+        lo, hi = 0.31, 0.08
+    elif L < 0.34:
+        L = max(L, 0.295)
+        lo, hi = 0.105, 0.21
+    else:
+        lo, hi = (0.255, 0.125) if secondary else (tr['lo'], tr['hi'])
+        hi = min(hi, 0.975 - L)
+    C = min(C, 0.155)
+    cols = ramp(from_oklch(L, C, H), n, lo=lo, hi=hi,
+                shift=0.15, cdark=0.78, clight=0.65)
+    if C < 0.02 or (L > 0.86 and C < 0.045):
+        # Warm pearl at the light, cool woven shadows. Grok remains near-neutral.
+        chroma = 0.012 if theme == 'grok' or L < 0.45 else 0.03
+        for i, col in enumerate(cols):
+            light = to_oklch(col)[0]
+            t = i / (n - 1)
+            cols[i] = from_oklch(light, chroma * (1 - 0.55 * t),
+                                  270 if i <= n // 2 else 85)
+    return cols
+
+
+def hair_look(mid):
+    L, C, H = to_oklch(mid)
+    L = max(0.29, min(L, 0.87))
+    mid = from_oklch(L, min(C, 0.125), H)
+    return ramp(mid, 5, lo=min(0.245, L - 0.065), hi=min(0.18, 0.97 - L),
+                shift=0.23, cdark=0.8, clight=0.65)
+
+
 def palette(theme, fam, look=0, skin=0):
     o = dict(OUTFIT[theme][fam])
     hair = HAIR[fam]
@@ -182,8 +222,7 @@ def palette(theme, fam, look=0, skin=0):
         o['C'], o['D'] = look_outfit(theme, fam, look)
         o['line'] = 'look' if o['line'] else None
         hm = HAIR_LOOK[fam][look]
-        hair = ramp(hm, 5, lo=0.22, hi=max(0.04, min(0.2, (0.97 - to_oklch(hm)[0]) * 0.9)), shift=0.16, cdark=0.9)
-    tr = THEME_RAMP[theme]
+        hair = hair_look(hm)
     P = ['#000000'] * 36
 
     def put(chars, cols):
@@ -196,22 +235,10 @@ def palette(theme, fam, look=0, skin=0):
     put('9', [MOUTH[fam]])
     put('abcde', hair)
     cl = o['C']
-    # very light / very dark cloth need asymmetric ramps
-    L = to_oklch(cl)[0]
-    lo, hi = tr['lo'], tr['hi']
-    if L > 0.86:
-        lo, hi = 0.28, 0.06
-    if L < 0.32:
-        lo, hi = 0.09, 0.22
-        cl = mix(cl, '#535164', 0.17)
-    # final (sol's cleanup on astra's ramps): darkest steps drift less toward violet and lose chroma,
-    # so folds and overlaps read as shade, not as purple holes.
-    cloth = ramp(cl, 5, lo=lo, hi=hi, shift=min(0.12, tr.get('shift', 0.22)), cdark=0.78)
+    cloth = fabric(cl, 5, theme)
     put('fghij', cloth)
     sec = o['D']
-    Ls = to_oklch(sec)[0]
-    slo, shi = (0.34, 0.05) if Ls > 0.86 else (0.14, 0.24) if Ls < 0.3 else (0.26, 0.12)
-    put('klmn', ramp(sec, 4, lo=min(slo, 0.28), hi=shi, shift=0.12, cdark=0.75))
+    put('klmn', fabric(sec, 4, theme, secondary=True))
     acc = o['A']
     La = to_oklch(acc)[0]
     alo, ahi = (0.34, 0.04) if La > 0.86 else (0.12, 0.24) if La < 0.3 else (0.26, 0.12)
