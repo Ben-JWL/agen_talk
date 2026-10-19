@@ -361,7 +361,7 @@ MOP = Part('''
 .......u..
 ........u.
 .......xxx
-......xxxx
+......xxyy
 ''', kx=0, ky=0)
 MOP_SWEEP = [Part(r, kx=0, ky=0) for r in ('''
 .....u....
@@ -372,7 +372,7 @@ MOP_SWEEP = [Part(r, kx=0, ky=0) for r in ('''
 ......u...
 ......u...
 .....xxxx.
-....xxxxx.
+....xxxyy.
 ''', '''
 .....u....
 .....u....
@@ -382,7 +382,7 @@ MOP_SWEEP = [Part(r, kx=0, ky=0) for r in ('''
 .......u..
 ........u.
 ........u.
-.......xxxx
+.......xxyy
 ''')]
 HOLD = Part('''
 CC..
@@ -390,7 +390,7 @@ CC..
 ..44
 ''', kx=0.5, ky=0, cast=1)    # near arm forward, hand closed around a handle / box edge
 BOX = Part('''
-vvvvvv
+vvvvvu
 vxxvvv
 vvxvvu
 vvvvvu
@@ -402,7 +402,7 @@ PLANT = [Part(r, kx=0, ky=0) for r in ('''
 tsswst
 .sstts
 ..ts..
-.vvvv.
+.vxxv.
 .vvvu.
 ..vu..
 ''', '''
@@ -411,13 +411,13 @@ tsswst
 tssswt
 .sstts
 ..st..
-.vvvv.
+.vxxv.
 .vvvu.
 ..vu..
 ''')]
 LAPTOP = Part('''
-1uuuuuu
 1vvvvvu
+1uuuuyu
 ''', kx=0, ky=0)
 UNDER = Part('''
 CC.
@@ -455,7 +455,7 @@ HAAAA34445
 ''', kx=0.7, ky=0.6),       # short spikes, headphones: band over the crown, cup on the ear
     ('agy', 'lead'): Part('''
 HH.HHHH...
-HHHHoooooo
+HHHHoppopo
 HHHorr8rr.
 HHHHoooH4.
 HHH2H474..
@@ -470,7 +470,7 @@ HHH344445.
 ..AAAAAA..
 .AAAAAAAA.
 AAAAAAAAA.
-qpqpqpqpq.
+qqppqqppo.
 HH_2H474..
 HHH344445.
 .HH34434..
@@ -722,6 +722,7 @@ SKIN_V = {'a': ['#6a3a36', '#c27c68', '#efb896', '#ffdcbc', '#ef9a8a'],
 
 
 def palette(theme, var='a'):
+    from pal import fabric, hair_look, to_oklch, from_oklch, SKIN_LOOK
     o = {'a': WALK_OUTFIT, 'b': WALK_OUTFIT_B, 'c': WALK_OUTFIT_C, 'd': WALK_OUTFIT_D, 'e': WALK_OUTFIT_E,
          'f': WALK_OUTFIT_F, 'g': WALK_OUTFIT_G}[var][theme]
     P = ['#000000'] * 36
@@ -730,22 +731,45 @@ def palette(theme, var='a'):
     def put(ch, cols):
         for c, v in zip(ch, cols):
             P[idx.index(c)] = v
-    put('23456', SKIN_V[var])
+    # The new colleagues share the inclusive face ramps used at the desks.
+    skin = {'d': 2, 'e': 1, 'f': 3}.get(var)
+    put('23456', SKIN_LOOK[skin] if skin else SKIN_V[var])
     put('789', ['#2a1e2e', '#ffffff', '#8a3a3a'])
-    put('abcde', ramp(o['H'], 5, lo=0.14, hi=0.24))
-    cl = ramp(o['C'], 5)
+    put('abcde', hair_look(o['H']))
+    cl = fabric(o['C'], 5, theme)
     put('fghij', cl)
-    put('klmn', ramp(o['D'], 4, lo=0.12, hi=0.22))
-    put('opq', ramp(o['o'], 3))
+    put('klmn', fabric(o['D'], 4, theme, secondary=True))
+    # Caps/bandanas keep a legible brim; saturated theme accents do not become neon shoes.
+    L, C, Hc = to_oklch(o['o'])
+    accent = from_oklch(max(0.28, min(0.84, L)), min(C, 0.14), Hc)
+    put('opq', ramp(accent, 3, lo=0.14, hi=0.12, shift=0.14, cdark=0.8))
     put('r', ['#ffffff'])
     put('st', [cl[2], cl[1]])
     put('w', [cl[2]])
     put('uv', ramp(o.get('mug', '#f2ebe0'), 3, lo=0.28, hi=0.1)[:2])
     put('x', ['#f6f2ec'])
-    put('y', ['#a8dcf0'])
-    put('z', [o.get('rim', WALK_OUTFIT[theme]['rim'])])
-    put('1', [mix(cl[0], '#120a20', 0.62)])
+    put('y', ['#b6c4ce'])
+    put('z', [mix(cl[3], o.get('rim', WALK_OUTFIT[theme]['rim']), 0.28)])
+    L, C, Hc = to_oklch(mix(cl[0], P[10], 0.35))
+    put('1', [from_oklch(max(0.18, min(0.245, L - 0.12)), min(C * 0.7, 0.045), Hc)])
     for ch, v in o.get('P', {}).items():
         put(ch, [v] if isinstance(v, str) else list(v))
+    if var == 'd':
+        # A light shaft separates the mop from the overalls; cool yarn shade at the wet end.
+        put('u', [mix(P[31], P[30], 0.55)])
+        put('y', [mix(P[33], '#7c929c', 0.5)])
+    elif var == 'e':
+        # Warm kraft with a quiet paper tape; the side stays darker than the top plane.
+        put('u', [mix(P[30], '#694733', 0.16)])
+        put('v', [mix(P[31], '#e4b87b', 0.18)])
+        put('x', [mix(P[33], '#e8d3a6', 0.4)])
+    elif var == 'f':
+        put('x', [mix(P[31], '#f2d9be', 0.25)])
+        # Leaves carry a broad light plane and a cool green interior, rather than many bright dots.
+        put('s', [mix(P[28], '#668f62', 0.18)])
+        put('t', [mix(P[29], '#2e4b42', 0.2)])
+        put('w', [mix(P[32], '#b0c98a', 0.25)])
+    elif var == 'g':
+        put('y', [mix(P[31], '#d5deea', 0.55)])
     P[0] = 'transparent'
     return P
