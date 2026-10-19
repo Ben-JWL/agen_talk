@@ -178,15 +178,16 @@ def animation(fam,size,state):
 
 def secondary(fam,frames):
     # Secondary motion is independent of finger taps. Claude settles, Codex has a tiny
-    # damped cable rebound, AGY has a 4-second wave with the tips delayed 1/2 second.
+    # damped cable rebound. AGY takes five seconds to rise and settle; tips and ribbon
+    # share a trailing beat so the silhouette does not chatter during arm transitions.
     out=[]
     for i,p in enumerate(frames):
         p=dict(p)
         if fam=='agy':
-            phases=[0,0,1,1,2,2,1,0,0,3,3,0]
+            phases=[0,0,1,1,2,2,1,1,0,0,0,0]
             p['ph']=phases[(i//5)%len(phases)]
-            p['tl']=phases[((i-6)//5)%len(phases)]
-            p['rb']=phases[((i-3)//5)%len(phases)]
+            p['tl']=phases[((i-5)//5)%len(phases)]
+            p['rb']=p['tl']
             p['bn']=p['tl']; p['fl']=min(2,p['ph'])
         elif fam=='claude':
             p['ph']=0
@@ -222,6 +223,7 @@ def variant(fam,size,state,k):
     pace={'claude':8,'codex':3,'agy':6}[fam]
     tap=2 if fam!='claude' else 3
     q=Timeline(M); add=q.add
+    ease={'claude':3,'codex':2,'agy':4}[fam]
     fill=None   # state-specific filler for the time left before the landing on frame 0
     def turn(a,b,**p):
         # head turn through the drawn in-betweens (lead has .5/1.5; intern cuts)
@@ -254,10 +256,10 @@ def variant(fam,size,state,k):
             burst(6)
         elif k==2:  # thinking: hand to chin, eyes up and away, slow blink, then a typing burst
             c=lambda n: V['chin%d'%n]
-            hi,mid=(27,31) if lead else (23,25)
+            hi=27 if lead else 23
             add(4,**dict(base,armL=D,armR=D))
-            add(2,**dict(base,armL=c(mid+2),armR=D))
-            add(2,**dict(base,armL=c(mid),armR=D))
+            for height in ([36,33,30,28] if lead else [28,27,25,24]):
+                add(ease if height in (36,28) else 2,**dict(base,armL=c(height),armR=D))
             P=dict(base,armL=c(hi),armR=D,hy=1)
             add(4,**P)
             add(16+pace,mark='key',**dict(P,eyes='up'))
@@ -265,21 +267,26 @@ def variant(fam,size,state,k):
             add(18+pace,**dict(P,eyes='look'))
             add(10+pace,**dict(P,eyes='up',hx=-1 if lead else 1))
             add(3,**dict(P,eyes='open',hy=2)); add(6,**dict(P,eyes='open'))   # "aha" nod
-            add(2,**dict(base,armL=c(mid),armR=D))
+            add(ease,**dict(P,eyes='open',hy=0))
+            for height in ([28,30,33,36] if lead else [24,25,27,28]):
+                add(2,**dict(base,armL=c(height),armR=D))
             add(3,**dict(base,armL=D,armR=D,by=1,folds=M.SLUMP))
-            burst(8); add(6+pace,**dict(base,armL=D,armR=D)); burst(6)
+            burst(4); add(6+pace,**dict(base,armL=D,armR=D)); burst(4)
         else:       # lead only: lean back and review, fingers flex, a glance away, then back to keys
             P=dict(base,armL=X,armR=X,hy=0 if fam=='agy' else -1,eyes='look')   # agy already floats 1 px high
             add(4,**dict(base,armL=D,armR=D))
-            add(3,**dict(base,armL=X,armR=X,by=1,folds=M.SLUMP))
+            add(ease,**dict(base,armL=H,armR=D,by=1,folds=M.SLUMP))
+            add(ease,**dict(base,armL=X,armR=H))
+            add(3,**dict(base,armL=X,armR=X))
             add(24+pace,mark='key',**P)
-            for j in range(3):
-                add(3,**dict(P,armL=H,armR=H)); add(4,**P)
+            add(6,**dict(P,hy=0)); add(8,**P)
             q.blink(**P)
             add(2,**dict(P,view=.5)); add(14+pace,**dict(P,view=.5,eyes='soft')); add(2,**dict(P,view=.5))
             add(20+pace,**P)
+            add(ease,**dict(base,armL=X,armR=H))
+            add(ease,**dict(base,armL=H,armR=D))
             add(3,**dict(base,armL=D,armR=D,by=1,folds=M.SLUMP))
-            burst(10)
+            burst(8)
     elif state=='idle':
         low=36 if lead else 28
         s=[0]
@@ -293,7 +300,12 @@ def variant(fam,size,state,k):
         def one(n,**p):
             add(n,**M.mugpose(low,s[0]%4,eyes=p.pop('eyes','soft'),mouth=p.pop('mouth','smile'),**p))
         mug(8+pace//2)
-        def fill(n): mug(n-len(q.frames))
+        def fill(n):
+            remaining=n-len(q.frames)
+            if remaining>=28:
+                mug(remaining//2)
+                one(1,eyes='soft'); one(2,eyes='shut'); one(1,eyes='soft')
+            mug(n-len(q.frames))
         if k==1:    # look around: camera, then the interns, mug in both hands
             if lead: one(2,eyes='look',view=.5)
             mug(30+pace,view=front,eyes='open'); q.marks['key']=len(q.frames)-10
@@ -309,44 +321,56 @@ def variant(fam,size,state,k):
             mug(4,eyes='shut',hy=1); mug(14+pace,eyes='shut',hx=1,hy=1); q.marks['key']=len(q.frames)-6
             mug(4,eyes='shut',hy=1); mug(4,eyes='soft')
             mug(6,by=-1,eyes='shut'); mug(10,by=-1,eyes='shut',mouth=None)           # shrug up...
-            mug(3,by=1,eyes='happy',mouth='hum'); mug(16+pace,eyes='happy',mouth='hum')   # ...and drop
+            mug(ease,eyes='soft'); mug(3,by=1,eyes='happy',mouth='hum'); mug(16+pace,eyes='happy',mouth='hum')   # ...and drop
         else:       # phone in the free hand, mug kept in the other
-            lo=hi='phone36' if lead else 'phone28'
+            heights=[36,34,32,31] if lead else [28,27,26,25]
+            lo,hi='phone%d'%heights[0],'phone%d'%heights[-1]
             def ph(n,arm,**p):
                 pose=M.mugpose(low,s[0]%4,eyes=p.pop('eyes','down'),mouth=p.pop('mouth','smile'),**p)
                 pose['armR']=V[arm]; pose['over']=pose['over'][:1]
                 add(n,**pose); s[0]+=1
-            ph(2,lo,eyes='soft'); ph(3,hi)
-            for j in range(5):
+            ph(ease,'phone_palm',eyes='soft')
+            for height in heights: ph(ease,'phone%d'%height)
+            for j in range(3):
                 ph(10+pace//2,hi,**({'mouth':'o'} if j==3 else {}))
                 if j==2: q.marks['key']=len(q.frames)-4
                 ph(3,hi+'b'); ph(4,hi)
                 if j==1:
                     ph(1,hi,eyes='soft'); ph(2,hi,eyes='shut'); ph(1,hi,eyes='soft')
-            ph(3,lo,eyes='soft')
+            for height in reversed(heights): ph(ease,'phone%d'%height,eyes='soft')
+            ph(ease,'phone_palm',eyes='soft')
     elif state=='stall':
         b=dict(armL=H,armR=H,mouth='flat',eyes='soft',hy=1)
         add(20+pace,**b)
-        c=V['chin29' if lead else 'chin23']; c2=V['chin33' if lead else 'chin27']
-        add(2,**dict(b,armL=c2))
+        c=V['chin29' if lead else 'chin23']
+        for height in ([36,33,31,29] if lead else [28,27,25,23]):
+            add(2,**dict(b,armL=V['chin%d'%height]))
+        add(ease,**dict(b,armL=c))
         P=dict(b,armL=c,hx=-1 if lead else 1,hy=2)
         add(14+pace,mark='key',**P)
-        for rep in range(3):     # drumming fingers, then a sigh
-            for j in range(4): add(2,**dict(P,armR=T if j%2==0 else D))
+        for rep in range(2):     # two irregular phrases, then a sigh
+            for j,n in enumerate((2,3,2,5)): add(n,**dict(P,armR=T if j%2==0 else D))
             add(10+pace,**dict(P,armR=H))
             if rep==1: add(2,**dict(P,eyes='shut',armR=H)); add(4 if fam=='claude' else 2,**dict(P,eyes='shut',armR=H,by=1)); add(2,**dict(P,armR=H))
         add(16,**dict(P,eyes='look',armR=H))
-        add(2,**dict(b,armL=c2))
+        add(ease,**dict(b,armL=c))  # head lifts before its support withdraws
+        for height in ([31,33,36] if lead else [25,27,28]):
+            add(2,**dict(b,armL=V['chin%d'%height]))
+        add(ease,**b)
     elif state=='child':
         cu,co,ct=A['cross_under'],A['cross_over'],A['cross_tap']
         b=dict(armL=cu,armR=co,mouth='smile')
         add(14+pace,**b)
-        add(3,**dict(b,armR=ct))
+        add(ease,**dict(b,armR=ct))
+        add(ease,**dict(b,armR=V['chin33' if lead else 'chin27']))
+        add(ease,**dict(b,armR=D))
+        add(ease,armL=V['chin36' if lead else 'chin28'],armR=D,mouth='smile')
         add(2,armL=D,armR=D,by=1,mouth='smile',folds=M.SLUMP)
         P=dict(armL=D,armR=D,mouth='flat',eyes='look',hx=-1 if lead else 1)
-        for j in range(3):      # tapping, checking the monitor
+        for j in range(2):      # tapping, checking the monitor
             for t in range(4): add(2,**dict(P,armL=T if t%2==0 else D))
             add(10+pace,mark='key' if j==1 else None,**P)
+        add(ease,armL=D,armR=D,mouth='smile',eyes='look')
         turn(0,front,armL=D,armR=D,mouth='smile',eyes='open')
         turn(front,other,armL=D,armR=D,mouth='smile',eyes='open')
         add(20+pace,view=other,armL=D,armR=D,mouth='smile')
@@ -355,19 +379,26 @@ def variant(fam,size,state,k):
         turn(other,front,armL=D,armR=D,mouth='smile')
         turn(front,0,armL=D,armR=D,mouth='smile')
         add(2,armL=D,armR=D,by=1,mouth='smile',folds=M.SLUMP)
-        add(3,**dict(b,armR=ct))
+        add(ease,armL=V['chin36' if lead else 'chin28'],armR=D,mouth='smile')
+        add(ease,**dict(b,armR=D))
+        add(ease,**dict(b,armR=V['chin33' if lead else 'chin27']))
+        add(ease,**dict(b,armR=ct))
+        add(ease,**b)
     elif state=='done_loop':
         b=dict(armL=X,armR=X,eyes='soft',mouth='smile')
         add(20+pace,**b)
         if k==1:    # lean back, hands laced behind the head
             add(3,**dict(b,by=1,eyes='shut',folds=M.SLUMP))
-            add(2,**dict(b,armL=A['stretch_mid'],armR=A['stretch_mid'],folds=M.STRETCH))
+            for arm in (V['lift_low'],V['lift_mid'],A['stretch_mid']):
+                add(ease,**dict(b,armL=arm,armR=arm,folds=M.STRETCH))
             P=dict(armL=V['behind'],armR=V['behind'],mouth='smile',eyes='happy',hy=-1,folds=M.STRETCH)
             add(3,**dict(P,hy=0))
             add(30+pace,mark='key',**P)
             add(2,**dict(P,eyes='shut')); add(4 if fam=='claude' else 2,**dict(P,eyes='shut',mouth='hum')); add(2,**dict(P,eyes='soft'))
-            add(36+pace,**dict(P,eyes='soft'))
-            add(2,**dict(b,armL=A['stretch_mid'],armR=A['stretch_mid'],folds=M.STRETCH))
+            add(22+pace,**dict(P,eyes='soft'))
+            add(ease,**dict(P,hy=0,eyes='soft'))
+            for arm in (A['stretch_mid'],V['lift_mid'],V['lift_low']):
+                add(ease,**dict(b,armL=arm,armR=arm,folds=M.STRETCH))
             add(3,**dict(b,by=1,eyes='happy',folds=M.SLUMP))
         else:       # small happy sway
             for j in range(3):
@@ -389,18 +420,26 @@ def variant(fam,size,state,k):
             l0,la=V['raise_l'],V['raise_antic_l']
             waves=[(mn(sheared(rb,6,1)),up(rb,-1)),(l0,rb),(mn(sheared(rb,6,-1)),up(rb,-1)),(l0,rb)]
         add(3,**dict(b,armL=la,by=1,mouth='o'))
-        add(4,**dict(b,armL=l0,mouth='open'))
+        add(ease,**dict(b,armL=V['raise_lmid']))
+        add(ease,**dict(b,armL=l0))
         for rep in range(2):    # both hands, counter-phase
-            for j,(l,r) in enumerate(waves): add(3,mark='key' if rep==0 and j==1 else None,**dict(b,armL=l,armR=r,mouth='open' if j%2 else 'smile'))
+            for j,(l,r) in enumerate(waves): add(3,mark='key' if rep==0 and j==1 else None,**dict(b,armL=l,armR=r,mouth='smile'))
             add(10+pace,**dict(b,armL=l0))
             if rep==0: q.blink(**dict(b,armL=l0))
-        add(3,**dict(b,armL=la))
+        add(ease,**dict(b,armL=l0))
+        add(ease,**dict(b,armL=V['raise_lmid']))
+        add(ease,**dict(b,armL=la))
+        add(ease,**b)
     L=len(animation(fam,size,state)['frames'])
     n0=len(q.frames)
     first=q.frames[0]
     if n0>=L: raise ValueError('%s/%s/%s~%d is %d exposures, longer than the %d-frame base loop'%(fam,size,state,k,n0,L))
     tail=min(L-n0,8)
     if fill: fill(L-tail); del q.frames[L-tail:]
-    q.frames.extend([first]*(L-len(q.frames)))   # land on the base frame-0 drawing
+    remaining=L-len(q.frames)
+    if not fill and remaining>=24:
+        add(remaining//2,**first)
+        q.blink(**first)
+    q.frames.extend([first]*(L-len(q.frames)))   # settle on the base frame-0 drawing
     key=q.marks.get('key',0)
     return dict(fps=12,loop=True,frames=secondary(fam,q.frames),key=key,review=[0,key,n0-1])

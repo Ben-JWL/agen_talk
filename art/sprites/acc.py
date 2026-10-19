@@ -19,8 +19,9 @@ ALLOW = {
 LEAD_BODY = (11, 25)
 INTERN_BODY = (8, 20)
 
-# 'glasses': dark browline over thin lower rims (the eyes stay readable); 'round': thin wire in the accent colour
-LENS = {'glasses': ['7777', 'k..k', 'k..k', '.kk.'], 'round': ['.oo.', 'o..o', 'o..o', '.oo.']}
+# Open lenses, a cool glint in the upper rim, and a lighter lit temple.
+# Never reuse the pupil colour for an unbroken brow: it becomes sunglasses at office scale.
+LENS = {'glasses': ['lylk', 'k..l', 'k..k', '.kk.'], 'round': ['.yq.', 'p..o', 'o..p', '.po.']}
 
 
 def glasses(kind, eyes, row, temple):
@@ -34,7 +35,7 @@ def glasses(kind, eyes, row, temple):
             for i, ch in enumerate(r):
                 if ch != '.':
                     px[(ex - 1 + i, row - 1 + j)] = ch
-    t = L[0][1]
+    t = 'l' if kind == 'glasses' else 'p'
     a, b = eyes[0] + 3, eyes[1] - 2
     for x in range(a, b + 1):
         px[(x, row)] = t
@@ -94,7 +95,7 @@ def eyes_intern(ang):
 CAP_A = Part('''
 .......CCCCCCCC.......
 .....CCCCCCCCCCCC.....
-....CCCCC-CCCCCCCC....
+....CCC++-CCCCCCCC....
 ...CCCCCC-CCCCCCCCC...
 ..CCCCCCC-CCCCCCCCCC..
 ..CCCCCCC-CCCCCCCCCC..
@@ -104,7 +105,7 @@ AAAAAAACCCCCCCCCCCCC..
 CAP_C = Part('''
 .......CCCCCCCC.......
 .....CCCCCCCCCCCC.....
-....CCCCCCC-CCCCCC....
+....CCCC++C-CCCCCC....
 ...CCCCCCCC-CCCCCCC...
 ...CCCCCCCC-CCCCCCC...
 ..CCCCCCCCC-CCCCCCCC..
@@ -114,42 +115,42 @@ CAP_C = Part('''
 BEANIE_A = Part('''
 ........CCCCCCC.......
 ......CCCCCCCCCCC.....
-....CCCCCCCCCCCCCCC...
-...CCCCCCCCCCCCCCCCC..
-...CCCCCCCCCCCCCCCCCC.
-..ihihihihihihihihihg.
-..hghghghghghghghghgg.
+....CCC++CCCCCCCCCC...
+...CCCCCCCCCC-CCCCCC..
+...CCCCCCCCCC-CCCCCCC.
+..iiihhhiihhhiihhhhgg.
+..hhggghhggghhggggggg.
 ''', kx=0.7, ky=0.7)
 BEANIE_C = Part('''
 .......CCCCCCCC.......
 .....CCCCCCCCCCCC.....
-....CCCCCCCCCCCCCC....
-...CCCCCCCCCCCCCCCC...
-...CCCCCCCCCCCCCCCC...
-..ihihihihihihihihih..
-..hghghghghghghghghg..
+....CCC++CCCCCCCCC....
+...CCCCCCCCC-CCCCCC...
+...CCCCCCCCC-CCCCCC...
+..iiihhhiihhhiihhhh..
+..hhggghhggghhggggg..
 ''', kx=0.6, ky=0.7)
 SCARF_L = Part('''
-.....AAAAAAAAAAAA......
-....AAAAAAAAAAAAAA.....
-.....AAAAAAAAAAAA......
-.............AAA.......
-.............A-A.......
-.............AAA.......
-.............A-A.......
+.....qqqqpppppppp......
+....qppppppppppppo.....
+.....ppppoooooppp......
+.............qpo.......
+.............qpo.......
+.............ppo.......
+.............poo.......
 .............p.p.......
 ''', kx=0.4, ky=0.3)
 SCARF_I = Part('''
-...AAAAAAAAA...
-..AAAAAAAAAAA..
-...AAAAAAAAA...
-.........AA....
-.........-A....
-.........AA....
+...qqqpppppp...
+..qpppppppppo..
+...ppooooppp...
+.........qp....
+.........po....
+.........po....
 .........p.p...
 ''', kx=0.4, ky=0.3)
-CLIP = ['.q.', 'qrq', '.p.']
-BUD_L = ['x.', 'xx', '.x', '.x', '.x', 'x.', 'x.']   # bud at the ear, cable down the jaw to the collar
+CLIP = ['.q.', 'qrp', '.o.']
+BUD_L = ['x.', 'xy', '.y', '.y', '.y', 'y.', 'y.']   # ceramic bud, cool shaded cable
 
 
 def lead_acc():
@@ -165,11 +166,11 @@ def lead_acc():
             g[kind][v] = glasses(kind, ex, row, temple)
         out[kind] = dict(a='h', v=g[kind])
     cap = {'A': place(0, 1, CAP_A), 'C': place(0, 1, CAP_C)}
-    cap['E'] = mirror(cap['A'], W)
+    cap['E'] = place(W - CAP_A.w, 1, CAP_A.mirror())
     cap['B'] = cap['D'] = cap['C']
     out['cap'] = dict(a='h', v=cap)
     bea = {'A': place(0, 0, BEANIE_A), 'C': place(0, 0, BEANIE_C)}
-    bea['E'] = mirror(bea['A'], W)
+    bea['E'] = place(W - BEANIE_A.w, 0, BEANIE_A.mirror(extra={'g': 'i', 'h': 'h', 'i': 'g'}))
     bea['B'] = bea['D'] = bea['C']
     out['beanie'] = dict(a='h', v=bea)
     out['scarf'] = dict(a='b', v={'*': place(LEAD_BODY[0], LEAD_BODY[1], SCARF_L)})
@@ -182,12 +183,15 @@ def lead_acc():
 
 
 # intern eyes are 2 px apart: full rims would merge into a visor, so the frames are open at the top
-INT_LENS = {'glasses': ['k..77..k', 'k......k', 'kkk..kkk'], 'round': ['o..oo..o', 'o......o', '.oo..oo.']}
+INT_LENS = {'glasses': ['y......l', 'l......k', '.kl..lk.'], 'round': ['q......p', 'p......o', '.pq..op.']}
 
 
 def intern_glasses(kind, eyes, row, side):
     L = INT_LENS[kind]
     px = {(eyes[0] - 1 + i, row + j): ch for j, r in enumerate(L) for i, ch in enumerate(r) if ch != '.'}
+    # The bridge sits above the eye line: joining the two pupils at this scale makes a visor.
+    for x in range(eyes[0] + 2, eyes[1]):
+        px[(x, row - 1)] = 'l' if kind == 'glasses' else 'p'
     c = L[0][0]
     if side < 0:
         px[(eyes[0] - 2, row)] = c
@@ -206,7 +210,7 @@ def intern_acc():
         out[kind] = dict(a='h', v=v)
     out['scarf'] = dict(a='b', v={'*': place(INTERN_BODY[0], INTERN_BODY[1], SCARF_I)})
     out['clip'] = dict(a='h', v={'E': (2, 6, CLIP), 'C': (11, 6, CLIP), 'A': (11, 6, CLIP)})
-    bud = ['x', 'x', 'x', '.x', '.x']
+    bud = ['x', 'y', 'y', '.y', '.y']
     out['buds'] = dict(a='h', v={'E': (3, 10, bud), 'C': (3, 10, bud), 'A': (12, 10, [r[::-1].rjust(2, '.') for r in bud])})
     return out
 
@@ -215,33 +219,33 @@ def intern_acc():
 W_CAP = Part('''
 ..CCCCC...
 .CCCCCCC..
-CCCC-CCCC.
+CC+C-CCCC.
 CCCCCCAAAA
 ''', kx=0.7, ky=0.6)
 W_BEANIE = Part('''
 ..CCCCC..
-.CCCCCCC.
-CCCCCCCCC
-ihihihihi
+.CC+CCCC.
+CCCCC-CCC
+iihhihhgg
 ''', kx=0.7, ky=0.7)
 W_SCARF = Part('''
-.AAAAA
-AAAAAA
-AA....
-A-....
+.qqppp
+qppppo
+po....
+po....
 ''', kx=0.4, ky=0.3)
 
 
 def walker_acc():
     S = lambda e: {'S': e}
     return {
-        'glasses': dict(a='h', v=S((3, 3, ['..777', '77..7']))),
-        'round': dict(a='h', v=S((3, 3, ['..oo.', 'oo..o']))),
+        'glasses': dict(a='h', v=S((3, 3, ['..ylk', 'll..k']))),
+        'round': dict(a='h', v=S((3, 3, ['..yq.', 'pp..o']))),
         'cap': dict(a='h', v=S(place(0, 0, W_CAP))),
         'beanie': dict(a='h', v=S(place(0, 0, W_BEANIE))),
         'scarf': dict(a='b', v=S(place(4, 12, W_SCARF))),
         'clip': dict(a='h', v=S((3, 2, ['qr']))),
-        'buds': dict(a='h', v=S((3, 4, ['x', 'x', 'x']))),
+        'buds': dict(a='h', v=S((3, 4, ['x', 'y', 'y']))),
     }
 
 
