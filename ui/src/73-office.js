@@ -1110,7 +1110,12 @@ const Office = {
     if (d === 'claude') { const hx2 = Math.min(W - 40, c.sign + 3); for (let i = 0; i < 9; i++) { PX(g, hx2 + Math.round(Math.sin(i * .9) * 1.5), 2 + i, P.plant[i % 2 ? 2 : 1]); if (i % 2) PX(g, hx2 + 1 + Math.round(Math.sin(i * .9) * 1.5), 2 + i, P.plant[3]); } if (c.space() > 10) { this.clock(g, P, c.px + 4, 7); c.px += 12; } }
     if (d === 'codex' && c.space() > 12) { this.poster(g, P, c.px, 4, 10, 13, [0x10A37F, 0x22262C, 0xF4F5F6]); c.px += 14; }
     if (d === 'gemini' && c.space() > 12) { this.poster(g, P, c.px, 4, 10, 13, [P.acc[0], P.acc[2], 0xFFE680]); c.px += 14; }
-    if (d === 'grok' && c.space() > 16) { F(g, c.px, 8, 13, 14, 0xF2F2F2); F(g, c.px + 1, 9, 11, 12, 0x0A0A0A); drawText(g, '42', c.px + 3, 12, 0xF2F2F2, null); c.px += 17; }
+    if (d === 'grok' && c.space() > 16) { // one of three monochrome pieces per room, so the '42' plaque is a rare joke, not wallpaper
+      const x = c.px, k = hsh(room.p.name + '#gk') % 3; F(g, x, 8, 13, 14, 0xF2F2F2); F(g, x + 1, 9, 11, 12, 0x0A0A0A);
+      if (k === 0) drawText(g, '42', x + 3, 12, 0xF2F2F2, null);
+      else if (k === 1) { for (const [sx, sy] of [[3, 11], [8, 10], [5, 15], [10, 14], [2, 18], [7, 19]]) PX(g, x + sx, sy, 0xF2F2F2); F(g, x + 6, 13, 3, 3, 0x8A8E96); PX(g, x + 6, 13, 0xF2F2F2); }   // starfield + moon
+      else { F(g, x + 6, 11, 1, 7, 0xF2F2F2); F(g, x + 5, 13, 3, 4, 0xF2F2F2); PX(g, x + 4, 16, 0xC4CAD4); PX(g, x + 8, 16, 0xC4CAD4); PX(g, x + 6, 18, 0xFFB040); PX(g, x + 6, 19, 0xE5342B); }   // little rocket
+      c.px += 17; }
     if (d === 'muse' && c.space() > 18) { const x = c.px; F(g, x, 6, 14, 10, P.trim[0]); F(g, x + 1, 7, 12, 8, 0xFFFFFF); vramp(g, x + 2, 8, 10, 6, [P.acc[1], P.acc[2], P.acc[3]]); F(g, x + 3, 10, 8, 2, 0xFFE8A0); room.lights.push([c.X + x + 7, c.Y + 4, 0xFFF0E0, 14, .3]); c.px += 19; }
     if (room.arch !== 'server') this.plant(g, P, W - (d === 'gemini' ? 12 : 11), d === 'gemini' ? 19 : d === 'codex' ? 21 : 22, d === 'gemini' ? 'float' : d === 'codex' || d === 'grok' ? 'snake' : 'monstera');
   },
