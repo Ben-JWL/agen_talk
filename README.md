@@ -30,7 +30,8 @@ Windows 10 or 11 (64-bit) with Microsoft Edge WebView2, which current Windows ve
 ## Features
 
 - **One room per agent.** Every Claude Code, Codex and Antigravity session on your PC and on your SSH servers shows up on its own. Each room says what the agent is for, what it is doing right now, and whether it is really working.
-- **Needs me, on top.** Approval requests, questions and stalled agents get a red badge and a Windows notification. A button copies the command an agent is waiting to run.
+- **Unread, on top.** Approval requests, questions and stalled agents go under a red **안읽음** (unread) section with a Windows notification, like a messenger. Opening the room marks it read; a new wait alerts again. A button copies the command an agent is waiting to run, and **작업 완료** closes out a room you're done with.
+- **Colour palettes.** Pick 기본 or a Claude, ChatGPT, Gemini, Grok or Muse style palette for the whole app, each in light and dark.
 - **Overview.** When no room is open, a wiring map shows every server → project → agent → subagent, live.
 - **Pixel office (fun mode).** Optional: the overview becomes an animated pixel-art office, one room per project, with five fan themes (Claude, ChatGPT, Gemini, Grok, Muse style) in light and dark.
 - **Projects.** Agents are grouped by the git repository they work in, read from the repo's files, so the same repo groups together across machines.
@@ -45,11 +46,11 @@ Windows 10 or 11 (64-bit) with Microsoft Edge WebView2, which current Windows ve
 |---|---|
 | [![Overview: wiring map](docs/img/overview.png)](docs/img/overview.png) **Overview**: server → project → agent | [![Pixel office](docs/img/office.png)](docs/img/office.png) **Pixel office**: fun mode, Claude style |
 | [![Pixel office, dark](docs/img/office-dark.png)](docs/img/office-dark.png) **Pixel office**: Gemini style, dark | [![A room](docs/img/room.png)](docs/img/room.png) **A room** with sent talks and their delivery state |
-| [![Board](docs/img/board.png)](docs/img/board.png) **Board**: needs me, working, waiting, done | [![Settings](docs/img/settings.png)](docs/img/settings.png) **Settings**: theme, fun mode, notifications, servers |
+| [![Board](docs/img/board.png)](docs/img/board.png) **Board**: unread, working, waiting, done | [![Settings](docs/img/settings.png)](docs/img/settings.png) **Settings**: theme, fun mode, notifications, servers |
 
 ## Getting started
 
-1. **See your agents.** Start your agents as usual and open **에겐 톡 (Agen Talk)** from the Start menu. Agents on this PC appear right away; the ones that need you are listed first under **나를 기다림** (needs me).
+1. **See your agents.** Start your agents as usual and open **에겐 톡 (Agen Talk)** from the Start menu. Agents on this PC appear right away; the ones that need you are listed first under **안읽음** (unread).
 2. **Add a Linux server (optional).** Click the **gear** (Settings), then **서버 추가** (Add server). Enter the address, your account and password.
    - The first time, the app shows the server's *fingerprint*, a short code that identifies that machine. Compare it with the one from your administrator if you have it.
    - The app then installs its own key, forgets the password and connects without asking from then on.
@@ -68,7 +69,9 @@ Windows 10 or 11 (64-bit) with Microsoft Edge WebView2, which current Windows ve
 |---|---|
 | 오버뷰 · 배선 지도 · 픽셀 오피스 | Overview · wiring map · pixel office |
 | 재미 모드 · 오버뷰 테마 | Fun mode · overview theme |
-| 나를 기다림 | Needs me (approval, question or input) |
+| 안읽음 · 읽음 · 모두 읽음 | Unread (approval, question or input) · read · mark all read |
+| 작업 완료 · 작업 완료 · 방 나가기 | Mark done · mark done and leave the room (the agent keeps running) |
+| 색 팔레트 · 테마 맞춤 | Colour palette · follow the pixel-office theme |
 | 승인 요청 · 명령 복사 | Approval request · copy the command |
 | 작업 중 / 진행 중 | Working |
 | 응답 없음 / 조용함 | Stalled / quiet for a while |
