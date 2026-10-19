@@ -110,10 +110,17 @@ svg { display: inline-block; vertical-align: middle; }
 @media (max-width: 1100px) { #app { grid-template-columns: 56px minmax(0, 1fr); } .tab { width: 44px; } }
 
 #main { position: relative; min-width: 0; height: 100vh; overflow: hidden; }
-#chat { position: absolute; inset: 0; display: grid; grid-template-columns: 320px minmax(0, 1fr); }
-#chat[data-drawer=open] { grid-template-columns: 320px minmax(0, 1fr) 300px; }
+#chat { position: absolute; inset: 0; display: grid; grid-template-columns: var(--list-w, 320px) minmax(0, 1fr); }
+#chat[data-drawer=open] { grid-template-columns: var(--list-w, 320px) minmax(0, 1fr) 300px; }
+/* list-pane splitter (54-shell): a 7 px grab strip over the list's right border; the line darkens on hover / drag / focus */
+.lsplit { position: absolute; top: 0; bottom: 0; width: 7px; margin-left: -4px; z-index: 6; cursor: col-resize; touch-action: none; outline: none; }
+.lsplit::after { content: ""; position: absolute; top: 0; bottom: 0; left: 3px; width: 1px; background: transparent; transition: background var(--dur-fast, .12s); }
+.lsplit:hover::after, .lsplit.drag::after { left: 2px; width: 3px; background: var(--line); }
+.lsplit:focus-visible::after { left: 2px; width: 3px; background: var(--ink-2); }
+.lsplit[hidden] { display: none; }
+body.col-resize, body.col-resize * { cursor: col-resize !important; user-select: none; }
 @media (max-width: 1100px) {
-  #chat, #chat[data-drawer=open] { grid-template-columns: 280px minmax(0, 1fr); }
+  #chat, #chat[data-drawer=open] { grid-template-columns: var(--list-w, 280px) minmax(0, 1fr); }
   #drawer { position: absolute; top: 0; right: 0; bottom: 0; width: 300px; z-index: 5; box-shadow: var(--shadow-float); }
 }
 @media (max-width: 760px) {
@@ -578,6 +585,12 @@ html.dark .ov[data-ovt=muse] { --ov-canvas: #17171C; --ov-surface: #212128; --ov
 .ov .seg { background: var(--ov-surface-2); }
 .ov .seg button { color: var(--ov-ink-2); }
 .ov .seg button[aria-checked=true] { background: var(--ov-surface); color: var(--ov-ink); border-color: var(--ov-line); }
+.ov-zoom { display: inline-flex; align-items: center; gap: 2px; padding: 3px; border-radius: var(--r-btn); background: var(--ov-surface-2); }
+.ov-zoom[hidden] { display: none; }
+.ov-zb { width: 26px; height: 26px; border: 1px solid transparent; border-radius: 6px; background: none; color: var(--ov-ink); font-size: 15px; line-height: 1; cursor: pointer; }
+.ov-zb:hover:not(:disabled) { background: var(--ov-surface); border-color: var(--ov-line); }
+.ov-zb:disabled { opacity: .4; cursor: default; }
+.ov-zl { min-width: 30px; text-align: center; font-size: 12px; color: var(--ov-ink-2); }
 .ov-note { flex: none; margin: 8px 18px 0; font-size: 12.5px; color: var(--ov-ink-2); }
 .ov-body { position: relative; flex: 1; min-height: 0; overflow: auto; }
 .ov-empty { padding: 48px 24px; text-align: center; color: var(--ov-ink-2); }
@@ -640,6 +653,11 @@ button.ovn.kid .t { font-size: 12.5px; line-height: 17px; font-weight: 500; }
 .ovo .hit.kid .np { font-size: 10px; padding: 0 5px; }
 .ovo .slab { position: absolute; display: inline-flex; align-items: center; gap: 6px; padding: 1px 9px; border-radius: var(--ov-r-chip); background: color-mix(in srgb, var(--ov-surface) 92%, transparent); color: var(--ov-ink); font: var(--ov-display-weight) 12px/18px var(--ov-font-display); letter-spacing: var(--ov-display-track); box-shadow: 0 1px 3px rgba(0,0,0,.25); pointer-events: none; white-space: nowrap; }
 .ovo .slab small { font: 400 11px var(--font, system-ui); color: var(--ov-ink-2); }
+.ovo.tiny .slab { padding: 0 6px; font-size: 10px; line-height: 14px; gap: 4px; }
+.ovo.tiny .slab small { font-size: 9px; }
+.ovo.tiny .np { font-size: 9.5px; padding: 0 5px 0 4px; gap: 3px; }
+.ovo.tiny .np i { width: 5px; height: 5px; }
+.ovo.tiny .hit.kid .np { font-size: 9px; padding: 0 3px; }
 .ovo-vig { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(ellipse 85% 80% at 50% 45%, transparent 55%, rgba(20,12,30,.22) 100%); }
 html.dark .ovo-vig { background: radial-gradient(ellipse 85% 80% at 50% 45%, transparent 50%, rgba(0,0,0,.42) 100%); }
 
@@ -764,10 +782,18 @@ button.ovn.st-user[data-ack="1"] .stl, button.ovn.st-stall[data-ack="1"] .stl { 
 .bn-err .ttl { display: flex; align-items: center; gap: 8px; font-weight: 600; color: var(--ink); }
 .bn-err .ttl .gl { color: var(--ink); flex: none; }
 .bn-err .sub { color: var(--ink-2); font-size: 12.5px; line-height: 18px; }
-.bn-err .acts { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin-top: 6px; color: var(--ink-2); }
+/* every line wraps and every button fits the list pane at its narrowest (260 px): no nowrap label may push the card wider */
+.bn-err, .bn-err > * { min-width: 0; overflow-wrap: anywhere; }
+.bn-err .ttl > span { min-width: 0; }
+.bn-err .hint { color: var(--ink-2); font-size: 12.5px; line-height: 18px; }
+.bn-err .hint[hidden], .bn-err .hint .raw[hidden], .bn-err .acts > [hidden] { display: none; }
+.bn-err .hint .more { display: inline; height: auto; padding: 0; font-size: 12px; line-height: 18px; color: var(--ink-2); text-decoration: underline; text-underline-offset: 2px; }
+.bn-err .hint .raw { display: block; margin-top: 4px; padding: 6px 8px; border-radius: 6px; background: var(--surface); font-size: 11.5px; line-height: 16px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.bn-err .acts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-top: 6px; color: var(--ink-2); min-width: 0; }
+.bn-err .acts .btn { max-width: 100%; min-width: 0; white-space: normal; height: auto; min-height: 32px; padding-top: 4px; padding-bottom: 4px; line-height: 18px; text-align: center; }
+.bn-err .acts .btn.link { min-height: 0; padding: 0; }
 .bn-err .acts .sep { color: var(--ink-2); }
-.bn-err .acts .hint { color: var(--ink-2); font-size: 12.5px; line-height: 18px; flex-basis: 100%; }
-.bn-err .inset { margin: 6px 0 0; background: var(--surface); }
+.bn-err .inset { margin: 6px 0 0; background: var(--surface); white-space: pre-wrap; overflow-wrap: anywhere; }
 .bn-conn { display: grid; gap: 8px; padding: 12px 16px; border-radius: var(--r-btn); background: var(--canvas); color: var(--ink-2); }
 .indet { position: relative; height: 2px; border-radius: 2px; background: color-mix(in srgb, var(--ink) 10%, transparent); overflow: hidden; }
 .indet::after { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 30%; border-radius: 2px; background: var(--ink); animation: indet 1.4s ease-in-out infinite; }
@@ -775,7 +801,7 @@ html[data-motion=reduce] .indet::after { animation: none; width: 100%; opacity: 
 @media (prefers-reduced-motion: reduce) { html:not([data-motion=full]) .indet::after { animation: none; width: 100%; opacity: .4; } }
 
 /* badperm: PC-side Windows permission fix (ADD-SERVER-ENG §10) */
-.bperm { display: grid; gap: 6px; flex-basis: 100%; margin: 4px 0 2px; }
+.bperm { display: grid; gap: 6px; flex-basis: 100%; min-width: 0; margin: 4px 0 2px; }
 .bperm .bcmd { display: block; padding: 8px 10px; border-radius: var(--r-btn); background: var(--surface); font-size: 12px; line-height: 17px; white-space: pre-wrap; word-break: break-all; user-select: all; }
 .bperm .bact { display: flex; justify-content: flex-start; }
 .bperm p { margin: 0; }
@@ -1204,7 +1230,8 @@ const R = (() => {
     set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { } },
   };
   // settings (room.settings) — DIRECTION §6
-  const S = Object.assign({ theme: 'system', motion: 'system', notify: false, titleBadge: true, interval: 3, stallMin: 5, longMin: 30, talkOn: true, fun: false, ovTheme: 'claude' }, store.get('room.settings', {}));   // fun = 재미 모드 (픽셀 오피스), ovTheme = 오버뷰 팬 테마 (OVERVIEW-CONTRACT §3)
+  const S = Object.assign({ theme: 'system', motion: 'system', notify: false, titleBadge: true, interval: 3, stallMin: 5, longMin: 30, talkOn: true, fun: false, ovTheme: 'claude', ofcSize: 'm' }, store.get('room.settings', {}));   // fun = 재미 모드 (픽셀 오피스), ovTheme = 오버뷰 팬 테마 (OVERVIEW-CONTRACT §3)
+  if (!['s', 'm', 'l'].includes(S.ofcSize)) S.ofcSize = 'm';   // 픽셀 오피스 크기: 작게 / 보통 / 크게 (Office.layout)
   delete S.showKids;   // moved to U.showKids (CHAT-UX §3)
   // per-user UI state (room.ui) — CHAT-UX §3: chip filter, sort, open room, drawer, last-viewed marks, 하위 rows, 조용함 expand
   const U = Object.assign({ expanded: {}, chFilter: 'all', sort: 'recent', room: null, drawer: false, seen: {}, showKids: false, quietOpen: false, flowText: false }, store.get('room.ui', {}));
@@ -1335,7 +1362,7 @@ const R = (() => {
   const isHidden = a => !!(a && U.hidden && U.hidden[a.key]) && REST.has(a.st) && !isWaiting(a);
   const hideRooms = keys => { if (!U.hidden || typeof U.hidden !== 'object') U.hidden = {}; for (const k of keys) U.hidden[k] = Date.now(); save(); emit('hidden'); };
   const unhideAll = () => { U.hidden = {}; save(); emit('hidden'); };
-  // 나를 기다림 order: blockers first (oldest-waiting first inside a rank). A turn that simply ended with an answer is 'done' (collector), not waiting.
+  // 안읽음 order: blockers first (oldest-waiting first inside a rank). A turn that simply ended with an answer is 'done' (collector), not waiting.
   const waitT = a => a.lastAt != null ? a.lastAt : a.t0 != null ? a.t0 : 0;
   const wrank = a => a.st === 'user' ? 0 : 1;   // 0 asks me something (approval, question), 1 stalled/stopped/dead
   const waitCmp = (a, b) => (wrank(a) - wrank(b)) || (waitT(a) - waitT(b)) || (a.key < b.key ? -1 : 1);
@@ -1741,7 +1768,7 @@ const C = (() => {
     const n = o && o.n > 0 ? o.n : 0, on = !!o && (o.red || n > 0);
     cls(el, 'red', !!(o && o.red)); cls(el, 'on', on);
     text(el, on ? String(Math.max(n, o.red ? 1 : 0)) : '');
-    attr(el, 'aria-label', on ? (o.red ? '나를 기다림, ' : '') + '새 활동 ' + Math.max(n, 1) + '개' : null);
+    attr(el, 'aria-label', on ? (o.red ? '안읽음, ' : '') + '새 활동 ' + Math.max(n, 1) + '개' : null);
   }
 
   // ---------- avatar: 36 px tile, tool shape, status glyph on a disc (the real status shape) ----------
@@ -1861,18 +1888,58 @@ const C = (() => {
 /* ---- 54-shell.js ---- */
 /* ===== 54-shell.js — icon rail (채팅 / 보드 / 설정), poll ring + pause, global keys (b , p r). CHAT-UX §3, §7. ===== */
 (() => {
-  const { $, attr, M, on, go, key } = R;
+  const { $, attr, M, U, on, go, key } = R;
   function renderRail() {
     const v = R.params().view;
     for (const [id, name] of [['rt-chat', 'chat'], ['rt-board', 'board'], ['rt-settings', 'settings']]) { const el = $('#' + id); attr(el, 'aria-selected', v === name ? 'true' : 'false'); attr(el, 'aria-current', v === name ? 'page' : null); }
     const n = M.counts.waiting || 0, tab = $('#rt-chat'); let b = tab.querySelector('.badge');
-    C.badge(b, { red: n > 0, n }); attr(tab, 'aria-label', n ? '채팅, 나를 기다림 ' + n : '채팅'); b.setAttribute('aria-label', n ? '나를 기다림 ' + n + '개' : '');
+    C.badge(b, { red: n > 0, n }); attr(tab, 'aria-label', n ? '채팅, 안읽음 ' + n : '채팅'); b.setAttribute('aria-label', n ? '안읽음 ' + n + '개' : '');
   }
   on('model', renderRail); on('route', renderRail); on('hubview', renderRail);
   $('#pause').addEventListener('click', () => R.setPaused(!R.isPaused()));
   key('b', () => go('board'), '보드'); key(',', () => go('settings'), '설정');
   key('p', () => R.setPaused(!R.isPaused()), '일시정지 / 재개');
   key('r', () => { R.refresh(); R.emit('resort'); }, '새로고침');
+
+  // ---------- list-pane splitter: drag (pointer capture), ←/→ 16 px, Home or double-click = default; U.listW persists ----------
+  // Clamp 260–560 and leave the conversation (plus an open docked drawer) at least 420 px; under 760 px the list is its own view: no handle.
+  const chat = $('#chat'), list = $('#list'), MIN = 260, MAX = 560, STEP = 16, MAIN_MIN = 420;
+  const split = R.h('div.lsplit', { role: 'separator', tabindex: '0', 'aria-orientation': 'vertical', 'aria-controls': 'list', 'aria-label': '목록 너비', title: '끌어서 목록 너비 조절 · 두 번 클릭하면 기본 너비', 'aria-valuemin': String(MIN) });
+  chat.append(split);
+  const narrow = () => matchMedia('(max-width: 760px)').matches;
+  const dflt = () => matchMedia('(max-width: 1100px)').matches ? 280 : 320;
+  const maxW = () => { const dock = chat.dataset.drawer === 'open' && !matchMedia('(max-width: 1100px)').matches ? 300 : 0; return Math.max(MIN, Math.min(MAX, chat.clientWidth - MAIN_MIN - dock)); };
+  const clampW = w => Math.round(Math.max(MIN, Math.min(maxW(), w)));
+  function applyW() {
+    const n = narrow(); split.hidden = n;
+    const w = U.listW ? clampW(U.listW) : null;
+    if (w) chat.style.setProperty('--list-w', w + 'px'); else chat.style.removeProperty('--list-w');
+    const cur = w || dflt();
+    attr(split, 'aria-valuemax', String(maxW())); attr(split, 'aria-valuenow', String(cur)); attr(split, 'aria-valuetext', cur + '픽셀');
+    split.style.left = (n ? 0 : list.getBoundingClientRect().width || cur) + 'px';
+  }
+  function setW(w) { U.listW = w == null ? null : clampW(w); if (U.listW === dflt()) U.listW = null; R.save(); applyW(); }
+  if (!(U.listW >= MIN && U.listW <= 2000)) U.listW = null;
+  let drag = null;
+  split.addEventListener('pointerdown', e => {
+    if (e.button !== 0) return;
+    e.preventDefault(); split.setPointerCapture(e.pointerId);
+    drag = { x: e.clientX, w: list.getBoundingClientRect().width, id: e.pointerId }; split.classList.add('drag'); document.body.classList.add('col-resize');
+  });
+  split.addEventListener('pointermove', e => { if (drag && e.pointerId === drag.id) setW(drag.w + e.clientX - drag.x); });
+  const end = e => { if (!drag || e.pointerId !== drag.id) return; drag = null; split.classList.remove('drag'); document.body.classList.remove('col-resize'); };
+  split.addEventListener('pointerup', end); split.addEventListener('pointercancel', end); split.addEventListener('lostpointercapture', end);
+  split.addEventListener('dblclick', () => setW(null));
+  split.addEventListener('keydown', e => {
+    const d = { ArrowLeft: -STEP, ArrowRight: STEP }[e.key];
+    if (!d && e.key !== 'Home') return;
+    e.preventDefault(); e.stopPropagation();
+    setW(d ? list.getBoundingClientRect().width + d : null);
+  });
+  new ResizeObserver(applyW).observe(chat);
+  new MutationObserver(applyW).observe(chat, { attributes: true, attributeFilter: ['data-drawer', 'data-room'] });
+  applyW();
+  R.listSplit = { el: split, set: setW, min: MIN, max: maxW };   // selftest hook
 })();
 
 /* ---- 60-chatlist.js ---- */
@@ -1922,7 +1989,7 @@ const ChatList = (() => {
     }
     pending = hold ? moved : 0;
     const pool = all.filter(a => inFilter(a) && listed(a) && match(a));
-    // 나를 기다림 = waits for me and not read yet (R.needsMe); a read wait sits with the quiet rooms, newest first, marked 읽음
+    // 안읽음 = waits for me and not read yet (R.needsMe); a read wait sits with the quiet rooms, newest first, marked 읽음
     const wait = pool.filter(a => !gk.has(a.key) && R.needsMe(a)).sort(R.waitCmp), rest = pool.filter(a => gk.has(a.key) || !R.needsMe(a)), inRest = new Set(rest.map(a => a.key));
     const cmp = cmpBy(U.sort), roots = rest.filter(a => !(a.parent && inRest.has(a.parent) && !R.needsMe(M.agents.get(a.parent)))).sort(cmp), seq = [];
     const sectionOf = a => gk.has(a.key) || !R.LIVE.has(a.st) ? 'quiet' : 'work';
@@ -1936,7 +2003,7 @@ const ChatList = (() => {
     if (it.room) { const el = C.roomRow(it.room); el.id = 'rm-' + (++uid); el.addEventListener('click', () => { fkey = el.dataset.key; R.openRoom(el._a.ch, el._a.id); }); return el; }
     if (it.sec) return h('div.sec', { role: 'presentation', class: 's-' + it.sec }, h('span.stt'), h('span.sn'),
       it.sec === 'wait' ? h('button.btn.link.ackall', { type: 'button', title: '지금 기다리는 방을 모두 읽음으로 표시합니다 — 새로 기다리기 시작하면 다시 알립니다', on: { click: e => { e.stopPropagation(); R.ack(waitKeys); } } }, '모두 읽음') : null);
-    if (it.none) return h('div.secnone', { role: 'presentation' }, C.glyph('done'), h('span', '기다리는 것 없음'));
+    if (it.none) return h('div.secnone', { role: 'presentation' }, C.glyph('done'), h('span', '안읽은 방 없음'));
     return h('div');
   }
   let uid = 0;
@@ -1993,8 +2060,8 @@ const ChatList = (() => {
   function render() {
     const P = plan(), items = []; moreN = 0;
     const wk = P.seq.filter(x => x.sec === 'work'), qt = P.seq.filter(x => x.sec === 'quiet');
-    waitKeys = P.wait.map(a => a.key);   // 모두 읽음: what the 나를 기다림 section shows (current filter + search)
-    if (P.wait.length) { items.push({ k: 'sec:wait', sec: 'wait', title: '나를 기다림', n: P.wait.length }); for (const a of P.wait) items.push({ k: a.key, room: a }); }
+    waitKeys = P.wait.map(a => a.key);   // 모두 읽음: what the 안읽음 section shows (current filter + search)
+    if (P.wait.length) { items.push({ k: 'sec:wait', sec: 'wait', title: '안읽음', n: P.wait.length }); for (const a of P.wait) items.push({ k: a.key, room: a }); }
     else if (P.total) items.push({ k: 'none:wait', none: true });
     if (U.sort === 'long') { for (const x of P.seq) items.push({ k: x.a.key, room: x.a, ghost: P.gk.has(x.a.key), gat: (ghosts.get(x.a.key) || {}).at }); }
     else {
@@ -2101,7 +2168,7 @@ const ChatList = (() => {
   }
   for (let i = 1; i <= 9; i++) R.key(String(i), () => { const c = i === 1 ? { id: 'all' } : M.channels[i - 2]; if (c) { if (R.params().view === 'chat') setFilter(c.id); else R.openChannel(c.id); } }, i === 1 ? '전체' : '채널 ' + (i - 1));
   R.key('/', () => { if (R.params().view !== 'chat') R.go('chat'); search.focus(); search.select(); }, '검색');
-  R.key('j', () => step(1), '다음 방'); R.key('k', () => step(-1), '이전 방'); R.key('.', focusFirstWaiting, '나를 기다림으로');
+  R.key('j', () => step(1), '다음 방'); R.key('k', () => step(-1), '이전 방'); R.key('.', focusFirstWaiting, '첫 안읽은 방으로');
   // Esc, list part (CHAT-UX §7 order: palette → sort menu → search text → drawer → pane). The room handler calls this first.
   function esc() {
     if (closeMenu()) return true;
@@ -2884,7 +2951,7 @@ const Room = (() => {
     const cnt = k => [...M.agents.values()].filter(x => x.st === k).length;
     const live = [...M.agents.values()].filter(x => R.LIVE.has(x.st)).length, ok = M.channels.filter(c => c.state === 'ok').length;
     if (w) { const cw = k => M.waiting.filter(x => x.st === k).length; C.setGlyph(eGl, 'user'); text(eT, [['입력 대기', cw('user')], ['응답 없음', cw('stall')], ['중단됨', cw('stopped')], ['끊김', cw('dead')]].filter(x => x[1]).map(x => x[0] + ' ' + x[1]).join(' · ')); }   // same set (R.needsMe) as the rail badge
-    else { C.setGlyph(eGl, 'done'); text(eT, '기다리는 것 없음'); }
+    else { C.setGlyph(eGl, 'done'); text(eT, '안읽은 방 없음'); }
     text(eS, '에이전트 ' + live + '개 작업 중 · 채널 ' + ok + '/' + M.channels.length + ' 연결');
   }
 
@@ -2947,7 +3014,7 @@ const Room = (() => {
 (() => {
   const { h, text, attr, cls, keyed, M, U, ST, on } = R;
   const LANE_IDS = ['wait', 'work', 'child', 'done'];
-  const LANES = [['wait', '나를 기다림'], ['work', '작업 중'], ['child', '하위 대기'], ['done', '끝남']];
+  const LANES = [['wait', '안읽음'], ['work', '작업 중'], ['child', '하위 대기'], ['done', '끝남']];
   const FAN = 5;                                   // a parent with >= FAN kids collapses to one summary card
   const cards = new Map(), sums = new Map(), ord = new Map();   // key -> element ; key -> {b, t} frozen sort time
   let sel, lanes = {}, board, scope;
@@ -3266,7 +3333,7 @@ window.Importer = (() => {
     if (bpm) { text(bx.querySelector('.bpb'), R.sshHint(c.error)); bx.querySelector('.bperm').hidden = bk !== 'badperm'; }   // the copy-paste fix only fits %USERPROFILE%\.ssh\config
     const fx = R.sshFix(c), rb = el.querySelector('.retry');
     const pws = c.kind === 'ssh' && c.auth === 'password-session', fb = el.querySelector('.fix');   // password-session: the key was refused once; offer the key again
-    fb.hidden = !fx; text(fb, pws ? '비밀번호로 다시 연결' : '이 서버에 키 등록하기'); rb.hidden = c.state !== 'error'; cls(rb, 'link', fx); cls(rb, 'sm', !fx);
+    fb.hidden = !fx; text(fb, pws ? '비밀번호로 연결' : '이 서버에 키 등록하기'); rb.hidden = c.state !== 'error'; cls(rb, 'link', fx); cls(rb, 'sm', !fx);
     el.querySelector('.rekey').hidden = !pws;
   }
 
@@ -3287,6 +3354,7 @@ window.Importer = (() => {
       const imp = Importer.make({ block: false }); this.imp = imp;
       const th = radios('테마', [['system', '시스템'], ['light', '라이트'], ['dark', '다크']], () => S.theme, v => S.theme = v);
       const mo = radios('움직임', [['system', '시스템'], ['reduce', '줄이기']], () => S.motion === 'reduce' ? 'reduce' : 'system', v => S.motion = v);
+      const oz = radios('픽셀 오피스 크기', [['s', '작게'], ['m', '보통'], ['l', '크게']], () => S.ofcSize, v => S.ofcSize = v);
       const ot = radios('오버뷰 테마', Overview.themes, () => S.ovTheme, v => S.ovTheme = v);   // fan themes style the overview pane only (OVERVIEW-CONTRACT §3)
       const chList = h('ul.clist'), keyList = h('ul.klist'), preList = h('ul.plist'); this.preList = preList;
       chList.append(this.noSsh = h('li.meta', { hidden: true }, '아직 서버가 없습니다 — 서버 추가로 첫 서버를 등록하세요'));   // unkeyed: R.keyed leaves it alone
@@ -3297,11 +3365,12 @@ window.Importer = (() => {
           row('theme', '테마', th.g, '시스템을 고르면 Windows의 라이트/다크 설정을 따릅니다'),
           row('motion', '움직임', mo.g, '입력 중 점의 움직임과 패널·서랍 전환 애니메이션을 끕니다'),
           row('fun', '재미 모드 (픽셀 오피스)', toggle('fun', '재미 모드 (픽셀 오피스)', 'fun'), '방을 열지 않았을 때 오른쪽 칸을 배선 지도 대신 픽셀 사무실로 보여 줍니다'),
+          row('ofcsize', '픽셀 오피스 크기', oz.g, '픽셀 사무실의 도트 크기입니다 (오버뷰 위쪽 − / + 와 같음). 고해상도 화면에서는 작게와 보통이 같게 보일 수 있습니다'),
           row('ovtheme', '오버뷰 테마', ot.g, '오버뷰 칸에만 적용됩니다 — 라이트/다크는 위의 테마를 따릅니다. 팬 테마이며 로고·상표는 쓰지 않습니다')),
         sec('notify', '알림',
           row('notify', 'Windows 알림', toggle('notify', 'Windows 알림', 'notify', setNotify), '입력 대기·응답 없음·중단됨·끊김으로 바뀔 때, 긴 프로세스가 끝날 때'),
           denied,
-          row('badge', '창 제목 배지', toggle('badge', '창 제목 배지', 'titleBadge'), '탭 제목 앞에 나를 기다리는 에이전트 수를 (3)처럼 붙입니다'),
+          row('badge', '창 제목 배지', toggle('badge', '창 제목 배지', 'titleBadge'), '탭 제목 앞에 안읽은 방 수를 (3)처럼 붙입니다'),
           row('talk', '톡 보내기 허용', toggle('talk', '톡 보내기 허용', 'talkOn', setTalk), '끄면 모든 방에서 보내기 칸이 사라집니다 — 지시 흐름 보기는 그대로입니다')),
         sec('poll', '갱신',
           row('interval', '갱신 주기', select('interval', '갱신 주기', [2, 3, 5, 10], '초', 'interval'), '바꾸면 바로 한 번 새로 고치고 이 주기로 다시 수집합니다'),
@@ -3570,14 +3639,18 @@ window.States = (() => {
     const retry = () => { R.refresh(); again2.disabled = true; text(again2, '확인하는 중…'); setTimeout(() => { again2.disabled = false; text(again2, '지금 확인'); }, 2500); };
     const again2 = h('button.btn.primary', { type: 'button', on: { click: retry } }, '지금 확인');
     const fixBtn = h('button.btn.primary', { type: 'button', hidden: true, on: { click: () => AddServer.open({ ch }) } }, '이 서버에 키 등록하기');
-    const tunnel = h('span.hint'), sep1 = h('span.sep', '·'), bp = badperm();
+    const rekeyBtn = h('button.btn', { type: 'button', hidden: true, title: '키를 다시 등록해 다음부터 비밀번호 없이 연결합니다 (거절되면 원인을 찾아 고칩니다)', on: { click: () => AddServer.open({ ch, rekey: true }) } }, '키 로그인 설정');
+    // the hint is one or two short sentences; the raw ssh line sits behind 자세히 (the full text is under 로그 보기)
+    const raw = h('code.mono.raw', { hidden: true, id: 'bnraw-' + ch });
+    const more = h('button.btn.link.more', { type: 'button', 'aria-expanded': 'false', 'aria-controls': 'bnraw-' + ch, on: { click: () => { raw.hidden = !raw.hidden; attr(more, 'aria-expanded', raw.hidden ? 'false' : 'true'); text(more, raw.hidden ? '자세히' : '접기'); } } }, '자세히');
+    const tunnel = h('div.hint', h('span.ht'), ' ', more, raw), sep1 = h('span.sep', '·'), bp = badperm();
     const err = h('div.bn-err', { role: 'alert', hidden: true },
-      h('div.ttl', svgUse('g-dead', 'gl'), h('span.t')), h('div.sub'),
-      h('div.acts', tunnel, bp, sep1, logBtn, fixBtn, again2), log);
+      h('div.ttl', svgUse('g-dead', 'gl'), h('span.t')), h('div.sub'), tunnel,
+      h('div.acts', bp, sep1, fixBtn, rekeyBtn, logBtn, again2), log);
     const longer = h('span.meta', { hidden: true }, '오래 걸리면 허브 창의 로그와 channels.json의 주소를 확인하세요');
     const conn = h('div.bn-conn', { role: 'status', hidden: true }, h('span', '서버에 연결하는 중입니다…'), longer, h('div.indet', { 'aria-hidden': 'true' }));
     const el = h('div.st-banner', { data: { ch } }, conn, err);
-    el._p = { err, conn, log, tunnel, bp, sep1, longer, fixBtn, again2 };
+    el._p = { err, conn, log, logBtn, tunnel, raw, more, bp, sep1, longer, fixBtn, rekeyBtn, again2 };
     return el;
   }
   function banner(ch) {
@@ -3594,13 +3667,18 @@ window.States = (() => {
       const ssh = c.kind === 'ssh' && c.state === 'error';
       const bpm = ssh && R.sshKind(c.error) === 'badperm'; p.bp.hidden = !bpm;
       text(p.err.querySelector('.t'), bpm ? R.BADPERM.title : c.state === 'ok' ? '수집이 중단되었습니다' : ssh ? 'SSH 연결이 끊겼습니다' : '연결 오류');
-      text(p.err.querySelector('.sub'), (c.t ? '마지막 수집 ' + R.fmtHM(c.t) : '아직 받은 데이터가 없습니다') + ' · 허브가 자동으로 다시 연결합니다 (최대 1분 간격)');
-      const fx = R.sshFix(c); p.fixBtn.hidden = !fx; cls(p.again2, 'primary', !fx); cls(p.again2, 'link', fx);
-      text(p.fixBtn, c.auth === 'password-session' ? '비밀번호로 다시 연결 (또는 키 로그인 다시 설정)' : '이 서버에 키 등록하기');   // the dialog offers both
-      p.tunnel.hidden = !ssh; p.sep1.hidden = true;   // the hint is long: it wraps, a leading dot would dangle
-      if (ssh) text(p.tunnel, R.sshHint(c.error) + ' (' + R.sshErr(c.error) + ')');
+      const pws = ssh && c.auth === 'password-session';   // the server refused our key: this run connects with a password
+      const waitPw = pws && !c.session_pw;                 // ...and the hub has none yet: it will not retry on its own
+      text(p.err.querySelector('.sub'), (c.t ? '마지막 수집 ' + R.fmtHM(c.t) : '아직 받은 데이터가 없습니다') + (waitPw ? '' : ' · 허브가 자동으로 다시 연결합니다 (최대 1분 간격)'));
+      const fx = R.sshFix(c); p.fixBtn.hidden = !fx; p.rekeyBtn.hidden = !pws; cls(p.again2, 'primary', !fx); cls(p.again2, 'link', fx);
+      text(p.fixBtn, pws ? '비밀번호로 연결' : '이 서버에 키 등록하기');
+      p.tunnel.hidden = !ssh; p.sep1.hidden = true;
+      if (ssh) {
+        text(p.tunnel.querySelector('.ht'), pws ? '이 서버는 키 로그인이 안 돼서, 이번 실행에서는 비밀번호가 필요합니다.' : R.sshHint(c.error));
+        const line = R.sshErr(c.error); text(p.raw, line); p.more.hidden = !line; if (!line) p.raw.hidden = true;
+      }
       text(p.log, c.error || '허브가 오류 내용을 보내지 않았습니다');
-      if (!ssh && c.state === 'error' && p.log.hidden && !p.log.dataset.seen) { p.log.hidden = false; p.log.dataset.seen = '1'; attr(p.err.querySelector('[aria-controls]'), 'aria-expanded', 'true'); }   // non-ssh: the error text is the content, show it once
+      if (!ssh && c.state === 'error' && p.log.hidden && !p.log.dataset.seen) { p.log.hidden = false; p.log.dataset.seen = '1'; attr(p.logBtn, 'aria-expanded', 'true'); }   // non-ssh: the error text is the content, show it once
     }
     return el;
   }
@@ -3650,7 +3728,7 @@ window.AddServer = (() => {
     hub_lost: ['허브가 응답하지 않습니다', '허브와의 연결이 끊겨 등록이 어디까지 진행됐는지 알 수 없습니다. 에겐 톡을 다시 시작한 뒤 다시 시도하세요. 이미 비밀번호를 보냈다면 서버에 키가 등록됐을 수 있습니다 — 서버의 ~/.ssh/authorized_keys 에서 \'agen-talk@PC이름\' 줄로 확인하세요.', (p, j) => PH[j.phase || p.phase] || 0, [['다시 입력', 'p', 'retry'], ['닫기', 'b', 'close']]],
     other: ['등록하지 못했습니다', '아래 로그를 확인하세요. 같은 내용이 반복되면 에겐 톡 로그 폴더의 로그와 함께 알려 주세요.', (p, j) => PH[j.phase || p.phase] || 0, [['다시 입력', 'p', 'retry'], ['계정 수정', 'l', 'user'], ['닫기', 'b', 'close']]],
   };
-  let dlg, E = {}, job = null, timer = 0, flashT = 0, opener = null, fix = null, fixName = '', rekey = false, reusePw = false, sub0 = SUB;
+  let dlg, E = {}, job = null, timer = 0, flashT = 0, opener = null, fix = null, fixName = '', rekey = false, pwConn = false, reusePw = false, sub0 = SUB;
 
   const api = (path, body) => fetch(path, body === undefined ? { cache: 'no-store' } : { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-AT-Token': TOKEN }, body: JSON.stringify(body) })
     .then(async r => ({ status: r.status, body: await r.json().catch(() => null) }));   // relative paths: the page lives under /<secret>/
@@ -3658,7 +3736,7 @@ window.AddServer = (() => {
   const flash = (msg, ms) => { clearTimeout(flashT); text(E.flash, msg); E.flash.hidden = !msg; if (msg && ms) flashT = setTimeout(() => flash(''), ms); };
   const err = (k, msg, link) => { E[k + 'Err'].replaceChildren(...[msg, link].filter(Boolean)); E[k + 'Err'].hidden = !msg; attr(E[k], 'aria-invalid', msg ? 'true' : null); };
   const running = () => !!job && job.running;
-  const pane = (n, sub) => { for (const k of ['form', 'prog', 'done']) E[k].hidden = k !== n; if (E.presets) E.presets.hidden = n !== 'form' || E.presets.children.length < 2; text(E.sub, sub || sub0); text(E.title, fix ? (rekey ? '키 로그인 다시 설정' : '이 서버에 키 등록하기') + (fixName ? ' — ' + fixName : '') : '서버 추가'); };
+  const pane = (n, sub) => { for (const k of ['form', 'prog', 'done']) E[k].hidden = k !== n; if (E.presets) E.presets.hidden = n !== 'form' || E.presets.children.length < 2; text(E.sub, sub || sub0); text(E.title, fix ? (rekey ? '키 로그인 다시 설정' : pwConn ? '비밀번호로 연결' : '이 서버에 키 등록하기') + (fixName ? ' — ' + fixName : '') : '서버 추가'); };
 
   function fld(k, label, attrs, extra) {
     const input = E[k] = h('input', Object.assign({ id: 'as-' + k, autocomplete: 'off', spellcheck: 'false', 'aria-describedby': 'as-' + k + '-err' }, attrs));
@@ -3707,7 +3785,7 @@ window.AddServer = (() => {
     E.okTitle = h('h3.t-section'); E.okLine = h('p'); E.okNote = h('p.meta');
     E.open = h('button.btn.primary', { type: 'button' }, '채널 열기');
     E.done = h('div', h('div.ttl', svgUse('g-done', 'gl lg'), E.okTitle), E.okLine, E.okNote,
-      h('div.acts', h('button.btn.link', { type: 'button', on: { click: () => { fix = null; fixName = ''; rekey = reusePw = false; sub0 = SUB; reset(); E.pw.placeholder = '서버 로그인 비밀번호'; pane('form'); paintPresets(); E.host.focus(); } } }, '서버 하나 더 추가'), h('button.btn', { type: 'button', on: { click: () => tryClose(true) } }, '닫기'), E.open));
+      h('div.acts', h('button.btn.link', { type: 'button', on: { click: () => { fix = null; fixName = ''; rekey = pwConn = reusePw = false; sub0 = SUB; reset(); E.pw.placeholder = '서버 로그인 비밀번호'; pane('form'); paintPresets(); E.host.focus(); } } }, '서버 하나 더 추가'), h('button.btn', { type: 'button', on: { click: () => tryClose(true) } }, '닫기'), E.open));
     dlg = h('dialog.dlg.addsrv', { 'aria-labelledby': 'as-title', 'aria-describedby': 'as-sub' }, h('div.hd', E.title), E.sub, E.presets, E.form, E.prog, E.done, E.flash, close);
     dlg.addEventListener('cancel', e => { if (running()) { e.preventDefault(); flash('진행 중입니다 — 중단하려면 취소를 누르세요', 3000); } });   // Esc
     dlg.addEventListener('close', () => { E.pw.value = ''; if (running()) cancel(); if (opener && opener.isConnected) opener.focus(); });
@@ -3729,9 +3807,9 @@ window.AddServer = (() => {
     if (!running()) {
       const c = o.ch && R.chan(o.ch), sessCh = !!c && c.kind === 'ssh' && c.auth === 'password-session';
       fix = c ? c.id : null; fixName = c ? c.name : '';
-      rekey = sessCh && !!o.rekey; reusePw = rekey && !!c.session_pw;   // 키 로그인 다시 설정: the hub may still hold this run's password
+      rekey = sessCh && !!o.rekey; pwConn = sessCh && !rekey; reusePw = rekey && !!c.session_pw;   // 키 로그인 다시 설정: the hub may still hold this run's password
       sub0 = rekey ? '이 서버는 키 로그인이 거절되어 비밀번호로 연결해 왔습니다. 키를 다시 등록하고, 또 거절되면 원인(폴더 권한 등)을 찾아 고칠 수 있게 안내합니다.' + (reusePw ? ' 이번 실행에서 입력한 비밀번호를 다시 쓰므로 비워 두어도 됩니다.' : '')
-        : sessCh ? '이 서버는 이번 실행 동안만 비밀번호로 연결합니다. 비밀번호를 입력하면 다시 연결합니다 — 매번 묻지 않게 하려면 아래 체크를 끄거나 설정 › 채널의 \'키 로그인 다시 설정\'을 쓰세요.' : SUB;
+        : sessCh ? '이 서버는 키 로그인이 안 돼서, 이번 실행 동안만 비밀번호로 연결합니다. 매번 묻지 않게 하려면 아래 체크를 끄거나 키 로그인 설정을 쓰세요.' : SUB;
       reset(c ? Object.assign(parse(c), { name: '' }) : o);
       if (sessCh) { E.sessrow.hidden = false; E.sess.checked = !rekey; }
       E.sess.dispatchEvent(new Event('change'));
@@ -3919,14 +3997,24 @@ const Overview = (() => {
   S.fun = S.fun === true;
 
   // ---------- pane skeleton ----------
-  const turn = h('button.ov-turn', { type: 'button', title: '다음 기다리는 에이전트로', on: { click: () => focusNext() } });
+  const turn = h('button.ov-turn', { type: 'button', title: '다음 안읽은 에이전트로', on: { click: () => focusNext() } });
   const sum = h('div.ov-sum');
   const segBtns = [['wire', '배선 지도'], ['office', '픽셀 오피스']].map(([v, l]) => h('button', { type: 'button', role: 'radio', data: { v }, on: { click: () => setFun(v === 'office') } }, l));
   const seg = h('div.seg.ov-seg', { role: 'radiogroup', 'aria-label': '오버뷰 보기' }, ...segBtns);
   seg.addEventListener('keydown', e => { const d = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: 1, ArrowUp: -1 }[e.key]; if (!d) return; e.preventDefault(); const b = segBtns[(segBtns.indexOf(document.activeElement) + d + 2) % 2]; b.focus(); b.click(); });
+  // 픽셀 오피스 크기 (S.ofcSize): − / + in the header while the office is shown; the same setting sits in 설정 › 화면
+  const ZS = [['s', '작게'], ['m', '보통'], ['l', '크게']], zi = () => Math.max(0, ZS.findIndex(z => z[0] === S.ofcSize));
+  // a step that would draw at the same scale as the current one is skipped (on a high-DPI pane 작게 can equal 보통): − / + always change the picture
+  const zNext = d => { const st = typeof OvOffice !== 'undefined' && OvOffice.steps && OvOffice.steps(), cur = zi(); for (let i = cur + d; i >= 0 && i < ZS.length; i += d) if (!st || st[ZS[i][0]] !== st[ZS[cur][0]]) return i; return -1; };
+  const zSync = () => { zDn.disabled = zNext(-1) < 0; zUp.disabled = zNext(1) < 0; };
+  const zoom = d => { const i = zNext(d); if (i >= 0) { S.ofcSize = ZS[i][0]; R.applySettings(); } };
+  const zDn = h('button.ov-zb', { type: 'button', 'aria-label': '픽셀 오피스 작게', title: '픽셀 오피스 크기 — 작게', on: { click: () => zoom(-1) } }, '−');
+  const zUp = h('button.ov-zb', { type: 'button', 'aria-label': '픽셀 오피스 크게', title: '픽셀 오피스 크기 — 크게', on: { click: () => zoom(1) } }, '+');
+  const zLbl = h('span.ov-zl', { 'aria-live': 'polite' });
+  const zoomG = h('div.ov-zoom', { role: 'group', 'aria-label': '픽셀 오피스 크기', title: '픽셀 오피스 크기', hidden: true }, zDn, zLbl, zUp);
   const note = h('p.ov-note', { hidden: true });
   const body = h('div.ov-body', { role: 'group', 'aria-label': '에이전트 지도' });
-  const root = h('section.ov', { 'aria-label': '오버뷰' }, h('header.ov-head', h('h2.t-title', '오버뷰'), turn, sum, seg), note, body);
+  const root = h('section.ov', { 'aria-label': '오버뷰' }, h('header.ov-head', h('h2.t-title', '오버뷰'), turn, sum, zoomG, seg), note, body);
   const tip = h('div.ov-tip', { role: 'tooltip', hidden: true });
 
   // ---------- helpers ----------
@@ -4035,12 +4123,13 @@ const Overview = (() => {
   function setFun(v) { S.fun = !!v; R.applySettings(); }
   function header() {
     const n = M.waiting.length;
-    text(turn, '나를 기다림 ' + n); turn.dataset.n = String(n); attr(turn, 'aria-disabled', n ? null : 'true');
+    text(turn, '안읽음 ' + n); turn.dataset.n = String(n); attr(turn, 'aria-disabled', n ? null : 'true');
     const c = {}; for (const a of M.agents.values()) if (!R.isHidden(a)) c[a.st] = (c[a.st] || 0) + 1;
     sum.replaceChildren(...['work', 'tool', 'child', 'idle', 'done'].filter(k => c[k]).map(k => h('span', C.glyph(k), ST[k] + ' ', h('b', String(c[k])))),
       h('span', '서버 ' + M.channels.filter(x => x.state === 'ok').length + '/' + M.channels.length + ' 연결'));
     segBtns.forEach(b => { const on_ = (b.dataset.v === 'office') === S.fun; attr(b, 'aria-checked', on_ ? 'true' : 'false'); b.tabIndex = on_ ? 0 : -1; });
     root.dataset.ovt = S.ovTheme;
+    text(zLbl, ZS[zi()][1]); zSync();
   }
   /* called by Room.renderEmpty (62) whenever no room is open; returns false while the model is not loaded (the loading card stays) */
   function render() {
@@ -4052,15 +4141,16 @@ const Overview = (() => {
     const want = S.fun && officeOk() ? 'office' : 'wire';
     note.hidden = !(S.fun && want === 'wire');
     if (!note.hidden) text(note, '픽셀 오피스 캐릭터 스프라이트를 불러오지 못해 배선 지도로 보여 줍니다');
+    zoomG.hidden = want !== 'office';
     if (mode !== want) { (mode === 'office' ? OvOffice : OvWire).unmount && (mode === 'office' ? OvOffice : OvWire).unmount(); body.replaceChildren(); mode = want; }
     if (!M.agents.size && !M.channels.length) { body.replaceChildren(h('p.ov-empty', '아직 서버가 없습니다 — 설정에서 서버를 추가하세요')); mode = null; return true; }
     (mode === 'office' ? OvOffice : OvWire).update(body, D, api);
-    if (mode === 'office') for (const n of D.planes) OvOffice.plane(n);
+    if (mode === 'office') { zSync(); for (const n of D.planes) OvOffice.plane(n); }
     else for (const n of D.planes) OvWire.flight(n);
     kick();
     return true;
   }
-  function relayout() { if (mode && root.isConnected && D) { (mode === 'office' ? OvOffice : OvWire).update(body, D, api, true); kick(); } }
+  function relayout() { if (mode && root.isConnected && D) { (mode === 'office' ? OvOffice : OvWire).update(body, D, api, true); if (mode === 'office') zSync(); kick(); } }
 
   // ---------- render loop: only while it can be seen ----------
   let raf = 0, last = -1e9, blurAt = 0;
@@ -4080,7 +4170,7 @@ const Overview = (() => {
   on('pause', kick); on('route', () => { hideTip(); setTimeout(kick, 0); });
   on('hidden', () => { if (root.isConnected && M.loaded && visible()) render(); });   // 정리 / 다시 보기 takes effect at once, not at the next poll
   let prevSig = '';
-  on('settings', () => { const sig = S.fun + S.ovTheme + dark() + reduced(); if (sig === prevSig) return; prevSig = sig; root.dataset.ovt = S.ovTheme; if (typeof OvOffice !== 'undefined') OvOffice.invalidate(); if (root.isConnected && M.loaded && visible()) render(); });
+  on('settings', () => { const sig = S.fun + S.ovTheme + S.ofcSize + dark() + reduced(); if (sig === prevSig) return; prevSig = sig; root.dataset.ovt = S.ovTheme; if (typeof OvOffice !== 'undefined') OvOffice.invalidate(); if (root.isConnected && M.loaded && visible()) render(); });
   new ResizeObserver(() => { if (visible()) relayout(); }).observe(pempty);
 
   const api = { label, bindAgent, reduced, dark, active, theme: () => S.ovTheme, kick };
@@ -4174,7 +4264,7 @@ const OvWire = (() => {
         attr(el, 'aria-label', '프로젝트 ' + p.name + (p.branch ? ', 브랜치 ' + p.branch : ''));
         attr(el, 'title', p.other ? '프로젝트를 찾지 못한 에이전트' : p.name + (p.branch ? ' · ' + p.branch : '') + (p.root ? '\n' + p.root : ''));
         const c = el.querySelector('.cnt'); text(c, '에이전트 ' + ags.length + (kids ? ' · 하위 ' + kids : ''));
-        let pn = el.querySelector('.pn'); if (wait) { if (!pn) el.querySelector('.s').append(pn = h('span.pn')); text(pn, '기다림 ' + wait); } else if (pn) pn.remove();
+        let pn = el.querySelector('.pn'); if (wait) { if (!pn) el.querySelector('.s').append(pn = h('span.pn')); text(pn, '안읽음 ' + wait); } else if (pn) pn.remove();
       } else {
         const n = byKey.get(b.n.key) || b.n; b.n = n;
         el.className = 'ovn' + (b.kind === 'kid' ? ' kid' : '');
@@ -4843,6 +4933,12 @@ function deskOf(id, kind) {
 }
 const line = (g, x0, y0, x1, y1, c) => { const n = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0), 1); for (let i = 0; i <= n; i++) PX(g, Math.round(x0 + (x1 - x0) * i / n), Math.round(y0 + (y1 - y0) * i / n), c); };
 const disc = (g, cx, cy, r, c0, c1, c2) => { for (let y = -r; y <= r; y++) for (let x = -r; x <= r; x++) { if (x * x + y * y > r * r + r * .6) continue; const s = x + y; PX(g, cx + x, cy + y, s < -r * .7 ? c2 : s > r * .6 ? c0 : c1); } };
+/* 픽셀 오피스 크기: integer device px per art px (crisp). 보통 aims at a ~800 art-px-wide world (half the old default's dot size
+   at DPR 1.5); 크게 is at least one step up (about the old default), 작게 one step down, but never below 1 CSS px per art px (the 5 px sign font and the plates stop being readable) */
+const officeScale = (devW, dpr, size) => {
+  const minS = Math.max(1, Math.ceil(dpr - 0.01)), m = clamp(Math.round(devW / 800), Math.max(minS, Math.ceil(dpr * 1.25 - 0.01)), 8);   // 보통 keeps >= 1.25 CSS px per art px
+  return size === 'l' ? clamp(Math.max(Math.round(devW / 460), m + 1), 2, 9) : size === 's' ? clamp(Math.min(Math.round(devW / 1100), m - 1), minS, 8) : m;
+};
 const Office = {
   S: 3, WD: 480, HD: 400, k: 2.4, stations: [], walks: [], rooms: [], stories: [], planes: [], notes: new Map(), ghosts: new Map(), lastT: -1e9,
   setTheme() { Chars.cache.clear(); this.ghosts.clear(); this.bubbleCache.clear(); this.walkCache = null; this.catCache = null; this.stat = null; this.lastT = -1e9; },
@@ -4870,7 +4966,7 @@ const Office = {
   /* ---------- layout: storeys of compact rooms; spare width becomes a lounge, never an empty stretched room ---------- */
   layout() {
     const box = this.host, dpr = window.devicePixelRatio || 1, cssW = Math.max(320, box.clientWidth - 18), devW = Math.floor(cssW * dpr);
-    const S = clamp(Math.floor(devW / 420), 2, 9);
+    const S = officeScale(devW, dpr, R.S.ofcSize); this.devW = devW; this.dpr = dpr;
     const WD = Math.max(200, Math.floor(devW / S));
     this.S = S; this.WD = WD; this.k = S / dpr;
     const G = this.G = this.geo();
@@ -6074,10 +6170,10 @@ const Office = {
   /* ---------- DOM overlay: focusable desks (buttons), nameplates, storey labels ---------- */
   buildOverlays() {
     const box = this.hits; box.replaceChildren(); this.hit = new Map();
-    const k = this.k, G = this.G;
+    const k = this.k, G = this.G, tiny = k < 1.3; this.world.classList.toggle('tiny', tiny);   // 작게 at 1 CSS px per art px: smaller storey labels and plates
     for (const st of this.stories) {
       const sv = st.sv;
-      box.append(h('div.slab', { style: 'left:' + ((this.B.x0 + 3) * k) + 'px;top:' + ((st.y + this.B.SLAB / 2) * k - 10) + 'px', 'aria-hidden': 'true' },
+      box.append(h('div.slab', { style: 'left:' + ((this.B.x0 + 3) * k) + 'px;top:' + ((st.y + this.B.SLAB / 2) * k - (tiny ? 7 : 10)) + 'px', 'aria-hidden': 'true' },
         h('span', sv.name), h('small', (sv.kind === 'local' ? '내 PC' : 'SSH') + ' · ' + (sv.state === 'ok' ? '연결됨' : sv.state === 'connecting' ? '연결 중' : '끊김'))));
     }
     for (const room of this.rooms) if (room.htmlSign) {
@@ -6106,7 +6202,7 @@ const Office = {
 };
 
   /* ---------- module API for Overview ---------- */
-  const sigOf = (D, w) => w + '#' + D.projects.map(p => p.id + ':' + D.roots.filter(r => r.project === p.id).map(r => r.key + '(' + r.kids.slice(0, 4).map(k => k.key).join(',') + ')').join(',')).join('|') + '#' + D.servers.map(s => s.id + s.state).join(',');
+  const sigOf = (D, w) => w + R.S.ofcSize + '#' + D.projects.map(p => p.id + ':' + D.roots.filter(r => r.project === p.id).map(r => r.key + '(' + r.kids.slice(0, 4).map(k => k.key).join(',') + ')').join(',')).join('|') + '#' + D.servers.map(s => s.id + s.state).join(',');
   function mount(host) {
     Office.host = host;
     Office.world = h('div.ovo'); Office.cv = h('canvas', { 'aria-hidden': 'true' }); Office.hits = h('div.hits', { role: 'group', 'aria-label': '책상' });
@@ -6125,6 +6221,8 @@ const Office = {
     scene: () => ({ rooms: Office.rooms.map(r => r.filler ? { si: r.si, filler: r.kind, spots: (r.spots || []).length } : { si: r.si, id: r.p.id, arch: r.arch }), desks: Office.stations.map(s2 => ({ id: s2.n.id, kind: s2.kind, v: s2.dv.k, scr: s2.o.scr.join(',') })) }),
     archOf: id => archOf(id), fillKind: (seed, w) => fillKind(seed, w, Object.keys(FILL_MIN), []), deskOf: (id, kind) => deskOf(id, kind).k, archs: () => ARCHS.slice(),
     relayout() { if (Office.host) Office.layout(); },            // dev hook (?walk=1 in the talkfx page): start an idle walk now, long stay
+    scale: () => Office.S, scaleFor: officeScale, geo: () => Office.G,   // selftest hooks: the current device px per art px, the pure picker, desk geometry
+    steps: () => Office.devW ? Object.fromEntries(['s', 'm', 'l'].map(z => [z, officeScale(Office.devW, Office.dpr, z)])) : null,   // what each size step draws at on this pane (작게 can equal 보통 on a high-DPI screen)
     /* selftest hook: make every agent due for a walk, run one scheduling step (reduced or not); returns the walkers started */
     walkTest(reduce) { if (!Office.stations.length) return -1; for (const s2 of Office.stations) s2.nw = 0; Office.lastWalk = -1e9; Office.walkTick(performance.now(), !!reduce); const n = Office.walks.length; for (const w of Office.walks) w.s2.away = null; Office.walks = []; return n; },
     update(host, D, api, force) {

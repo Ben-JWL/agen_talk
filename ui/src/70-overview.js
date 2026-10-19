@@ -13,14 +13,24 @@ const Overview = (() => {
   S.fun = S.fun === true;
 
   // ---------- pane skeleton ----------
-  const turn = h('button.ov-turn', { type: 'button', title: '다음 기다리는 에이전트로', on: { click: () => focusNext() } });
+  const turn = h('button.ov-turn', { type: 'button', title: '다음 안읽은 에이전트로', on: { click: () => focusNext() } });
   const sum = h('div.ov-sum');
   const segBtns = [['wire', '배선 지도'], ['office', '픽셀 오피스']].map(([v, l]) => h('button', { type: 'button', role: 'radio', data: { v }, on: { click: () => setFun(v === 'office') } }, l));
   const seg = h('div.seg.ov-seg', { role: 'radiogroup', 'aria-label': '오버뷰 보기' }, ...segBtns);
   seg.addEventListener('keydown', e => { const d = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: 1, ArrowUp: -1 }[e.key]; if (!d) return; e.preventDefault(); const b = segBtns[(segBtns.indexOf(document.activeElement) + d + 2) % 2]; b.focus(); b.click(); });
+  // 픽셀 오피스 크기 (S.ofcSize): − / + in the header while the office is shown; the same setting sits in 설정 › 화면
+  const ZS = [['s', '작게'], ['m', '보통'], ['l', '크게']], zi = () => Math.max(0, ZS.findIndex(z => z[0] === S.ofcSize));
+  // a step that would draw at the same scale as the current one is skipped (on a high-DPI pane 작게 can equal 보통): − / + always change the picture
+  const zNext = d => { const st = typeof OvOffice !== 'undefined' && OvOffice.steps && OvOffice.steps(), cur = zi(); for (let i = cur + d; i >= 0 && i < ZS.length; i += d) if (!st || st[ZS[i][0]] !== st[ZS[cur][0]]) return i; return -1; };
+  const zSync = () => { zDn.disabled = zNext(-1) < 0; zUp.disabled = zNext(1) < 0; };
+  const zoom = d => { const i = zNext(d); if (i >= 0) { S.ofcSize = ZS[i][0]; R.applySettings(); } };
+  const zDn = h('button.ov-zb', { type: 'button', 'aria-label': '픽셀 오피스 작게', title: '픽셀 오피스 크기 — 작게', on: { click: () => zoom(-1) } }, '−');
+  const zUp = h('button.ov-zb', { type: 'button', 'aria-label': '픽셀 오피스 크게', title: '픽셀 오피스 크기 — 크게', on: { click: () => zoom(1) } }, '+');
+  const zLbl = h('span.ov-zl', { 'aria-live': 'polite' });
+  const zoomG = h('div.ov-zoom', { role: 'group', 'aria-label': '픽셀 오피스 크기', title: '픽셀 오피스 크기', hidden: true }, zDn, zLbl, zUp);
   const note = h('p.ov-note', { hidden: true });
   const body = h('div.ov-body', { role: 'group', 'aria-label': '에이전트 지도' });
-  const root = h('section.ov', { 'aria-label': '오버뷰' }, h('header.ov-head', h('h2.t-title', '오버뷰'), turn, sum, seg), note, body);
+  const root = h('section.ov', { 'aria-label': '오버뷰' }, h('header.ov-head', h('h2.t-title', '오버뷰'), turn, sum, zoomG, seg), note, body);
   const tip = h('div.ov-tip', { role: 'tooltip', hidden: true });
 
   // ---------- helpers ----------
@@ -129,12 +139,13 @@ const Overview = (() => {
   function setFun(v) { S.fun = !!v; R.applySettings(); }
   function header() {
     const n = M.waiting.length;
-    text(turn, '나를 기다림 ' + n); turn.dataset.n = String(n); attr(turn, 'aria-disabled', n ? null : 'true');
+    text(turn, '안읽음 ' + n); turn.dataset.n = String(n); attr(turn, 'aria-disabled', n ? null : 'true');
     const c = {}; for (const a of M.agents.values()) if (!R.isHidden(a)) c[a.st] = (c[a.st] || 0) + 1;
     sum.replaceChildren(...['work', 'tool', 'child', 'idle', 'done'].filter(k => c[k]).map(k => h('span', C.glyph(k), ST[k] + ' ', h('b', String(c[k])))),
       h('span', '서버 ' + M.channels.filter(x => x.state === 'ok').length + '/' + M.channels.length + ' 연결'));
     segBtns.forEach(b => { const on_ = (b.dataset.v === 'office') === S.fun; attr(b, 'aria-checked', on_ ? 'true' : 'false'); b.tabIndex = on_ ? 0 : -1; });
     root.dataset.ovt = S.ovTheme;
+    text(zLbl, ZS[zi()][1]); zSync();
   }
   /* called by Room.renderEmpty (62) whenever no room is open; returns false while the model is not loaded (the loading card stays) */
   function render() {
@@ -146,15 +157,16 @@ const Overview = (() => {
     const want = S.fun && officeOk() ? 'office' : 'wire';
     note.hidden = !(S.fun && want === 'wire');
     if (!note.hidden) text(note, '픽셀 오피스 캐릭터 스프라이트를 불러오지 못해 배선 지도로 보여 줍니다');
+    zoomG.hidden = want !== 'office';
     if (mode !== want) { (mode === 'office' ? OvOffice : OvWire).unmount && (mode === 'office' ? OvOffice : OvWire).unmount(); body.replaceChildren(); mode = want; }
     if (!M.agents.size && !M.channels.length) { body.replaceChildren(h('p.ov-empty', '아직 서버가 없습니다 — 설정에서 서버를 추가하세요')); mode = null; return true; }
     (mode === 'office' ? OvOffice : OvWire).update(body, D, api);
-    if (mode === 'office') for (const n of D.planes) OvOffice.plane(n);
+    if (mode === 'office') { zSync(); for (const n of D.planes) OvOffice.plane(n); }
     else for (const n of D.planes) OvWire.flight(n);
     kick();
     return true;
   }
-  function relayout() { if (mode && root.isConnected && D) { (mode === 'office' ? OvOffice : OvWire).update(body, D, api, true); kick(); } }
+  function relayout() { if (mode && root.isConnected && D) { (mode === 'office' ? OvOffice : OvWire).update(body, D, api, true); if (mode === 'office') zSync(); kick(); } }
 
   // ---------- render loop: only while it can be seen ----------
   let raf = 0, last = -1e9, blurAt = 0;
@@ -174,7 +186,7 @@ const Overview = (() => {
   on('pause', kick); on('route', () => { hideTip(); setTimeout(kick, 0); });
   on('hidden', () => { if (root.isConnected && M.loaded && visible()) render(); });   // 정리 / 다시 보기 takes effect at once, not at the next poll
   let prevSig = '';
-  on('settings', () => { const sig = S.fun + S.ovTheme + dark() + reduced(); if (sig === prevSig) return; prevSig = sig; root.dataset.ovt = S.ovTheme; if (typeof OvOffice !== 'undefined') OvOffice.invalidate(); if (root.isConnected && M.loaded && visible()) render(); });
+  on('settings', () => { const sig = S.fun + S.ovTheme + S.ofcSize + dark() + reduced(); if (sig === prevSig) return; prevSig = sig; root.dataset.ovt = S.ovTheme; if (typeof OvOffice !== 'undefined') OvOffice.invalidate(); if (root.isConnected && M.loaded && visible()) render(); });
   new ResizeObserver(() => { if (visible()) relayout(); }).observe(pempty);
 
   const api = { label, bindAgent, reduced, dark, active, theme: () => S.ovTheme, kick };

@@ -148,7 +148,8 @@ const R = (() => {
     set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { } },
   };
   // settings (room.settings) — DIRECTION §6
-  const S = Object.assign({ theme: 'system', motion: 'system', notify: false, titleBadge: true, interval: 3, stallMin: 5, longMin: 30, talkOn: true, fun: false, ovTheme: 'claude' }, store.get('room.settings', {}));   // fun = 재미 모드 (픽셀 오피스), ovTheme = 오버뷰 팬 테마 (OVERVIEW-CONTRACT §3)
+  const S = Object.assign({ theme: 'system', motion: 'system', notify: false, titleBadge: true, interval: 3, stallMin: 5, longMin: 30, talkOn: true, fun: false, ovTheme: 'claude', ofcSize: 'm' }, store.get('room.settings', {}));   // fun = 재미 모드 (픽셀 오피스), ovTheme = 오버뷰 팬 테마 (OVERVIEW-CONTRACT §3)
+  if (!['s', 'm', 'l'].includes(S.ofcSize)) S.ofcSize = 'm';   // 픽셀 오피스 크기: 작게 / 보통 / 크게 (Office.layout)
   delete S.showKids;   // moved to U.showKids (CHAT-UX §3)
   // per-user UI state (room.ui) — CHAT-UX §3: chip filter, sort, open room, drawer, last-viewed marks, 하위 rows, 조용함 expand
   const U = Object.assign({ expanded: {}, chFilter: 'all', sort: 'recent', room: null, drawer: false, seen: {}, showKids: false, quietOpen: false, flowText: false }, store.get('room.ui', {}));
@@ -279,7 +280,7 @@ const R = (() => {
   const isHidden = a => !!(a && U.hidden && U.hidden[a.key]) && REST.has(a.st) && !isWaiting(a);
   const hideRooms = keys => { if (!U.hidden || typeof U.hidden !== 'object') U.hidden = {}; for (const k of keys) U.hidden[k] = Date.now(); save(); emit('hidden'); };
   const unhideAll = () => { U.hidden = {}; save(); emit('hidden'); };
-  // 나를 기다림 order: blockers first (oldest-waiting first inside a rank). A turn that simply ended with an answer is 'done' (collector), not waiting.
+  // 안읽음 order: blockers first (oldest-waiting first inside a rank). A turn that simply ended with an answer is 'done' (collector), not waiting.
   const waitT = a => a.lastAt != null ? a.lastAt : a.t0 != null ? a.t0 : 0;
   const wrank = a => a.st === 'user' ? 0 : 1;   // 0 asks me something (approval, question), 1 stalled/stopped/dead
   const waitCmp = (a, b) => (wrank(a) - wrank(b)) || (waitT(a) - waitT(b)) || (a.key < b.key ? -1 : 1);

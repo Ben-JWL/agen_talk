@@ -88,7 +88,7 @@ const C = (() => {
     const n = o && o.n > 0 ? o.n : 0, on = !!o && (o.red || n > 0);
     cls(el, 'red', !!(o && o.red)); cls(el, 'on', on);
     text(el, on ? String(Math.max(n, o.red ? 1 : 0)) : '');
-    attr(el, 'aria-label', on ? (o.red ? '나를 기다림, ' : '') + '새 활동 ' + Math.max(n, 1) + '개' : null);
+    attr(el, 'aria-label', on ? (o.red ? '안읽음, ' : '') + '새 활동 ' + Math.max(n, 1) + '개' : null);
   }
 
   // ---------- avatar: 36 px tile, tool shape, status glyph on a disc (the real status shape) ----------

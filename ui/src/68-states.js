@@ -25,14 +25,18 @@ window.States = (() => {
     const retry = () => { R.refresh(); again2.disabled = true; text(again2, '확인하는 중…'); setTimeout(() => { again2.disabled = false; text(again2, '지금 확인'); }, 2500); };
     const again2 = h('button.btn.primary', { type: 'button', on: { click: retry } }, '지금 확인');
     const fixBtn = h('button.btn.primary', { type: 'button', hidden: true, on: { click: () => AddServer.open({ ch }) } }, '이 서버에 키 등록하기');
-    const tunnel = h('span.hint'), sep1 = h('span.sep', '·'), bp = badperm();
+    const rekeyBtn = h('button.btn', { type: 'button', hidden: true, title: '키를 다시 등록해 다음부터 비밀번호 없이 연결합니다 (거절되면 원인을 찾아 고칩니다)', on: { click: () => AddServer.open({ ch, rekey: true }) } }, '키 로그인 설정');
+    // the hint is one or two short sentences; the raw ssh line sits behind 자세히 (the full text is under 로그 보기)
+    const raw = h('code.mono.raw', { hidden: true, id: 'bnraw-' + ch });
+    const more = h('button.btn.link.more', { type: 'button', 'aria-expanded': 'false', 'aria-controls': 'bnraw-' + ch, on: { click: () => { raw.hidden = !raw.hidden; attr(more, 'aria-expanded', raw.hidden ? 'false' : 'true'); text(more, raw.hidden ? '자세히' : '접기'); } } }, '자세히');
+    const tunnel = h('div.hint', h('span.ht'), ' ', more, raw), sep1 = h('span.sep', '·'), bp = badperm();
     const err = h('div.bn-err', { role: 'alert', hidden: true },
-      h('div.ttl', svgUse('g-dead', 'gl'), h('span.t')), h('div.sub'),
-      h('div.acts', tunnel, bp, sep1, logBtn, fixBtn, again2), log);
+      h('div.ttl', svgUse('g-dead', 'gl'), h('span.t')), h('div.sub'), tunnel,
+      h('div.acts', bp, sep1, fixBtn, rekeyBtn, logBtn, again2), log);
     const longer = h('span.meta', { hidden: true }, '오래 걸리면 허브 창의 로그와 channels.json의 주소를 확인하세요');
     const conn = h('div.bn-conn', { role: 'status', hidden: true }, h('span', '서버에 연결하는 중입니다…'), longer, h('div.indet', { 'aria-hidden': 'true' }));
     const el = h('div.st-banner', { data: { ch } }, conn, err);
-    el._p = { err, conn, log, tunnel, bp, sep1, longer, fixBtn, again2 };
+    el._p = { err, conn, log, logBtn, tunnel, raw, more, bp, sep1, longer, fixBtn, rekeyBtn, again2 };
     return el;
   }
   function banner(ch) {
@@ -49,13 +53,18 @@ window.States = (() => {
       const ssh = c.kind === 'ssh' && c.state === 'error';
       const bpm = ssh && R.sshKind(c.error) === 'badperm'; p.bp.hidden = !bpm;
       text(p.err.querySelector('.t'), bpm ? R.BADPERM.title : c.state === 'ok' ? '수집이 중단되었습니다' : ssh ? 'SSH 연결이 끊겼습니다' : '연결 오류');
-      text(p.err.querySelector('.sub'), (c.t ? '마지막 수집 ' + R.fmtHM(c.t) : '아직 받은 데이터가 없습니다') + ' · 허브가 자동으로 다시 연결합니다 (최대 1분 간격)');
-      const fx = R.sshFix(c); p.fixBtn.hidden = !fx; cls(p.again2, 'primary', !fx); cls(p.again2, 'link', fx);
-      text(p.fixBtn, c.auth === 'password-session' ? '비밀번호로 다시 연결 (또는 키 로그인 다시 설정)' : '이 서버에 키 등록하기');   // the dialog offers both
-      p.tunnel.hidden = !ssh; p.sep1.hidden = true;   // the hint is long: it wraps, a leading dot would dangle
-      if (ssh) text(p.tunnel, R.sshHint(c.error) + ' (' + R.sshErr(c.error) + ')');
+      const pws = ssh && c.auth === 'password-session';   // the server refused our key: this run connects with a password
+      const waitPw = pws && !c.session_pw;                 // ...and the hub has none yet: it will not retry on its own
+      text(p.err.querySelector('.sub'), (c.t ? '마지막 수집 ' + R.fmtHM(c.t) : '아직 받은 데이터가 없습니다') + (waitPw ? '' : ' · 허브가 자동으로 다시 연결합니다 (최대 1분 간격)'));
+      const fx = R.sshFix(c); p.fixBtn.hidden = !fx; p.rekeyBtn.hidden = !pws; cls(p.again2, 'primary', !fx); cls(p.again2, 'link', fx);
+      text(p.fixBtn, pws ? '비밀번호로 연결' : '이 서버에 키 등록하기');
+      p.tunnel.hidden = !ssh; p.sep1.hidden = true;
+      if (ssh) {
+        text(p.tunnel.querySelector('.ht'), pws ? '이 서버는 키 로그인이 안 돼서, 이번 실행에서는 비밀번호가 필요합니다.' : R.sshHint(c.error));
+        const line = R.sshErr(c.error); text(p.raw, line); p.more.hidden = !line; if (!line) p.raw.hidden = true;
+      }
       text(p.log, c.error || '허브가 오류 내용을 보내지 않았습니다');
-      if (!ssh && c.state === 'error' && p.log.hidden && !p.log.dataset.seen) { p.log.hidden = false; p.log.dataset.seen = '1'; attr(p.err.querySelector('[aria-controls]'), 'aria-expanded', 'true'); }   // non-ssh: the error text is the content, show it once
+      if (!ssh && c.state === 'error' && p.log.hidden && !p.log.dataset.seen) { p.log.hidden = false; p.log.dataset.seen = '1'; attr(p.logBtn, 'aria-expanded', 'true'); }   // non-ssh: the error text is the content, show it once
     }
     return el;
   }

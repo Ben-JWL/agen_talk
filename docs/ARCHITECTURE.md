@@ -46,7 +46,7 @@ or an ask cue such as 할까요 / 진행할까요 / should I / would you like in
 Approvals, questions to answer, usage limits, interrupts and orphaned turns stay `user`. An answered main session older than six hours
 reads as `idle`. Older collectors still send `user` + "답변 끝남"; the UI reads that as `done`.
 
-In the UI, "나를 기다림" counts waits the user has not read: opening a waiting room, or "모두 읽음", records the episode (its state,
+In the UI, "안읽음" counts waits the user has not read: opening a waiting room, or "모두 읽음", records the episode (its state,
 reason and start time) in `room.ui` and drops it from the badges, notifications and the office '!'; a new episode alerts again.
 "작업 완료" / "작업 완료 · 방 나가기" in a waiting room makes the view treat that episode as done (and hides the room for the latter);
 nothing is sent to the agent, and the mark clears itself when the session works or waits again.

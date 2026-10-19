@@ -32,6 +32,12 @@ html.dark .ov[data-ovt=muse] { --ov-canvas: #17171C; --ov-surface: #212128; --ov
 .ov .seg { background: var(--ov-surface-2); }
 .ov .seg button { color: var(--ov-ink-2); }
 .ov .seg button[aria-checked=true] { background: var(--ov-surface); color: var(--ov-ink); border-color: var(--ov-line); }
+.ov-zoom { display: inline-flex; align-items: center; gap: 2px; padding: 3px; border-radius: var(--r-btn); background: var(--ov-surface-2); }
+.ov-zoom[hidden] { display: none; }
+.ov-zb { width: 26px; height: 26px; border: 1px solid transparent; border-radius: 6px; background: none; color: var(--ov-ink); font-size: 15px; line-height: 1; cursor: pointer; }
+.ov-zb:hover:not(:disabled) { background: var(--ov-surface); border-color: var(--ov-line); }
+.ov-zb:disabled { opacity: .4; cursor: default; }
+.ov-zl { min-width: 30px; text-align: center; font-size: 12px; color: var(--ov-ink-2); }
 .ov-note { flex: none; margin: 8px 18px 0; font-size: 12.5px; color: var(--ov-ink-2); }
 .ov-body { position: relative; flex: 1; min-height: 0; overflow: auto; }
 .ov-empty { padding: 48px 24px; text-align: center; color: var(--ov-ink-2); }
@@ -94,6 +100,11 @@ button.ovn.kid .t { font-size: 12.5px; line-height: 17px; font-weight: 500; }
 .ovo .hit.kid .np { font-size: 10px; padding: 0 5px; }
 .ovo .slab { position: absolute; display: inline-flex; align-items: center; gap: 6px; padding: 1px 9px; border-radius: var(--ov-r-chip); background: color-mix(in srgb, var(--ov-surface) 92%, transparent); color: var(--ov-ink); font: var(--ov-display-weight) 12px/18px var(--ov-font-display); letter-spacing: var(--ov-display-track); box-shadow: 0 1px 3px rgba(0,0,0,.25); pointer-events: none; white-space: nowrap; }
 .ovo .slab small { font: 400 11px var(--font, system-ui); color: var(--ov-ink-2); }
+.ovo.tiny .slab { padding: 0 6px; font-size: 10px; line-height: 14px; gap: 4px; }
+.ovo.tiny .slab small { font-size: 9px; }
+.ovo.tiny .np { font-size: 9.5px; padding: 0 5px 0 4px; gap: 3px; }
+.ovo.tiny .np i { width: 5px; height: 5px; }
+.ovo.tiny .hit.kid .np { font-size: 9px; padding: 0 3px; }
 .ovo-vig { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(ellipse 85% 80% at 50% 45%, transparent 55%, rgba(20,12,30,.22) 100%); }
 html.dark .ovo-vig { background: radial-gradient(ellipse 85% 80% at 50% 45%, transparent 50%, rgba(0,0,0,.42) 100%); }
 

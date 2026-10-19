@@ -2510,7 +2510,7 @@ ST = {"work": ("●", "32", "작업 중"), "tool": ("●", "32", "도구 실행 
       "user": ("○", "33;1", "입력 대기"), "stall": ("◐", "31;1", "응답 없음"), "idle": ("·", "2", "쉬는 중"),
       "done": ("✓", "2", "완료"), "stopped": ("✗", "2", "중단됨"), "dead": ("✗", "31", "끊김")}
 TOOL = {"codex": "34", "claude": "38;5;208", "agy": "35"}
-COLS = [("작업 중", ("work", "tool")), ("대기", ("child",)), ("나를 기다림", ATTENTION), ("끝남", ("done", "stopped", "dead"))]
+COLS = [("작업 중", ("work", "tool")), ("대기", ("child",)), ("확인 필요", ATTENTION), ("끝남", ("done", "stopped", "dead"))]
 
 
 def paint(s, code):
@@ -3904,7 +3904,7 @@ def pm_channel(ch):
     try:
         pw = SESSION_PW.get((user, host, port)) if ch.get("auth") == "password-session" else None
         if ch.get("auth") == "password-session" and pw is None:   # before connecting: a handshake per backoff would only fill the server's sshd log
-            raise SrvErr("wrong_password", "Permission denied: 이 서버는 이번 실행에서 비밀번호로 연결해야 합니다 — 비밀번호로 다시 연결하거나, 설정 › 채널의 '키 로그인 다시 설정'으로 비밀번호 없이 접속되게 하세요")
+            raise SrvErr("wrong_password", "Permission denied: 키 로그인이 거절된 서버라 이번 실행에서는 비밀번호가 필요합니다 (비밀번호로 연결 또는 키 로그인 설정)")
         t = pm_open(host, port, None)   # channels never prompt: unknown / changed keys are errors, fixed through the dialog
         paramiko = pm_mod()
         if ch.get("auth") == "password-session":

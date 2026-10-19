@@ -3,7 +3,7 @@
 (() => {
   const { h, text, attr, cls, keyed, M, U, ST, on } = R;
   const LANE_IDS = ['wait', 'work', 'child', 'done'];
-  const LANES = [['wait', '나를 기다림'], ['work', '작업 중'], ['child', '하위 대기'], ['done', '끝남']];
+  const LANES = [['wait', '안읽음'], ['work', '작업 중'], ['child', '하위 대기'], ['done', '끝남']];
   const FAN = 5;                                   // a parent with >= FAN kids collapses to one summary card
   const cards = new Map(), sums = new Map(), ord = new Map();   // key -> element ; key -> {b, t} frozen sort time
   let sel, lanes = {}, board, scope;

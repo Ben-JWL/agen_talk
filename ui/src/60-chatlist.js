@@ -44,7 +44,7 @@ const ChatList = (() => {
     }
     pending = hold ? moved : 0;
     const pool = all.filter(a => inFilter(a) && listed(a) && match(a));
-    // 나를 기다림 = waits for me and not read yet (R.needsMe); a read wait sits with the quiet rooms, newest first, marked 읽음
+    // 안읽음 = waits for me and not read yet (R.needsMe); a read wait sits with the quiet rooms, newest first, marked 읽음
     const wait = pool.filter(a => !gk.has(a.key) && R.needsMe(a)).sort(R.waitCmp), rest = pool.filter(a => gk.has(a.key) || !R.needsMe(a)), inRest = new Set(rest.map(a => a.key));
     const cmp = cmpBy(U.sort), roots = rest.filter(a => !(a.parent && inRest.has(a.parent) && !R.needsMe(M.agents.get(a.parent)))).sort(cmp), seq = [];
     const sectionOf = a => gk.has(a.key) || !R.LIVE.has(a.st) ? 'quiet' : 'work';
@@ -58,7 +58,7 @@ const ChatList = (() => {
     if (it.room) { const el = C.roomRow(it.room); el.id = 'rm-' + (++uid); el.addEventListener('click', () => { fkey = el.dataset.key; R.openRoom(el._a.ch, el._a.id); }); return el; }
     if (it.sec) return h('div.sec', { role: 'presentation', class: 's-' + it.sec }, h('span.stt'), h('span.sn'),
       it.sec === 'wait' ? h('button.btn.link.ackall', { type: 'button', title: '지금 기다리는 방을 모두 읽음으로 표시합니다 — 새로 기다리기 시작하면 다시 알립니다', on: { click: e => { e.stopPropagation(); R.ack(waitKeys); } } }, '모두 읽음') : null);
-    if (it.none) return h('div.secnone', { role: 'presentation' }, C.glyph('done'), h('span', '기다리는 것 없음'));
+    if (it.none) return h('div.secnone', { role: 'presentation' }, C.glyph('done'), h('span', '안읽은 방 없음'));
     return h('div');
   }
   let uid = 0;
@@ -115,8 +115,8 @@ const ChatList = (() => {
   function render() {
     const P = plan(), items = []; moreN = 0;
     const wk = P.seq.filter(x => x.sec === 'work'), qt = P.seq.filter(x => x.sec === 'quiet');
-    waitKeys = P.wait.map(a => a.key);   // 모두 읽음: what the 나를 기다림 section shows (current filter + search)
-    if (P.wait.length) { items.push({ k: 'sec:wait', sec: 'wait', title: '나를 기다림', n: P.wait.length }); for (const a of P.wait) items.push({ k: a.key, room: a }); }
+    waitKeys = P.wait.map(a => a.key);   // 모두 읽음: what the 안읽음 section shows (current filter + search)
+    if (P.wait.length) { items.push({ k: 'sec:wait', sec: 'wait', title: '안읽음', n: P.wait.length }); for (const a of P.wait) items.push({ k: a.key, room: a }); }
     else if (P.total) items.push({ k: 'none:wait', none: true });
     if (U.sort === 'long') { for (const x of P.seq) items.push({ k: x.a.key, room: x.a, ghost: P.gk.has(x.a.key), gat: (ghosts.get(x.a.key) || {}).at }); }
     else {
@@ -223,7 +223,7 @@ const ChatList = (() => {
   }
   for (let i = 1; i <= 9; i++) R.key(String(i), () => { const c = i === 1 ? { id: 'all' } : M.channels[i - 2]; if (c) { if (R.params().view === 'chat') setFilter(c.id); else R.openChannel(c.id); } }, i === 1 ? '전체' : '채널 ' + (i - 1));
   R.key('/', () => { if (R.params().view !== 'chat') R.go('chat'); search.focus(); search.select(); }, '검색');
-  R.key('j', () => step(1), '다음 방'); R.key('k', () => step(-1), '이전 방'); R.key('.', focusFirstWaiting, '나를 기다림으로');
+  R.key('j', () => step(1), '다음 방'); R.key('k', () => step(-1), '이전 방'); R.key('.', focusFirstWaiting, '첫 안읽은 방으로');
   // Esc, list part (CHAT-UX §7 order: palette → sort menu → search text → drawer → pane). The room handler calls this first.
   function esc() {
     if (closeMenu()) return true;

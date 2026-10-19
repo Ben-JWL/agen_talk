@@ -258,7 +258,7 @@ const Room = (() => {
     const cnt = k => [...M.agents.values()].filter(x => x.st === k).length;
     const live = [...M.agents.values()].filter(x => R.LIVE.has(x.st)).length, ok = M.channels.filter(c => c.state === 'ok').length;
     if (w) { const cw = k => M.waiting.filter(x => x.st === k).length; C.setGlyph(eGl, 'user'); text(eT, [['입력 대기', cw('user')], ['응답 없음', cw('stall')], ['중단됨', cw('stopped')], ['끊김', cw('dead')]].filter(x => x[1]).map(x => x[0] + ' ' + x[1]).join(' · ')); }   // same set (R.needsMe) as the rail badge
-    else { C.setGlyph(eGl, 'done'); text(eT, '기다리는 것 없음'); }
+    else { C.setGlyph(eGl, 'done'); text(eT, '안읽은 방 없음'); }
     text(eS, '에이전트 ' + live + '개 작업 중 · 채널 ' + ok + '/' + M.channels.length + ' 연결');
   }
 

@@ -152,6 +152,24 @@
         A(lab && !lab.querySelector('b'), 'project names on the map are text, not markup');
         const card = ov.querySelector('[data-agent="s01:cl-data"]');
         A(/데이터셋 정리/.test(card.getAttribute('aria-label')) && /프로젝트 data-pipeline/.test(card.getAttribute('aria-label')), 'agent card has an aria label with project');
+        // list-pane splitter: clamp, keyboard, reset, persisted in room.ui; the channel error card fits the narrowest list
+        {
+          const sp = R.listSplit, list = document.querySelector('#list'), lw = () => Math.round(list.getBoundingClientRect().width), w0 = lw();
+          A(sp && sp.el.getAttribute('role') === 'separator' && !sp.el.hidden && +sp.el.getAttribute('aria-valuenow') === w0, 'list splitter is a separator showing the current width');
+          sp.set(5000); await tick(); A(R.U.listW === sp.max() && lw() === sp.max() && sp.max() <= 560, 'splitter clamps to the max (' + lw() + ')');
+          sp.set(10); await tick(); A(R.U.listW === 260 && lw() === 260 && +sp.el.getAttribute('aria-valuenow') === 260, 'splitter clamps to 260');
+          sp.el.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })); await tick(); A(lw() === 276 && R.U.listW === 276, '→ widens the list by 16 px');
+          await new Promise(r => setTimeout(r, 250)); A((JSON.parse(localStorage.getItem('room.ui') || '{}').listW) === 276, 'the list width persists in room.ui');
+          sp.set(260); await tick();
+          const card = document.querySelector('#lnote .bn-err:not([hidden])');
+          A(card && card.querySelector('.t').textContent === 'SSH 연결이 끊겼습니다', 'the password-session channel shows its error card');
+          const btns = [...card.querySelectorAll('.acts .btn')].filter(b => b.offsetParent !== null), cr = card.getBoundingClientRect();
+          A(card.scrollWidth <= card.clientWidth && btns.every(b => { const r = b.getBoundingClientRect(); return r.left >= cr.left - 0.5 && r.right <= cr.right + 0.5; }), 'the error card fits a 260 px list (' + card.scrollWidth + '/' + card.clientWidth + ')');
+          A(btns.map(b => b.textContent).join('|') === '비밀번호로 연결|키 로그인 설정|로그 보기|지금 확인' && card.querySelector('.hint .ht').textContent.length <= 60 && card.querySelector('.hint .raw').hidden && !card.querySelector('.hint .more').hidden, 'short copy; raw ssh line behind 자세히 (' + btns.map(b => b.textContent).join('|') + ')');
+          card.querySelector('.hint .more').click(); A(!card.querySelector('.hint .raw').hidden && /Permission denied/.test(card.querySelector('.hint .raw').textContent) && card.scrollWidth <= card.clientWidth, '자세히 shows the raw line, still wrapped');
+          card.querySelector('.hint .more').click();
+          sp.el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Home', bubbles: true })); await tick(); A(R.U.listW == null && lw() === w0, 'Home resets the list width');
+        }
         // mode toggle: header radio -> 재미 모드 (office if sprites exist, else the map with a note); back
         ov.querySelector('.ov-seg [data-v=office]').click(); await tick();
         A(S.fun === true && (typeof OvOffice !== 'undefined' && OvOffice.available() ? Overview.mode === 'office' && ov.querySelector('.ovo canvas') : Overview.mode === 'wire' && !ov.querySelector('.ov-note').hidden), 'mode toggle switches to 픽셀 오피스 (or explains the fallback)');
@@ -168,6 +186,17 @@
           A(ids.every(id => OvOffice.archOf(id) === OvOffice.archOf(id)) && new Set(ids.map(OvOffice.archOf)).size >= 6 && new Set(ids.map(id => OvOffice.deskOf(id, 'lead'))).size >= 8, 'archetype / desk pickers are deterministic and spread');
           const key = x => JSON.stringify([x.rooms.filter(r => r.arch).map(r => r.id + '=' + r.arch), x.desks.map(d => d.id + '=' + d.v)]);
           OvOffice.relayout(); A(key(OvOffice.scene()) === key(sc), 'a relayout assigns the same archetypes and desks');   // fillers follow the width, which a relayout may change (scrollbar)
+          // 픽셀 오피스 크기: integer steps; 보통 is half the old dot size at DPR 1.5; overlays follow the scale
+          const sf = OvOffice.scaleFor;
+          A(sf(1797, 1.5, 's') === 2 && sf(1797, 1.5, 'm') === 2 && sf(1797, 1.5, 'l') === 4 && sf(1282, 1, 's') === 1 && sf(1282, 1, 'm') === 2 && sf(1282, 1, 'l') === 3 && sf(1198, 1, 'm') === 2 && sf(2564, 2, 'm') === 3, 'office size steps pick integer scales');
+          const z0 = S.ofcSize, st = OvOffice.steps(), zb = ov.querySelectorAll('.ov-zoom .ov-zb');
+          A(!ov.querySelector('.ov-zoom').hidden && zb.length === 2 && st.l > st.m && st.s <= st.m, 'size control shown with the office; 크게 > 보통 >= 작게');
+          const fit = () => { const cv = ov.querySelector('.ovo canvas'), k = OvOffice.scale() / (window.devicePixelRatio || 1); return Math.abs(parseFloat(cv.style.width) - cv.width / (window.devicePixelRatio || 1)) < 0.5 && ov.querySelector('.ovo').style.width === cv.style.width && [...ov.querySelectorAll('.ovo .hit')].every(b => Math.abs(parseFloat(b.style.width) - (b.classList.contains('kid') ? OvOffice.geo().IW : OvOffice.geo().SW) * k) < 0.01); };
+          S.ofcSize = 'm'; R.applySettings(); await tick(); const sm = OvOffice.scale(); A(sm === st.m && fit(), 'office 보통 draws at its step');
+          zb[1].click(); await tick(); A(S.ofcSize === 'l' && OvOffice.scale() === st.l && OvOffice.scale() > sm && fit() && zb[1].disabled, '+ grows the office (S ' + sm + ' -> ' + OvOffice.scale() + '), overlays follow');
+          await new Promise(r => setTimeout(r, 250)); A(JSON.parse(localStorage.getItem('room.settings') || '{}').ofcSize === 'l', 'office size persists');
+          zb[0].click(); await tick(); A(OvOffice.scale() < st.l && fit(), '− shrinks it again');
+          S.ofcSize = z0; R.applySettings(); await tick();
         }
         ov.querySelector('.ov-seg [data-v=wire]').click(); await tick();
         A(S.fun === false && Overview.mode === 'wire', 'mode toggle back to 배선 지도');
@@ -207,7 +236,13 @@
         A(byA.st === 'done' && !R.isWaiting(byA) && !R.M.waiting.includes(byA) && R.needsMe(qA) && R.M.waiting.includes(qA), 'an answered session is not counted; a question is');
         A(R.normalize('old', { id: 'o', st: 'user', why: '답변 끝남 · 입력 기다림' }, null, 0, new Map(), 0).st === 'done', "an older collector's 답변 끝남 is read as done");
         const n0 = R.M.counts.waiting;
-        A(n0 >= 3 && R.needsMe(ag(WK)) && rowEl(WK).closest('#rooms') && document.querySelector('#rooms .sec.s-wait .ackall'), '나를 기다림 lists the approval; 모두 읽음 is offered');
+        A(n0 >= 3 && R.needsMe(ag(WK)) && rowEl(WK).closest('#rooms') && document.querySelector('#rooms .sec.s-wait .ackall'), '안읽음 lists the approval; 모두 읽음 is offered');
+        // 안읽음 is red while N > 0 (section title, overview chip, row badges), calm at 0
+        const probe = (host, v) => { const x = document.createElement('i'); x.style.color = 'var(' + v + ')'; host.append(x); const c = getComputedStyle(x).color; x.remove(); return c; };
+        const turn = ov.querySelector('.ov-turn'), secT = document.querySelector('#rooms .sec.s-wait .stt');
+        A(turn.textContent === '안읽음 ' + n0 && getComputedStyle(turn).backgroundColor === probe(ov, '--ov-signal'), 'overview chip "안읽음 N" uses the alert red');
+        A(secT && /^안읽음/.test(secT.textContent) && getComputedStyle(secT).color === probe(secT.parentNode, '--signal-text'), 'list section 안읽음 is red');
+        A(rowEl(WK).querySelector('.bdg.red, .badge.red'), 'an unread row carries a red count bubble');
         S.fun = true; R.applySettings(); await tick();
         const office = Overview.mode === 'office';
         if (office) A(OvOffice.cue(WK) === 'bang', "pixel office shows the red '!' for an unread wait");
@@ -217,7 +252,7 @@
         R.openRoom('s01', 'cl-wait'); await wait(() => R.isAcked(ag(WK)));
         A(R.M.counts.waiting === n0 - 1 && !R.M.waiting.some(x => x.key === WK) && R.isWaiting(ag(WK)), 'opening a waiting room acks it: out of the count (still waiting underneath)');
         A(!S.titleBadge || document.title.startsWith('(' + (n0 - 1) + ')'), 'title badge follows the read count');
-        A(!rowEl(WK).classList.contains('waiting') && rowEl(WK).querySelector('.ackm').textContent === '승인 대기 · 읽음' && !rowEl(WK).querySelector('.ackm').hidden, 'a read approval leaves 나를 기다림 and keeps a 승인 대기 · 읽음 hint');
+        A(!rowEl(WK).classList.contains('waiting') && rowEl(WK).querySelector('.ackm').textContent === '승인 대기 · 읽음' && !rowEl(WK).querySelector('.ackm').hidden, 'a read approval leaves 안읽음 and keeps a 승인 대기 · 읽음 hint');
         A(!R.canHide(ag(WK)), 'a read approval is still not hideable');
         R.closeRoom(); await wait(() => !document.querySelector('#pempty').hidden);
         A(ov.querySelector('[data-agent="' + WK + '"]').dataset.w === '' && ov.querySelector('[data-agent="' + WK + '"]').dataset.ack === '1', 'wiring map: a read wait is calm');
@@ -226,9 +261,10 @@
         const fxW = window.__fx.find('cl-wait'), why0 = fxW.why; fxW.why = '권한 승인 대기: Bash';
         R.refresh(); await wait(() => ag(WK).why === fxW.why);
         A(R.needsMe(ag(WK)) && !U.ack[WK], 'a new waiting episode alerts again');
-        // 모두 읽음: acks every room in 나를 기다림 (current filter)
+        // 모두 읽음: acks every room in 안읽음 (current filter)
         document.querySelector('#rooms .sec.s-wait .ackall').click(); await tick();
-        A(R.M.counts.waiting === 0 && !document.querySelector('#rooms .sec.s-wait') && document.querySelector('#rooms .secnone'), '모두 읽음 clears 나를 기다림');
+        A(R.M.counts.waiting === 0 && !document.querySelector('#rooms .sec.s-wait') && document.querySelector('#rooms .secnone'), '모두 읽음 clears 안읽음');
+        A(document.querySelector('#rooms .secnone').textContent === '안읽은 방 없음' && turn.textContent === '안읽음 0' && getComputedStyle(turn).backgroundColor !== probe(ov, '--ov-signal'), 'at 0 the chip is calm and the section says 안읽은 방 없음');
         // 작업 완료: the episode is done in the view (hideable, no alert); 되돌리기 puts it back; the room stays
         R.openRoom('s01', 'cl-data'); await wait(() => Room.key === 's01:cl-data' && !document.querySelector('#proom').hidden && !document.querySelector('#proom .donebtn').hidden);
         const dBtn = document.querySelector('#proom .donebtn'), lBtn = document.querySelector('#proom .leavebtn');

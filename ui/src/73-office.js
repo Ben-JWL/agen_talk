@@ -520,6 +520,12 @@ function deskOf(id, kind) {
 }
 const line = (g, x0, y0, x1, y1, c) => { const n = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0), 1); for (let i = 0; i <= n; i++) PX(g, Math.round(x0 + (x1 - x0) * i / n), Math.round(y0 + (y1 - y0) * i / n), c); };
 const disc = (g, cx, cy, r, c0, c1, c2) => { for (let y = -r; y <= r; y++) for (let x = -r; x <= r; x++) { if (x * x + y * y > r * r + r * .6) continue; const s = x + y; PX(g, cx + x, cy + y, s < -r * .7 ? c2 : s > r * .6 ? c0 : c1); } };
+/* 픽셀 오피스 크기: integer device px per art px (crisp). 보통 aims at a ~800 art-px-wide world (half the old default's dot size
+   at DPR 1.5); 크게 is at least one step up (about the old default), 작게 one step down, but never below 1 CSS px per art px (the 5 px sign font and the plates stop being readable) */
+const officeScale = (devW, dpr, size) => {
+  const minS = Math.max(1, Math.ceil(dpr - 0.01)), m = clamp(Math.round(devW / 800), Math.max(minS, Math.ceil(dpr * 1.25 - 0.01)), 8);   // 보통 keeps >= 1.25 CSS px per art px
+  return size === 'l' ? clamp(Math.max(Math.round(devW / 460), m + 1), 2, 9) : size === 's' ? clamp(Math.min(Math.round(devW / 1100), m - 1), minS, 8) : m;
+};
 const Office = {
   S: 3, WD: 480, HD: 400, k: 2.4, stations: [], walks: [], rooms: [], stories: [], planes: [], notes: new Map(), ghosts: new Map(), lastT: -1e9,
   setTheme() { Chars.cache.clear(); this.ghosts.clear(); this.bubbleCache.clear(); this.walkCache = null; this.catCache = null; this.stat = null; this.lastT = -1e9; },
@@ -547,7 +553,7 @@ const Office = {
   /* ---------- layout: storeys of compact rooms; spare width becomes a lounge, never an empty stretched room ---------- */
   layout() {
     const box = this.host, dpr = window.devicePixelRatio || 1, cssW = Math.max(320, box.clientWidth - 18), devW = Math.floor(cssW * dpr);
-    const S = clamp(Math.floor(devW / 420), 2, 9);
+    const S = officeScale(devW, dpr, R.S.ofcSize); this.devW = devW; this.dpr = dpr;
     const WD = Math.max(200, Math.floor(devW / S));
     this.S = S; this.WD = WD; this.k = S / dpr;
     const G = this.G = this.geo();
@@ -1751,10 +1757,10 @@ const Office = {
   /* ---------- DOM overlay: focusable desks (buttons), nameplates, storey labels ---------- */
   buildOverlays() {
     const box = this.hits; box.replaceChildren(); this.hit = new Map();
-    const k = this.k, G = this.G;
+    const k = this.k, G = this.G, tiny = k < 1.3; this.world.classList.toggle('tiny', tiny);   // 작게 at 1 CSS px per art px: smaller storey labels and plates
     for (const st of this.stories) {
       const sv = st.sv;
-      box.append(h('div.slab', { style: 'left:' + ((this.B.x0 + 3) * k) + 'px;top:' + ((st.y + this.B.SLAB / 2) * k - 10) + 'px', 'aria-hidden': 'true' },
+      box.append(h('div.slab', { style: 'left:' + ((this.B.x0 + 3) * k) + 'px;top:' + ((st.y + this.B.SLAB / 2) * k - (tiny ? 7 : 10)) + 'px', 'aria-hidden': 'true' },
         h('span', sv.name), h('small', (sv.kind === 'local' ? '내 PC' : 'SSH') + ' · ' + (sv.state === 'ok' ? '연결됨' : sv.state === 'connecting' ? '연결 중' : '끊김'))));
     }
     for (const room of this.rooms) if (room.htmlSign) {
@@ -1783,7 +1789,7 @@ const Office = {
 };
 
   /* ---------- module API for Overview ---------- */
-  const sigOf = (D, w) => w + '#' + D.projects.map(p => p.id + ':' + D.roots.filter(r => r.project === p.id).map(r => r.key + '(' + r.kids.slice(0, 4).map(k => k.key).join(',') + ')').join(',')).join('|') + '#' + D.servers.map(s => s.id + s.state).join(',');
+  const sigOf = (D, w) => w + R.S.ofcSize + '#' + D.projects.map(p => p.id + ':' + D.roots.filter(r => r.project === p.id).map(r => r.key + '(' + r.kids.slice(0, 4).map(k => k.key).join(',') + ')').join(',')).join('|') + '#' + D.servers.map(s => s.id + s.state).join(',');
   function mount(host) {
     Office.host = host;
     Office.world = h('div.ovo'); Office.cv = h('canvas', { 'aria-hidden': 'true' }); Office.hits = h('div.hits', { role: 'group', 'aria-label': '책상' });
@@ -1802,6 +1808,8 @@ const Office = {
     scene: () => ({ rooms: Office.rooms.map(r => r.filler ? { si: r.si, filler: r.kind, spots: (r.spots || []).length } : { si: r.si, id: r.p.id, arch: r.arch }), desks: Office.stations.map(s2 => ({ id: s2.n.id, kind: s2.kind, v: s2.dv.k, scr: s2.o.scr.join(',') })) }),
     archOf: id => archOf(id), fillKind: (seed, w) => fillKind(seed, w, Object.keys(FILL_MIN), []), deskOf: (id, kind) => deskOf(id, kind).k, archs: () => ARCHS.slice(),
     relayout() { if (Office.host) Office.layout(); },            // dev hook (?walk=1 in the talkfx page): start an idle walk now, long stay
+    scale: () => Office.S, scaleFor: officeScale, geo: () => Office.G,   // selftest hooks: the current device px per art px, the pure picker, desk geometry
+    steps: () => Office.devW ? Object.fromEntries(['s', 'm', 'l'].map(z => [z, officeScale(Office.devW, Office.dpr, z)])) : null,   // what each size step draws at on this pane (작게 can equal 보통 on a high-DPI screen)
     /* selftest hook: make every agent due for a walk, run one scheduling step (reduced or not); returns the walkers started */
     walkTest(reduce) { if (!Office.stations.length) return -1; for (const s2 of Office.stations) s2.nw = 0; Office.lastWalk = -1e9; Office.walkTick(performance.now(), !!reduce); const n = Office.walks.length; for (const w of Office.walks) w.s2.away = null; Office.walks = []; return n; },
     update(host, D, api, force) {

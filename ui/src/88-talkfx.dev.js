@@ -78,7 +78,7 @@
   D[1].project = PJ('infra-scripts', 'ops/cron', 'github.com/example/infra-scripts', '~/infra');
   const ROOTS = { s01: [P, MM, BY, WA, CD, CN, ...D, AG, AG2, B], pc: [WN], cloud: [CL] };
   const chans = () => [{ id: 's01', name: 'gpu-01', kind: 'ssh', state: 'ok', error: null, t: Date.now() / 1000, ssh: 'gpu.example.com', ssh_args: [] }, { id: 'pc', name: '내 PC', kind: 'local', state: 'ok', error: null, t: Date.now() / 1000 },
-    { id: 'cloud', name: 'cloud-a', kind: 'ssh', state: 'error', error: 'ssh: connect to host cloud.example.com port 22: Connection timed out', t: Date.now() / 1000 - 120, ssh: 'cloud.example.com', ssh_args: [] }];
+    { id: 'cloud', name: 'cloud-a', kind: 'ssh', state: 'error', error: 'Permission denied: 키 로그인이 거절된 서버라 이번 실행에서는 비밀번호가 필요합니다 (비밀번호로 연결 또는 키 로그인 설정)', t: Date.now() / 1000 - 120, ssh: 'cloud.example.com', ssh_args: [], auth: 'password-session', session_pw: false }];
   const aged = (list, dt) => list.map(n => ({ ...n, age: n.age == null ? null : n.age + dt, since: n.since == null ? null : n.since + dt, kids: aged(n.kids, dt) }));
   const find = (id, list = Object.values(ROOTS).flat()) => { for (const n of list) { if (n.id === id) return n; const r = find(id, n.kids); if (r) return r; } return null; };
   // ?walk=1 (screenshots): the pixel office starts an idle walk as soon as an idle agent is on screen, with a long stay

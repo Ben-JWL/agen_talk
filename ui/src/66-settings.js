@@ -75,7 +75,7 @@
     if (bpm) { text(bx.querySelector('.bpb'), R.sshHint(c.error)); bx.querySelector('.bperm').hidden = bk !== 'badperm'; }   // the copy-paste fix only fits %USERPROFILE%\.ssh\config
     const fx = R.sshFix(c), rb = el.querySelector('.retry');
     const pws = c.kind === 'ssh' && c.auth === 'password-session', fb = el.querySelector('.fix');   // password-session: the key was refused once; offer the key again
-    fb.hidden = !fx; text(fb, pws ? '비밀번호로 다시 연결' : '이 서버에 키 등록하기'); rb.hidden = c.state !== 'error'; cls(rb, 'link', fx); cls(rb, 'sm', !fx);
+    fb.hidden = !fx; text(fb, pws ? '비밀번호로 연결' : '이 서버에 키 등록하기'); rb.hidden = c.state !== 'error'; cls(rb, 'link', fx); cls(rb, 'sm', !fx);
     el.querySelector('.rekey').hidden = !pws;
   }
 
@@ -96,6 +96,7 @@
       const imp = Importer.make({ block: false }); this.imp = imp;
       const th = radios('테마', [['system', '시스템'], ['light', '라이트'], ['dark', '다크']], () => S.theme, v => S.theme = v);
       const mo = radios('움직임', [['system', '시스템'], ['reduce', '줄이기']], () => S.motion === 'reduce' ? 'reduce' : 'system', v => S.motion = v);
+      const oz = radios('픽셀 오피스 크기', [['s', '작게'], ['m', '보통'], ['l', '크게']], () => S.ofcSize, v => S.ofcSize = v);
       const ot = radios('오버뷰 테마', Overview.themes, () => S.ovTheme, v => S.ovTheme = v);   // fan themes style the overview pane only (OVERVIEW-CONTRACT §3)
       const chList = h('ul.clist'), keyList = h('ul.klist'), preList = h('ul.plist'); this.preList = preList;
       chList.append(this.noSsh = h('li.meta', { hidden: true }, '아직 서버가 없습니다 — 서버 추가로 첫 서버를 등록하세요'));   // unkeyed: R.keyed leaves it alone
@@ -106,11 +107,12 @@
           row('theme', '테마', th.g, '시스템을 고르면 Windows의 라이트/다크 설정을 따릅니다'),
           row('motion', '움직임', mo.g, '입력 중 점의 움직임과 패널·서랍 전환 애니메이션을 끕니다'),
           row('fun', '재미 모드 (픽셀 오피스)', toggle('fun', '재미 모드 (픽셀 오피스)', 'fun'), '방을 열지 않았을 때 오른쪽 칸을 배선 지도 대신 픽셀 사무실로 보여 줍니다'),
+          row('ofcsize', '픽셀 오피스 크기', oz.g, '픽셀 사무실의 도트 크기입니다 (오버뷰 위쪽 − / + 와 같음). 고해상도 화면에서는 작게와 보통이 같게 보일 수 있습니다'),
           row('ovtheme', '오버뷰 테마', ot.g, '오버뷰 칸에만 적용됩니다 — 라이트/다크는 위의 테마를 따릅니다. 팬 테마이며 로고·상표는 쓰지 않습니다')),
         sec('notify', '알림',
           row('notify', 'Windows 알림', toggle('notify', 'Windows 알림', 'notify', setNotify), '입력 대기·응답 없음·중단됨·끊김으로 바뀔 때, 긴 프로세스가 끝날 때'),
           denied,
-          row('badge', '창 제목 배지', toggle('badge', '창 제목 배지', 'titleBadge'), '탭 제목 앞에 나를 기다리는 에이전트 수를 (3)처럼 붙입니다'),
+          row('badge', '창 제목 배지', toggle('badge', '창 제목 배지', 'titleBadge'), '탭 제목 앞에 안읽은 방 수를 (3)처럼 붙입니다'),
           row('talk', '톡 보내기 허용', toggle('talk', '톡 보내기 허용', 'talkOn', setTalk), '끄면 모든 방에서 보내기 칸이 사라집니다 — 지시 흐름 보기는 그대로입니다')),
         sec('poll', '갱신',
           row('interval', '갱신 주기', select('interval', '갱신 주기', [2, 3, 5, 10], '초', 'interval'), '바꾸면 바로 한 번 새로 고치고 이 주기로 다시 수집합니다'),

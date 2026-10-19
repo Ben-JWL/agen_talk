@@ -14,10 +14,18 @@
 .bn-err .ttl { display: flex; align-items: center; gap: 8px; font-weight: 600; color: var(--ink); }
 .bn-err .ttl .gl { color: var(--ink); flex: none; }
 .bn-err .sub { color: var(--ink-2); font-size: 12.5px; line-height: 18px; }
-.bn-err .acts { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin-top: 6px; color: var(--ink-2); }
+/* every line wraps and every button fits the list pane at its narrowest (260 px): no nowrap label may push the card wider */
+.bn-err, .bn-err > * { min-width: 0; overflow-wrap: anywhere; }
+.bn-err .ttl > span { min-width: 0; }
+.bn-err .hint { color: var(--ink-2); font-size: 12.5px; line-height: 18px; }
+.bn-err .hint[hidden], .bn-err .hint .raw[hidden], .bn-err .acts > [hidden] { display: none; }
+.bn-err .hint .more { display: inline; height: auto; padding: 0; font-size: 12px; line-height: 18px; color: var(--ink-2); text-decoration: underline; text-underline-offset: 2px; }
+.bn-err .hint .raw { display: block; margin-top: 4px; padding: 6px 8px; border-radius: 6px; background: var(--surface); font-size: 11.5px; line-height: 16px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.bn-err .acts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-top: 6px; color: var(--ink-2); min-width: 0; }
+.bn-err .acts .btn { max-width: 100%; min-width: 0; white-space: normal; height: auto; min-height: 32px; padding-top: 4px; padding-bottom: 4px; line-height: 18px; text-align: center; }
+.bn-err .acts .btn.link { min-height: 0; padding: 0; }
 .bn-err .acts .sep { color: var(--ink-2); }
-.bn-err .acts .hint { color: var(--ink-2); font-size: 12.5px; line-height: 18px; flex-basis: 100%; }
-.bn-err .inset { margin: 6px 0 0; background: var(--surface); }
+.bn-err .inset { margin: 6px 0 0; background: var(--surface); white-space: pre-wrap; overflow-wrap: anywhere; }
 .bn-conn { display: grid; gap: 8px; padding: 12px 16px; border-radius: var(--r-btn); background: var(--canvas); color: var(--ink-2); }
 .indet { position: relative; height: 2px; border-radius: 2px; background: color-mix(in srgb, var(--ink) 10%, transparent); overflow: hidden; }
 .indet::after { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 30%; border-radius: 2px; background: var(--ink); animation: indet 1.4s ease-in-out infinite; }
@@ -25,7 +33,7 @@ html[data-motion=reduce] .indet::after { animation: none; width: 100%; opacity: 
 @media (prefers-reduced-motion: reduce) { html:not([data-motion=full]) .indet::after { animation: none; width: 100%; opacity: .4; } }
 
 /* badperm: PC-side Windows permission fix (ADD-SERVER-ENG §10) */
-.bperm { display: grid; gap: 6px; flex-basis: 100%; margin: 4px 0 2px; }
+.bperm { display: grid; gap: 6px; flex-basis: 100%; min-width: 0; margin: 4px 0 2px; }
 .bperm .bcmd { display: block; padding: 8px 10px; border-radius: var(--r-btn); background: var(--surface); font-size: 12px; line-height: 17px; white-space: pre-wrap; word-break: break-all; user-select: all; }
 .bperm .bact { display: flex; justify-content: flex-start; }
 .bperm p { margin: 0; }

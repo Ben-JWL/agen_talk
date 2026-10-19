@@ -84,7 +84,7 @@ const OvWire = (() => {
         attr(el, 'aria-label', '프로젝트 ' + p.name + (p.branch ? ', 브랜치 ' + p.branch : ''));
         attr(el, 'title', p.other ? '프로젝트를 찾지 못한 에이전트' : p.name + (p.branch ? ' · ' + p.branch : '') + (p.root ? '\n' + p.root : ''));
         const c = el.querySelector('.cnt'); text(c, '에이전트 ' + ags.length + (kids ? ' · 하위 ' + kids : ''));
-        let pn = el.querySelector('.pn'); if (wait) { if (!pn) el.querySelector('.s').append(pn = h('span.pn')); text(pn, '기다림 ' + wait); } else if (pn) pn.remove();
+        let pn = el.querySelector('.pn'); if (wait) { if (!pn) el.querySelector('.s').append(pn = h('span.pn')); text(pn, '안읽음 ' + wait); } else if (pn) pn.remove();
       } else {
         const n = byKey.get(b.n.key) || b.n; b.n = n;
         el.className = 'ovn' + (b.kind === 'kid' ? ' kid' : '');
