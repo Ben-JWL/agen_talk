@@ -34,7 +34,7 @@ jobs:
         with:
           python-version: ${{ matrix.py }}
       - name: Compile
-        run: python -m py_compile agen_talk.py app.py ui/build.py tools/scan.py tools/check_ui.py packaging/make_icon.py
+        run: python -m py_compile agen_talk.py app.py ui/build.py tools/scan.py tools/check_ui.py tools/check_palettes.py packaging/make_icon.py
       - name: Install paramiko (in-app SSH half of the selftest)
         if: matrix.py == '3.12'
         run: python -m pip install paramiko==5.0.0
@@ -55,6 +55,8 @@ jobs:
         with:
           python-version: "3.12"
       - run: python tools/check_ui.py
+      - name: Colour palettes keep contrast and the red alert apart
+        run: python tools/check_palettes.py
       - run: python tools/scan.py
       - name: Sprites match their sources (pixel-exact v2 decode, fresh build, size budget)
         run: python art/sprites/check_v2.py

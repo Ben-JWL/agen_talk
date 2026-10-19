@@ -65,7 +65,7 @@
 code.nw, .nw { white-space: nowrap; }
 .dlg .bn-err[data-kind=host_key_changed] .acts .btn:not(.primary):not(.link) { flex-basis: 100%; order: 2; }
 .dlg .bn-err[data-kind=host_key_changed] .acts .btn.primary { order: 1; }
-.pchip[aria-pressed=true] { background: var(--ink); color: var(--on-ink); border-color: var(--ink); }
+.pchip[aria-pressed=true] { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
 .dlg [tabindex="-1"]:focus, .dlg [tabindex="-1"]:focus-visible { outline: none; }
 /* key_rejected: what the diagnosis found, and the exact commands a fix runs */
 .dlg .finds { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 6px; }

@@ -1,4 +1,4 @@
-/* ===== 24-components.css — shared primitives (CHAT-UX §2, §8). Tokens only; no hover lift; focus ring = ink. ===== */
+/* ===== 24-components.css — shared primitives (CHAT-UX §2, §8). Tokens only; no hover lift; focus ring = --focus (the ink in 기본). ===== */
 .gl { width: 16px; height: 16px; flex: none; color: var(--ink-2); vertical-align: -3px; }
 .gl.st-work, .gl.st-tool, .gl.st-child { color: var(--st-work); }
 .gl.st-user { color: var(--st-user); }
@@ -28,8 +28,8 @@
 .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 32px; padding: 0 14px; border: 1px solid var(--line); border-radius: var(--r-btn); background: var(--surface); color: var(--ink); font-weight: 500; white-space: nowrap; transition: background var(--dur-fast); }
 .btn:hover { background: var(--canvas); }
 .btn:disabled { opacity: .5; cursor: default; }
-.btn.primary { background: var(--ink); border-color: var(--ink); color: var(--on-ink); }
-.btn.primary:hover { background: color-mix(in srgb, var(--ink) 86%, var(--surface)); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.btn.primary:hover { background: color-mix(in srgb, var(--accent) 86%, var(--surface)); }
 .btn.sm { height: 28px; padding: 0 10px; font-size: 12.5px; }
 .btn.link { border: 0; background: none; color: var(--ink); padding: 0 4px; height: auto; font-weight: 500; }
 .btn.link:hover { text-decoration: underline; background: none; }
@@ -41,7 +41,7 @@
 .field { display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 10px; border-radius: var(--r-btn); background: var(--canvas); color: var(--ink-2); }
 .field input { flex: 1; min-width: 0; border: 0; background: none; color: var(--ink); outline: none; }
 .field input::placeholder { color: var(--ink-2); }
-.field:focus-within { outline: 2px solid var(--ink); outline-offset: 2px; }
+.field:focus-within { outline: 2px solid var(--focus); outline-offset: 2px; }
 .field .ic { width: 16px; height: 16px; fill: currentColor; flex: none; }
 .field:focus-within kbd { display: none; }
 select.sel { height: 32px; padding: 0 28px 0 10px; border: 0; border-radius: var(--r-btn); background-color: var(--canvas); appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='gray'%3E%3Cpath d='M4 6l4 4 4-4'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 8px center; background-size: 14px; }
@@ -52,9 +52,9 @@ select.sel { height: 32px; padding: 0 28px 0 10px; border: 0; border-radius: var
 .sw input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; z-index: 1; }
 .sw i { position: absolute; inset: 0; border-radius: 999px; background: var(--line); transition: background var(--dur-mid); }
 .sw i::before { content: ""; position: absolute; width: 16px; height: 16px; left: 3px; top: 3px; border-radius: 50%; background: var(--surface); box-shadow: 0 1px 2px rgba(0,0,0,.25); transition: transform var(--dur-mid); }
-.sw input:checked + i { background: var(--ink); }
-.sw input:checked + i::before { transform: translateX(18px); background: var(--on-ink); }
-.sw input:focus-visible + i { outline: 2px solid var(--ink); outline-offset: 2px; }
+.sw input:checked + i { background: var(--accent); }
+.sw input:checked + i::before { transform: translateX(18px); background: var(--on-accent); }
+.sw input:focus-visible + i { outline: 2px solid var(--focus); outline-offset: 2px; }
 
 /* ask bubble: the one saturated thing on screen. Signal border + header, tinted fill. */
 .ask { display: flex; flex-direction: column; gap: 2px; padding: 8px 12px; border: 1.5px solid var(--signal); border-radius: var(--r-card); border-top-left-radius: 4px; background: var(--tint-signal); min-width: 0; text-align: left; }

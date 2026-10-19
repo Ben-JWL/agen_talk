@@ -13,13 +13,13 @@
 .room.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-card); --disc: var(--surface); overflow: hidden; }
 .room.card::after { display: none; }
 .room.card:hover { background: var(--surface); }
-.room.card[aria-current=true] { border-color: var(--ink); }
+.room.card[aria-current=true] { border-color: var(--accent); }
 .room.card .rrow { padding: 10px 12px; min-height: 56px; }
 .room.card.waiting { background: var(--surface); }
 .room.card .ask { margin: 0 12px 10px; }
 .room.card .rt { font-size: 14px; }
 .room.card.k-done { opacity: .75; }
-.room.card:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.room.card:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .cfoot { padding: 0 12px 10px; }
 .room.card.gone { opacity: .6; }
 .bcard.k-sum { margin: -4px 0 0 12px; cursor: default; border-style: dashed; display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; background: var(--surface); border: 1px dashed var(--line); border-radius: var(--r-card); }

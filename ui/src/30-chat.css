@@ -7,7 +7,7 @@
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 #chips .chip { position: relative; height: 26px; padding: 0 9px; border: 0; background: var(--canvas); color: var(--ink-2); font-size: 12.5px; gap: 6px; overflow: hidden; }
 #chips .chip:hover { color: var(--ink); }
-#chips .chip[aria-pressed=true] { background: var(--ink); color: var(--on-ink); }
+#chips .chip[aria-pressed=true] { background: var(--accent); color: var(--on-accent); }
 #chips .cc { font-weight: 600; }
 #chips .cn { min-width: 0; max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #chips .chip { flex: 0 1 auto; min-width: 0; max-width: 100%; }
@@ -33,7 +33,7 @@ html[data-motion=reduce] #chips .indet::after { animation: none; width: 100%; op
 .smenu .ck { width: 14px; font-size: 12px; }
 .smenu hr { margin: 4px 0; border: 0; border-top: 1px solid var(--line); }
 .npw { position: sticky; top: 4px; z-index: 7; height: 0; display: flex; justify-content: flex-end; padding-right: 12px; overflow: visible; }   /* docked in the sticky section header's empty right side: never covers a room title */
-.newpill { height: 24px; padding: 0 12px; border: 0; border-radius: 12px; background: var(--ink); color: var(--on-ink); font-size: 12.5px; font-weight: 600; box-shadow: var(--shadow-float); animation: fade var(--dur-fast) ease-out; }
+.newpill { height: 24px; padding: 0 12px; border: 0; border-radius: 12px; background: var(--accent); color: var(--on-accent); font-size: 12.5px; font-weight: 600; box-shadow: var(--shadow-float); animation: fade var(--dur-fast) ease-out; }
 @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
 #lscroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 #rooms { outline: none; }
@@ -49,10 +49,10 @@ html[data-motion=reduce] #chips .indet::after { animation: none; width: 100%; op
 /* room row: 64 px, two lines; the waiting row grows by the ask bubble */
 .room { position: relative; --disc: var(--surface); background: var(--surface); cursor: pointer; }
 .room:hover { background: color-mix(in srgb, var(--canvas) 50%, var(--surface)); --disc: color-mix(in srgb, var(--canvas) 50%, var(--surface)); }
-.room[aria-selected=true] { background: var(--canvas); --disc: var(--canvas); }
+.room[aria-selected=true] { background: var(--row-sel); --disc: var(--row-sel); }
 
 .room::after { content: ""; position: absolute; left: 64px; right: 0; bottom: 0; border-bottom: 1px solid var(--line); }
-#rooms:focus-visible .room.active { outline: 2px solid var(--ink); outline-offset: -2px; }
+#rooms:focus-visible .room.active { outline: 2px solid var(--focus); outline-offset: -2px; }
 .rrow { display: grid; grid-template-columns: 36px minmax(0, 1fr); column-gap: 12px; align-items: center; padding: 14px 16px; min-height: 64px; }
 .rmain { min-width: 0; }
 .l1, .l2 { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
@@ -103,7 +103,7 @@ html[data-motion=reduce] #chips .indet::after { animation: none; width: 100%; op
 .implin { display: flex; align-items: flex-start; flex-wrap: wrap; gap: 6px; margin: 0; font-weight: 600; color: var(--ink); }
 .implin .gl { color: var(--ink); }
 .appbn { margin: 12px 16px 0; padding: 12px 12px 12px 16px; border-radius: var(--r-btn); background: var(--canvas); position: relative; overflow: hidden; display: grid; gap: 4px; }
-.appbn::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--ink); }
+.appbn::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--accent); }
 .appbn p { margin: 0; }
 .appbn .acts { display: flex; align-items: center; gap: 12px; margin-top: 4px; }
 .appbn a.btn { text-decoration: none; }

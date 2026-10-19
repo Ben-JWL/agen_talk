@@ -20,7 +20,7 @@
 .tf .btn.link { color: var(--ink-2); font-size: 12.5px; line-height: 18px; }
 .tf .btn.link:hover { color: var(--ink); }
 /* my talk: outlined = sent from here (peer authority); the filled bubble stays the terminal prompt */
-.bub.talkme { border: 1.5px solid var(--ink); background: var(--surface); border-radius: var(--r-bubble); border-top-right-radius: 4px; }
+.bub.talkme { border: 1.5px solid var(--accent); background: var(--surface); border-radius: var(--r-bubble); border-top-right-radius: 4px; }
 .bub.talkme .th { color: var(--ink-2); }
 /* delivery state */
 .ds { display: inline-flex; align-items: center; gap: 6px; min-width: 0; color: var(--ink-2); }
@@ -46,7 +46,7 @@
 .cmw { flex: 1; min-width: 0; }
 .cta { display: block; width: 100%; height: 40px; max-height: 124px; resize: none; border: 0; border-radius: var(--r-btn); background: var(--canvas); color: var(--ink); padding: 9px 12px; font: inherit; line-height: 21px; overflow-y: auto; }
 .cta::placeholder { color: var(--ink-2); }
-.cta:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.cta:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .csend { flex: none; min-width: 72px; }
 .ccnt { margin-top: 2px; text-align: right; font-size: 12.5px; line-height: 18px; color: var(--ink-2); }
 .ccnt.over { color: var(--ink); font-weight: 600; }

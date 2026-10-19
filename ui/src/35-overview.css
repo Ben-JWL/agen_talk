@@ -1,8 +1,9 @@
 /* ===== 35-overview.css — the overview in the empty right pane (OVERVIEW-CONTRACT §3): 배선 지도 (default) and 재미 모드 (픽셀 오피스).
-   Fan themes (Claude 풍 … Muse 풍) set --ov-* tokens on .ov only; the rest of the app keeps its own tokens. Light/dark follows html.dark. ===== */
+   Fan themes (Claude 풍 … Muse 풍) set --ov-* tokens on .ov only (data-ovt): always in 픽셀 오피스, and on the 배선 지도 only under the 기본 palette.
+   With any other colour palette (S.palette, 21-palettes.css) the 배선 지도 has no data-ovt and takes the defaults below, i.e. the app palette. Light/dark follows html.dark. ===== */
 .ov { --ov-font-display: inherit; --ov-r-card: 12px; --ov-r-chip: 999px; --ov-display-weight: 650; --ov-display-track: 0; --ov-label-case: none;
-  --ov-canvas: var(--canvas); --ov-surface: var(--surface); --ov-surface-2: var(--canvas); --ov-line: var(--line); --ov-line-strong: var(--line); --ov-ink: var(--ink); --ov-ink-2: var(--ink-2);
-  --ov-accent: var(--ink-2); --ov-accent-2: var(--ink-2); --ov-on-accent: var(--surface); --ov-signal: var(--signal); --ov-on-signal: var(--on-signal); --ov-warn: var(--warn); --ov-edge: var(--line); --ov-edge-act: var(--ink-2); }
+  --ov-canvas: var(--canvas); --ov-surface: var(--surface); --ov-surface-2: color-mix(in srgb, var(--canvas) 60%, var(--surface)); --ov-line: var(--line); --ov-line-strong: color-mix(in srgb, var(--line) 55%, var(--ink-2)); --ov-ink: var(--ink); --ov-ink-2: var(--ink-2);
+  --ov-accent: var(--st-work); --ov-accent-2: var(--accent-2); --ov-on-accent: var(--on-accent); --ov-signal: var(--signal); --ov-on-signal: var(--on-signal); --ov-warn: var(--warn); --ov-edge: color-mix(in srgb, var(--line) 75%, var(--ink-2)); --ov-edge-act: var(--accent); }
 .ov[data-ovt=claude] { --ov-font-display: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", "Noto Serif KR", "Batang", serif; --ov-r-card: 12px; --ov-r-chip: 8px; --ov-display-weight: 600;
   --ov-canvas: #F4EFE6; --ov-surface: #FFFCF7; --ov-surface-2: #F8F2E8; --ov-line: #E5DACB; --ov-line-strong: #CDBDA8; --ov-ink: #2A2420; --ov-ink-2: #7A6C5F; --ov-accent: #C2603F; --ov-accent-2: #8E5A3C; --ov-on-accent: #FFFFFF; --ov-signal: #D3352B; --ov-on-signal: #FFFFFF; --ov-warn: #9A5600; --ov-edge: #D3C4B0; --ov-edge-act: #C2603F; }
 html.dark .ov[data-ovt=claude] { --ov-canvas: #1D1A17; --ov-surface: #27231F; --ov-surface-2: #2F2A25; --ov-line: #3A332D; --ov-line-strong: #52483F; --ov-ink: #F1EAE0; --ov-ink-2: #A99B8C; --ov-accent: #E2865F; --ov-accent-2: #C79A6E; --ov-on-accent: #1D1A17; --ov-signal: #FF5E52; --ov-on-signal: #1D1A17; --ov-warn: #EBA55A; --ov-edge: #4A4038; --ov-edge-act: #E2865F; }
@@ -67,7 +68,7 @@ html.dark .ov[data-ovt=muse] { --ov-canvas: #17171C; --ov-surface: #212128; --ov
 .ovn.prj .t .nm { flex: none; font-family: var(--mono, ui-monospace, monospace); font-size: 12.5px; }
 .ovn .br { min-width: 0; overflow: hidden; text-overflow: ellipsis; font: 11px var(--mono, ui-monospace, monospace); color: var(--ov-ink-2); background: var(--ov-surface-2); border: 1px solid var(--ov-line); padding: 0 5px; border-radius: 4px; }
 .ovn .pn { flex: none; font-size: 11px; font-weight: 700; color: var(--ov-on-signal); background: var(--ov-signal); border-radius: 999px; padding: 0 6px; line-height: 16px; }
-.ovn .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; background: #3E8A5A; }
+.ovn .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--ok); }
 .ovn .dot.err { background: transparent; box-shadow: inset 0 0 0 2px var(--ov-ink-2); }
 button.ovn { cursor: pointer; }
 button.ovn:hover { border-color: var(--ov-line-strong); }

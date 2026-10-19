@@ -1,0 +1,96 @@
+/* ===== 21-palettes.css — colour palettes (S.palette, 설정 › 화면 › 색 팔레트). Token overrides only; 기본 = no data-palette (20-tokens.css).
+   Each palette sets the same tokens for light and dark; light/dark itself still comes from S.theme (html.dark). The names describe a colour mood
+   only (no logos or wordmarks). Reserved: the signal family (--signal, --signal-text, --on-signal = the red 안읽음 / 승인 / error alert) is never
+   set here, so it is the same red in every palette; each accent keeps a clear distance from it (tools/check_palettes.py checks contrast + ΔE).
+   Selectors also match the settings swatches (any element with data-palette), so a swatch previews its palette inside the current one. ===== */
+
+/* ----- Claude 풍: warm paper, burnt-orange clay accent, warm greys. Stall (--warn) moves to olive-ochre so it never reads as the accent, and busy
+   states (--st-work) use a muted clay-brown so the 배선 지도 is not a wall of orange next to the red alerts. ----- */
+[data-palette=claude] {
+  --canvas: #F2EDE4; --surface: #FAF7F1; --line: #E2D9CB; --tile: #EAE2D5;
+  --ink: #2A2521; --ink-2: #675D54; --on-ink: #FBF9F5;
+  --accent: #A85A14; --on-accent: #FFFFFF; --accent-2: #8A6A4F; --focus: #A85A14;
+  --row-sel: #F3E4D3; --tab-sel: #EADCC8; --tab-on: #8C4A0E; --rail-bg: #ECE5D9;
+  --warn: #746800; --ok: #4C8758;
+  --st-work: #8E5530; --st-tool: #8E5530; --st-child: #8A6A4F;
+}
+.dark[data-palette=claude], .dark [data-palette=claude] {
+  --canvas: #1E1B18; --surface: #2A2622; --line: #3D3630; --tile: #3B352F;
+  --ink: #F2ECE4; --ink-2: #ADA194; --on-ink: #1E1B18;
+  --accent: #DE9450; --on-accent: #1E1B18; --accent-2: #C4A383; --focus: #DE9450;
+  --row-sel: #3A2E24; --tab-sel: #3A2E24; --tab-on: #F0AE74; --rail-bg: #191613;
+  --warn: #DCC25A; --ok: #6DBA83;
+  --st-work: #D3A27A; --st-tool: #D3A27A; --st-child: #C4A383;
+}
+
+/* ----- ChatGPT 풍: clean white on a soft grey-green canvas, teal-green accent. ----- */
+[data-palette=chatgpt] {
+  --canvas: #F2F5F4; --surface: #FFFFFF; --line: #E0E6E3; --tile: #E8EEEB;
+  --ink: #161A19; --ink-2: #5E6865; --on-ink: #FFFFFF;
+  --accent: #0B7A5E; --on-accent: #FFFFFF; --accent-2: #4A8A79; --focus: #0B7A5E;
+  --row-sel: #E3F1EC; --tab-sel: #DCEBE5; --tab-on: #08664F; --rail-bg: #ECF1EF;
+  --ok: #1E8A55;
+  --st-work: #0B7A5E; --st-tool: #0B7A5E; --st-child: #4A8A79;
+}
+.dark[data-palette=chatgpt], .dark [data-palette=chatgpt] {
+  --canvas: #171A19; --surface: #212524; --line: #333937; --tile: #333937;
+  --ink: #ECEFEE; --ink-2: #9EA7A4; --on-ink: #171A19;
+  --accent: #2EC49B; --on-accent: #0E1211; --accent-2: #80D3BB; --focus: #2EC49B;
+  --row-sel: #1F3530; --tab-sel: #1F3530; --tab-on: #5FD6B4; --rail-bg: #131615;
+  --ok: #4CC38A;
+  --st-work: #2EC49B; --st-tool: #2EC49B; --st-child: #80D3BB;
+}
+
+/* ----- Gemini 풍: cool blue-violet tints, blue→violet accent; the only gradient is on the rail. ----- */
+[data-palette=gemini] {
+  --canvas: #EDF0FA; --surface: #FFFFFF; --line: #DBE0F0; --tile: #E3E7F6;
+  --ink: #1A1C24; --ink-2: #5A6073; --on-ink: #FFFFFF;
+  --accent: #4655D0; --on-accent: #FFFFFF; --accent-2: #8259C9; --focus: #4655D0;
+  --row-sel: #E5E8FB; --tab-sel: #DCE0F9; --tab-on: #3B47B5; --rail-bg: linear-gradient(180deg, #E4EAFB 0%, #ECE6FA 100%);
+  --ok: #2D8A5A;
+  --st-work: #4655D0; --st-tool: #4655D0; --st-child: #8259C9;
+}
+.dark[data-palette=gemini], .dark [data-palette=gemini] {
+  --canvas: #13141B; --surface: #1D1F29; --line: #2E3142; --tile: #2E3142;
+  --ink: #E6E8F2; --ink-2: #9EA4B8; --on-ink: #13141B;
+  --accent: #8E9CFF; --on-accent: #13141B; --accent-2: #B99CFF; --focus: #8E9CFF;
+  --row-sel: #262B4A; --tab-sel: #262B4A; --tab-on: #A9B4FF; --rail-bg: linear-gradient(180deg, #161A2C 0%, #1C1729 100%);
+  --ok: #5CC08A;
+  --st-work: #8E9CFF; --st-tool: #8E9CFF; --st-child: #B99CFF;
+}
+
+/* ----- Grok 풍: steel / graphite monochrome, cool grey accent, crisp. ----- */
+[data-palette=grok] {
+  --canvas: #ECEDEF; --surface: #FAFAFB; --line: #D8DADE; --tile: #E2E4E7;
+  --ink: #0E1013; --ink-2: #565B64; --on-ink: #FAFAFB;
+  --accent: #39414E; --on-accent: #FFFFFF; --accent-2: #687384; --focus: #39414E;
+  --row-sel: #E1E4E8; --tab-sel: #DADDE2; --tab-on: #0E1013; --rail-bg: #E4E6E9;
+  --ok: #3E8A5A;
+  --st-work: #39414E; --st-tool: #39414E; --st-child: #687384;
+}
+.dark[data-palette=grok], .dark [data-palette=grok] {
+  --canvas: #0B0C0E; --surface: #16181B; --line: #282B30; --tile: #282B30;
+  --ink: #F2F3F5; --ink-2: #9097A1; --on-ink: #0B0C0E;
+  --accent: #C5CCD7; --on-accent: #0B0C0E; --accent-2: #8F9AAB; --focus: #C5CCD7;
+  --row-sel: #20242A; --tab-sel: #20242A; --tab-on: #F2F3F5; --rail-bg: #08090A;
+  --ok: #5DB37E;
+  --st-work: #C5CCD7; --st-tool: #C5CCD7; --st-child: #8F9AAB;
+}
+
+/* ----- Muse 풍: soft pastel pink / lilac surfaces, berry accent (kept magenta, away from the alert red). ----- */
+[data-palette=muse] {
+  --canvas: #F6EEF3; --surface: #FFF8FB; --line: #EADCE5; --tile: #EFE2EB;
+  --ink: #2A1F27; --ink-2: #6A5A66; --on-ink: #FFFFFF;
+  --accent: #962C72; --on-accent: #FFFFFF; --accent-2: #7F55A6; --focus: #962C72;
+  --row-sel: #F4E0EC; --tab-sel: #EED6E5; --tab-on: #7D235F; --rail-bg: #F1E5EE;
+  --ok: #3E8A5A;
+  --st-work: #962C72; --st-tool: #962C72; --st-child: #7F55A6;
+}
+.dark[data-palette=muse], .dark [data-palette=muse] {
+  --canvas: #1C161B; --surface: #271F26; --line: #3B3039; --tile: #3B3039;
+  --ink: #F4EAF1; --ink-2: #B09FAC; --on-ink: #1C161B;
+  --accent: #E48DCB; --on-accent: #1C161B; --accent-2: #C3A2EA; --focus: #E48DCB;
+  --row-sel: #3A2537; --tab-sel: #3A2537; --tab-on: #EFA9DA; --rail-bg: #18121A;
+  --ok: #66BC88;
+  --st-work: #E48DCB; --st-tool: #E48DCB; --st-child: #C3A2EA;
+}

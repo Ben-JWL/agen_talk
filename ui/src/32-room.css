@@ -30,7 +30,7 @@
 .msg .col:has(.askw), .msg .col:has(.pcard) { width: min(72%, 640px); }
 .msg .tm { flex: none; font-size: 12px; line-height: 16px; color: var(--ink-2); white-space: nowrap; min-width: 0; }
 .bub { padding: 8px 12px; border-radius: var(--r-bubble); border-top-left-radius: 4px; background: var(--surface); border: 1px solid var(--line); font-size: 14px; line-height: 21px; white-space: pre-wrap; overflow-wrap: anywhere; }
-.bub.user { background: var(--ink); border-color: var(--ink); color: var(--on-ink); border-top-left-radius: var(--r-bubble); border-top-right-radius: 4px; }
+.bub.user { background: var(--bub-me); border-color: var(--bub-me); color: var(--on-bub-me); border-top-left-radius: var(--r-bubble); border-top-right-radius: 4px; }
 .bub.tool { display: flex; align-items: center; gap: 8px; padding: 6px 10px; white-space: normal; }
 .bub.tool .tg { width: 12px; height: 12px; }
 .bub.tool .tnm { font-weight: 600; flex: none; }
@@ -51,7 +51,7 @@
 .sysl { align-self: center; max-width: 90%; margin: 20px 0 6px; text-align: center; font-size: 12.5px; line-height: 18px; color: var(--ink-2); }
 .sysl .sg .gl { width: 12px; height: 12px; margin-right: 4px; vertical-align: -1px; }
 .dpill + .msg.first, .sysl + .msg.first { margin-top: 6px; }
-.newmsg { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); height: 30px; padding: 0 16px; border: 0; border-radius: 15px; background: var(--ink); color: var(--on-ink); font-size: 12.5px; font-weight: 600; box-shadow: var(--shadow-float); animation: fade var(--dur-fast) ease-out; }
+.newmsg { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); height: 30px; padding: 0 16px; border: 0; border-radius: 15px; background: var(--accent); color: var(--on-accent); font-size: 12.5px; font-weight: 600; box-shadow: var(--shadow-float); animation: fade var(--dur-fast) ease-out; }
 /* live tail: the only animation in the pane */
 .typing { display: flex; align-items: center; gap: 6px; padding: 6px 12px; color: var(--ink-2); font-size: 13px; line-height: 19px; white-space: normal; }
 .typing .dots { display: inline-flex; gap: 4px; }

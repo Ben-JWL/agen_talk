@@ -36,6 +36,15 @@
     return h('label.sw', i, h('i'));
   }
 
+  // ---------- 색 팔레트: radio cards, each with a mini window in its own palette (data-palette scopes the tokens, 21-palettes.css) ----------
+  function palettes() {
+    const sw = v => h('span.pal-sw', { 'aria-hidden': 'true', data: { palette: v } }, h('i.pr'), h('i.ps'), h('i.pk'), h('i.pt'), h('i.pa'), h('i.pd'));
+    const r = radios('색 팔레트', R.PALETTES.map(([v, l, x]) => [v, [sw(v === 'match' ? S.ovTheme : v), h('span.pal-nm', l)], x]), () => S.palette, v => S.palette = v, 'palg');
+    const m = r.btns[r.btns.length - 1].querySelector('.pal-sw');
+    sync.push(() => { if (m.dataset.palette !== S.ovTheme) m.dataset.palette = S.ovTheme; });   // 맞추기 previews the current overview theme
+    return r;
+  }
+
   // ---------- 알림 permission ----------
   const denied = h('div.snote.warn', { role: 'alert', hidden: true }, '브라우저에서 알림이 차단되어 있습니다 — 주소창 자물쇠에서 허용하세요');
   function setNotify(input) {
@@ -97,7 +106,9 @@
       const th = radios('테마', [['system', '시스템'], ['light', '라이트'], ['dark', '다크']], () => S.theme, v => S.theme = v);
       const mo = radios('움직임', [['system', '시스템'], ['reduce', '줄이기']], () => S.motion === 'reduce' ? 'reduce' : 'system', v => S.motion = v);
       const oz = radios('픽셀 오피스 크기', [['s', '작게'], ['m', '보통'], ['l', '크게']], () => S.ofcSize, v => S.ofcSize = v);
-      const ot = radios('오버뷰 테마', Overview.themes, () => S.ovTheme, v => S.ovTheme = v);   // fan themes style the overview pane only (OVERVIEW-CONTRACT §3)
+      const pa = palettes();
+      const ot = radios('오버뷰 테마', Overview.themes, () => S.ovTheme, v => S.ovTheme = v);   // fan themes style the 픽셀 오피스 (and the 배선 지도 under 기본) (OVERVIEW-CONTRACT §3)
+      const prow = row('palette', '색 팔레트', pa.g, '앱 전체의 색입니다. 라이트/다크는 위의 테마를 따르고, 안읽음·승인 요청 같은 빨간 표시는 모든 팔레트에서 같은 빨강입니다'); prow.classList.add('stack'); attr(pa.g, 'aria-describedby', 'n-palette');
       const chList = h('ul.clist'), keyList = h('ul.klist'), preList = h('ul.plist'); this.preList = preList;
       chList.append(this.noSsh = h('li.meta', { hidden: true }, '아직 서버가 없습니다 — 서버 추가로 첫 서버를 등록하세요'));   // unkeyed: R.keyed leaves it alone
       this.chList = chList; this.keyList = keyList;
@@ -105,10 +116,11 @@
       const main = h('div.card.smain',
         sec('screen', '화면',
           row('theme', '테마', th.g, '시스템을 고르면 Windows의 라이트/다크 설정을 따릅니다'),
+          prow,
           row('motion', '움직임', mo.g, '입력 중 점의 움직임과 패널·서랍 전환 애니메이션을 끕니다'),
           row('fun', '재미 모드 (픽셀 오피스)', toggle('fun', '재미 모드 (픽셀 오피스)', 'fun'), '방을 열지 않았을 때 오른쪽 칸을 배선 지도 대신 픽셀 사무실로 보여 줍니다'),
           row('ofcsize', '픽셀 오피스 크기', oz.g, '픽셀 사무실의 도트 크기입니다 (오버뷰 위쪽 − / + 와 같음). 고해상도 화면에서는 작게와 보통이 같게 보일 수 있습니다'),
-          row('ovtheme', '오버뷰 테마', ot.g, '오버뷰 칸에만 적용됩니다 — 라이트/다크는 위의 테마를 따릅니다. 팬 테마이며 로고·상표는 쓰지 않습니다')),
+          row('ovtheme', '오버뷰 테마', ot.g, '픽셀 오피스의 테마입니다 (색 팔레트가 기본이면 배선 지도에도 적용) — 라이트/다크는 위의 테마를 따릅니다. 팬 테마이며 로고·상표는 쓰지 않습니다')),
         sec('notify', '알림',
           row('notify', 'Windows 알림', toggle('notify', 'Windows 알림', 'notify', setNotify), '입력 대기·응답 없음·중단됨·끊김으로 바뀔 때, 긴 프로세스가 끝날 때'),
           denied,

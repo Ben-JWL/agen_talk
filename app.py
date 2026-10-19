@@ -150,9 +150,25 @@ def load_geometry(cfg, areas=None):
     return out
 
 
-def save_geometry(cfg, win):
+def is_hex(c):
+    return isinstance(c, str) and len(c) == 7 and c[0] == "#" and all(ch in "0123456789abcdefABCDEF" for ch in c[1:])
+
+
+def window_bg(cfg, light):
+    """The window's background before the page paints: the page's last palette canvas (ui.json "bg", reported by Api.bg) unless the page
+    followed the system theme and Windows has flipped light/dark since; otherwise the 기본 palette's canvas."""
+    b = read_json(Path(cfg) / "ui.json", {}).get("bg")
+    if isinstance(b, dict) and is_hex(b.get("bg")) and not (b.get("follow") is True and bool(b.get("dark")) == light):
+        return b["bg"]
+    return "#F2F2F5" if light else "#1C1C1E"
+
+
+def save_geometry(cfg, win, bg=None):
     try:
-        write_private(Path(cfg) / "ui.json", {"width": int(win.width), "height": int(win.height), "x": int(win.x), "y": int(win.y)})
+        g = {"width": int(win.width), "height": int(win.height), "x": int(win.x), "y": int(win.y)}
+        if bg:
+            g["bg"] = bg
+        write_private(Path(cfg) / "ui.json", g)
     except Exception as e:   # a closing window may already be gone
         logging.getLogger("agen-talk").info("ui.json not saved: %s", e)
 
@@ -235,7 +251,8 @@ def light_theme(winreg=None):
 
 
 class Api:
-    """js_api exposed to the page: window.pywebview.api.title(t) mirrors the page title into the native title bar."""
+    """js_api exposed to the page: window.pywebview.api.title(t) mirrors the page title into the native title bar;
+    bg(colour, dark, follow) remembers the palette's canvas colour so the next launch opens on it (saved with the geometry)."""
 
     def __init__(self, holder):
         self.holder = holder
@@ -248,6 +265,10 @@ class Api:
                 w.set_title(t)
             except Exception as e:
                 logging.getLogger("agen-talk").info("title: %s", e)
+
+    def bg(self, colour, dark=False, follow=True):
+        if is_hex(colour):
+            self.holder["bg"] = {"bg": colour, "dark": dark is True, "follow": follow is True}
 
 
 # ---------- the app ----------
@@ -312,8 +333,8 @@ def run_app(cfg_dir=None, state_dir=None, port=None, win_mod="default", idle=IDL
                 g = load_geometry(cfg_dir)
                 kw = {k: g[k] for k in ("x", "y") if g[k] is not None}
                 win = holder["win"] = wv.create_window(TITLE, url, width=g["width"], height=g["height"], min_size=(760, 560), js_api=Api(holder),
-                                                       background_color="#F2F2F5" if light_theme() else "#1C1C1E", **kw)
-                win.events.closing += lambda *a: save_geometry(cfg_dir, win)
+                                                       background_color=window_bg(cfg_dir, light_theme()), **kw)
+                win.events.closing += lambda *a: save_geometry(cfg_dir, win, holder.get("bg"))
                 if smoke_gui:
                     def page_loaded(*args):
                         try:
@@ -389,6 +410,16 @@ def selftest():
             assert rect_intersects(-800, 20, 900, 700, [(0, 0, 1920, 1080)])
         finally:
             ar.WIN = old_win
+        # window background: the page's palette canvas (Api.bg -> ui.json), dropped when the page followed a system theme that has flipped since
+        assert window_bg(t, True) == "#F2F2F5" and window_bg(t, False) == "#1C1C1E"
+        hb = {}
+        Api(hb).bg("#F2EDE4", False, True)
+        Api(hb).bg("url(x)", True, False)   # not a colour: ignored
+        assert hb["bg"] == {"bg": "#F2EDE4", "dark": False, "follow": True}
+        save_geometry(t, FakeWindow(), hb["bg"])
+        assert window_bg(t, True) == "#F2EDE4" and window_bg(t, False) == "#1C1C1E" and load_geometry(t)["width"] == 1000
+        save_geometry(t, FakeWindow(), {"bg": "#1E1B18", "dark": True, "follow": False})
+        assert window_bg(t, True) == "#1E1B18" == window_bg(t, False)
         # lifecycle with a mocked window: start -> a second launch asks to show -> close -> hub stopped, transports closed, run.json gone
         (t / "cfg").mkdir()
         write_private(t / "cfg" / "channels.json", {"port": 8765, "presets": [], "channels": [{"id": "pc", "name": "pc", "kind": "local"}]})

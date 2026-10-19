@@ -39,32 +39,44 @@
 <style>
 
 /* ---- 20-tokens.css ---- */
-/* ===== 20-tokens.css — CHAT-UX §2. Neutral surfaces, one signal colour (needs me), one evidence hue (stall). Hex lives ONLY here. ===== */
-:root {
+/* ===== 20-tokens.css — CHAT-UX §2. Neutral surfaces, one signal colour (needs me), one evidence hue (stall). Hex lives ONLY here and in 21-palettes.css.
+   This file is the 기본 palette (no data-palette on <html>); 21-palettes.css overrides the same tokens per S.palette. The signal (red alert) family is never overridden. ===== */
+:root, [data-palette=default] {
   --canvas: #F2F2F5; --surface: #FFFFFF; --line: #E3E3E8;
   --ink: #1D1D1F; --ink-2: #6E6E73; --on-ink: #FFFFFF;
   --signal: #E5342B; --signal-text: #C4261E; --on-signal: #FFFFFF; --warn: #9E4F00;
   --tint-signal: color-mix(in srgb, var(--signal) 8%, var(--surface));
   --tile: var(--canvas);
+  --ok: #3E8A5A;
   --shadow-float: 0 8px 32px rgba(0,0,0,.14);
   --scrim: rgba(0,0,0,.3);
-  /* status colours: shape carries the state, colour only echoes it */
-  --st-work: var(--ink-2); --st-tool: var(--ink-2); --st-child: var(--ink-2); --st-user: var(--signal); --st-stall: var(--warn);
-  --st-idle: var(--ink-2); --st-done: var(--ink-2); --st-stopped: var(--ink-2); --st-dead: var(--ink);
+}
+:root {
   --font: "Apple SD Gothic Neo", "Pretendard", "Malgun Gothic", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
   --mono: "Cascadia Mono", "D2Coding", Consolas, "Noto Sans Mono CJK KR", ui-monospace, monospace;
   --r-bubble: 16px; --r-av: 12px; --r-btn: 8px; --r-card: 12px; --r-dlg: 16px; --r-chip: 6px;
   --dur-fast: 120ms; --dur-mid: 160ms;
   color-scheme: light;
 }
+/* roles derived from the base colours; re-declared on every palette scope (the settings swatches carry data-palette too) so they resolve there.
+   기본: the accent IS the ink (black/white), so these are the same pixels as before palettes existed. */
+:root, [data-palette] {
+  --accent: var(--ink); --on-accent: var(--on-ink); --accent-2: var(--ink-2); --focus: var(--ink);
+  --row-sel: var(--canvas); --tab-sel: color-mix(in srgb, var(--ink) 8%, transparent); --tab-on: var(--ink); --rail-bg: var(--canvas);
+  --bub-me: var(--accent); --on-bub-me: var(--on-accent);
+  /* status colours: shape carries the state, colour only echoes it */
+  --st-work: var(--ink-2); --st-tool: var(--ink-2); --st-child: var(--ink-2); --st-user: var(--signal); --st-stall: var(--warn);
+  --st-idle: var(--ink-2); --st-done: var(--ink-2); --st-stopped: var(--ink-2); --st-dead: var(--ink);
+}
 html[data-theme=dark] { color-scheme: dark; }
 @media (prefers-color-scheme: dark) { html:not([data-theme=light]) { color-scheme: dark; } }
-html[data-theme=dark], html.dark {
+html[data-theme=dark], html.dark, .dark [data-palette=default] {
   --canvas: #1C1C1E; --surface: #2C2C2E; --line: #3A3A3C;
   --ink: #F5F5F7; --ink-2: #98989D; --on-ink: #1D1D1F;
   --signal: #FF5A4F; --signal-text: #FF7A70; --on-signal: #1D1D1F; --warn: #F0A24A;
   --tint-signal: color-mix(in srgb, var(--signal) 6%, var(--surface));
   --tile: #3A3A3C;
+  --ok: #3E8A5A;
   --shadow-float: 0 8px 32px rgba(0,0,0,.5);
   --scrim: rgba(0,0,0,.55);
 }
@@ -79,7 +91,7 @@ pre, code, .mono, .cmd { word-break: break-all; }
 button, input, select { font: inherit; color: inherit; letter-spacing: 0; }
 button { cursor: pointer; }
 a { color: inherit; }
-:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; border-radius: 4px; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
 h1, h2, h3, p { margin: 0; }
 ul { margin: 0; padding: 0; list-style: none; }
 svg { display: inline-block; vertical-align: middle; }
@@ -93,13 +105,111 @@ svg { display: inline-block; vertical-align: middle; }
 .dim { color: var(--ink-2); }
 .rel { cursor: default; }
 
+/* ---- 21-palettes.css ---- */
+/* ===== 21-palettes.css — colour palettes (S.palette, 설정 › 화면 › 색 팔레트). Token overrides only; 기본 = no data-palette (20-tokens.css).
+   Each palette sets the same tokens for light and dark; light/dark itself still comes from S.theme (html.dark). The names describe a colour mood
+   only (no logos or wordmarks). Reserved: the signal family (--signal, --signal-text, --on-signal = the red 안읽음 / 승인 / error alert) is never
+   set here, so it is the same red in every palette; each accent keeps a clear distance from it (tools/check_palettes.py checks contrast + ΔE).
+   Selectors also match the settings swatches (any element with data-palette), so a swatch previews its palette inside the current one. ===== */
+
+/* ----- Claude 풍: warm paper, burnt-orange clay accent, warm greys. Stall (--warn) moves to olive-ochre so it never reads as the accent, and busy
+   states (--st-work) use a muted clay-brown so the 배선 지도 is not a wall of orange next to the red alerts. ----- */
+[data-palette=claude] {
+  --canvas: #F2EDE4; --surface: #FAF7F1; --line: #E2D9CB; --tile: #EAE2D5;
+  --ink: #2A2521; --ink-2: #675D54; --on-ink: #FBF9F5;
+  --accent: #A85A14; --on-accent: #FFFFFF; --accent-2: #8A6A4F; --focus: #A85A14;
+  --row-sel: #F3E4D3; --tab-sel: #EADCC8; --tab-on: #8C4A0E; --rail-bg: #ECE5D9;
+  --warn: #746800; --ok: #4C8758;
+  --st-work: #8E5530; --st-tool: #8E5530; --st-child: #8A6A4F;
+}
+.dark[data-palette=claude], .dark [data-palette=claude] {
+  --canvas: #1E1B18; --surface: #2A2622; --line: #3D3630; --tile: #3B352F;
+  --ink: #F2ECE4; --ink-2: #ADA194; --on-ink: #1E1B18;
+  --accent: #DE9450; --on-accent: #1E1B18; --accent-2: #C4A383; --focus: #DE9450;
+  --row-sel: #3A2E24; --tab-sel: #3A2E24; --tab-on: #F0AE74; --rail-bg: #191613;
+  --warn: #DCC25A; --ok: #6DBA83;
+  --st-work: #D3A27A; --st-tool: #D3A27A; --st-child: #C4A383;
+}
+
+/* ----- ChatGPT 풍: clean white on a soft grey-green canvas, teal-green accent. ----- */
+[data-palette=chatgpt] {
+  --canvas: #F2F5F4; --surface: #FFFFFF; --line: #E0E6E3; --tile: #E8EEEB;
+  --ink: #161A19; --ink-2: #5E6865; --on-ink: #FFFFFF;
+  --accent: #0B7A5E; --on-accent: #FFFFFF; --accent-2: #4A8A79; --focus: #0B7A5E;
+  --row-sel: #E3F1EC; --tab-sel: #DCEBE5; --tab-on: #08664F; --rail-bg: #ECF1EF;
+  --ok: #1E8A55;
+  --st-work: #0B7A5E; --st-tool: #0B7A5E; --st-child: #4A8A79;
+}
+.dark[data-palette=chatgpt], .dark [data-palette=chatgpt] {
+  --canvas: #171A19; --surface: #212524; --line: #333937; --tile: #333937;
+  --ink: #ECEFEE; --ink-2: #9EA7A4; --on-ink: #171A19;
+  --accent: #2EC49B; --on-accent: #0E1211; --accent-2: #80D3BB; --focus: #2EC49B;
+  --row-sel: #1F3530; --tab-sel: #1F3530; --tab-on: #5FD6B4; --rail-bg: #131615;
+  --ok: #4CC38A;
+  --st-work: #2EC49B; --st-tool: #2EC49B; --st-child: #80D3BB;
+}
+
+/* ----- Gemini 풍: cool blue-violet tints, blue→violet accent; the only gradient is on the rail. ----- */
+[data-palette=gemini] {
+  --canvas: #EDF0FA; --surface: #FFFFFF; --line: #DBE0F0; --tile: #E3E7F6;
+  --ink: #1A1C24; --ink-2: #5A6073; --on-ink: #FFFFFF;
+  --accent: #4655D0; --on-accent: #FFFFFF; --accent-2: #8259C9; --focus: #4655D0;
+  --row-sel: #E5E8FB; --tab-sel: #DCE0F9; --tab-on: #3B47B5; --rail-bg: linear-gradient(180deg, #E4EAFB 0%, #ECE6FA 100%);
+  --ok: #2D8A5A;
+  --st-work: #4655D0; --st-tool: #4655D0; --st-child: #8259C9;
+}
+.dark[data-palette=gemini], .dark [data-palette=gemini] {
+  --canvas: #13141B; --surface: #1D1F29; --line: #2E3142; --tile: #2E3142;
+  --ink: #E6E8F2; --ink-2: #9EA4B8; --on-ink: #13141B;
+  --accent: #8E9CFF; --on-accent: #13141B; --accent-2: #B99CFF; --focus: #8E9CFF;
+  --row-sel: #262B4A; --tab-sel: #262B4A; --tab-on: #A9B4FF; --rail-bg: linear-gradient(180deg, #161A2C 0%, #1C1729 100%);
+  --ok: #5CC08A;
+  --st-work: #8E9CFF; --st-tool: #8E9CFF; --st-child: #B99CFF;
+}
+
+/* ----- Grok 풍: steel / graphite monochrome, cool grey accent, crisp. ----- */
+[data-palette=grok] {
+  --canvas: #ECEDEF; --surface: #FAFAFB; --line: #D8DADE; --tile: #E2E4E7;
+  --ink: #0E1013; --ink-2: #565B64; --on-ink: #FAFAFB;
+  --accent: #39414E; --on-accent: #FFFFFF; --accent-2: #687384; --focus: #39414E;
+  --row-sel: #E1E4E8; --tab-sel: #DADDE2; --tab-on: #0E1013; --rail-bg: #E4E6E9;
+  --ok: #3E8A5A;
+  --st-work: #39414E; --st-tool: #39414E; --st-child: #687384;
+}
+.dark[data-palette=grok], .dark [data-palette=grok] {
+  --canvas: #0B0C0E; --surface: #16181B; --line: #282B30; --tile: #282B30;
+  --ink: #F2F3F5; --ink-2: #9097A1; --on-ink: #0B0C0E;
+  --accent: #C5CCD7; --on-accent: #0B0C0E; --accent-2: #8F9AAB; --focus: #C5CCD7;
+  --row-sel: #20242A; --tab-sel: #20242A; --tab-on: #F2F3F5; --rail-bg: #08090A;
+  --ok: #5DB37E;
+  --st-work: #C5CCD7; --st-tool: #C5CCD7; --st-child: #8F9AAB;
+}
+
+/* ----- Muse 풍: soft pastel pink / lilac surfaces, berry accent (kept magenta, away from the alert red). ----- */
+[data-palette=muse] {
+  --canvas: #F6EEF3; --surface: #FFF8FB; --line: #EADCE5; --tile: #EFE2EB;
+  --ink: #2A1F27; --ink-2: #6A5A66; --on-ink: #FFFFFF;
+  --accent: #962C72; --on-accent: #FFFFFF; --accent-2: #7F55A6; --focus: #962C72;
+  --row-sel: #F4E0EC; --tab-sel: #EED6E5; --tab-on: #7D235F; --rail-bg: #F1E5EE;
+  --ok: #3E8A5A;
+  --st-work: #962C72; --st-tool: #962C72; --st-child: #7F55A6;
+}
+.dark[data-palette=muse], .dark [data-palette=muse] {
+  --canvas: #1C161B; --surface: #271F26; --line: #3B3039; --tile: #3B3039;
+  --ink: #F4EAF1; --ink-2: #B09FAC; --on-ink: #1C161B;
+  --accent: #E48DCB; --on-accent: #1C161B; --accent-2: #C3A2EA; --focus: #E48DCB;
+  --row-sel: #3A2537; --tab-sel: #3A2537; --tab-on: #EFA9DA; --rail-bg: #18121A;
+  --ok: #66BC88;
+  --st-work: #E48DCB; --st-tool: #E48DCB; --st-child: #C3A2EA;
+}
+
 /* ---- 22-shell.css ---- */
 /* ===== 22-shell.css — rail, the three-column chat grid, board/settings view container, overlay layer. CHAT-UX §3. ===== */
 #app { display: grid; grid-template-columns: 64px minmax(0, 1fr); height: 100vh; }
-#rail { background: var(--canvas); border-right: 1px solid var(--line); display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 0; }
+#rail { background: var(--rail-bg); border-right: 1px solid var(--line); display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 0; }
 .tab { position: relative; display: grid; place-items: center; width: 48px; height: 56px; border-radius: var(--r-card); color: var(--ink-2); text-decoration: none; }
 .tab:hover { color: var(--ink); }
-.tab[aria-selected=true] { color: var(--ink); background: color-mix(in srgb, var(--ink) 8%, transparent); }
+.tab[aria-selected=true] { color: var(--tab-on); background: var(--tab-sel); }
 .tab .ic { width: 24px; height: 24px; fill: currentColor; }
 .tab.bottom { margin-top: auto; }
 .tab .badge { position: absolute; top: 6px; right: 2px; }
@@ -150,7 +260,7 @@ html.paused #pause .pz { display: inline; }
 .card.flat { overflow: hidden; }
 
 /* ---- 24-components.css ---- */
-/* ===== 24-components.css — shared primitives (CHAT-UX §2, §8). Tokens only; no hover lift; focus ring = ink. ===== */
+/* ===== 24-components.css — shared primitives (CHAT-UX §2, §8). Tokens only; no hover lift; focus ring = --focus (the ink in 기본). ===== */
 .gl { width: 16px; height: 16px; flex: none; color: var(--ink-2); vertical-align: -3px; }
 .gl.st-work, .gl.st-tool, .gl.st-child { color: var(--st-work); }
 .gl.st-user { color: var(--st-user); }
@@ -180,8 +290,8 @@ html.paused #pause .pz { display: inline; }
 .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 32px; padding: 0 14px; border: 1px solid var(--line); border-radius: var(--r-btn); background: var(--surface); color: var(--ink); font-weight: 500; white-space: nowrap; transition: background var(--dur-fast); }
 .btn:hover { background: var(--canvas); }
 .btn:disabled { opacity: .5; cursor: default; }
-.btn.primary { background: var(--ink); border-color: var(--ink); color: var(--on-ink); }
-.btn.primary:hover { background: color-mix(in srgb, var(--ink) 86%, var(--surface)); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.btn.primary:hover { background: color-mix(in srgb, var(--accent) 86%, var(--surface)); }
 .btn.sm { height: 28px; padding: 0 10px; font-size: 12.5px; }
 .btn.link { border: 0; background: none; color: var(--ink); padding: 0 4px; height: auto; font-weight: 500; }
 .btn.link:hover { text-decoration: underline; background: none; }
@@ -193,7 +303,7 @@ html.paused #pause .pz { display: inline; }
 .field { display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 10px; border-radius: var(--r-btn); background: var(--canvas); color: var(--ink-2); }
 .field input { flex: 1; min-width: 0; border: 0; background: none; color: var(--ink); outline: none; }
 .field input::placeholder { color: var(--ink-2); }
-.field:focus-within { outline: 2px solid var(--ink); outline-offset: 2px; }
+.field:focus-within { outline: 2px solid var(--focus); outline-offset: 2px; }
 .field .ic { width: 16px; height: 16px; fill: currentColor; flex: none; }
 .field:focus-within kbd { display: none; }
 select.sel { height: 32px; padding: 0 28px 0 10px; border: 0; border-radius: var(--r-btn); background-color: var(--canvas); appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='gray'%3E%3Cpath d='M4 6l4 4 4-4'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 8px center; background-size: 14px; }
@@ -204,9 +314,9 @@ select.sel { height: 32px; padding: 0 28px 0 10px; border: 0; border-radius: var
 .sw input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; z-index: 1; }
 .sw i { position: absolute; inset: 0; border-radius: 999px; background: var(--line); transition: background var(--dur-mid); }
 .sw i::before { content: ""; position: absolute; width: 16px; height: 16px; left: 3px; top: 3px; border-radius: 50%; background: var(--surface); box-shadow: 0 1px 2px rgba(0,0,0,.25); transition: transform var(--dur-mid); }
-.sw input:checked + i { background: var(--ink); }
-.sw input:checked + i::before { transform: translateX(18px); background: var(--on-ink); }
-.sw input:focus-visible + i { outline: 2px solid var(--ink); outline-offset: 2px; }
+.sw input:checked + i { background: var(--accent); }
+.sw input:checked + i::before { transform: translateX(18px); background: var(--on-accent); }
+.sw input:focus-visible + i { outline: 2px solid var(--focus); outline-offset: 2px; }
 
 /* ask bubble: the one saturated thing on screen. Signal border + header, tinted fill. */
 .ask { display: flex; flex-direction: column; gap: 2px; padding: 8px 12px; border: 1.5px solid var(--signal); border-radius: var(--r-card); border-top-left-radius: 4px; background: var(--tint-signal); min-width: 0; text-align: left; }
@@ -254,7 +364,7 @@ select.sel { height: 32px; padding: 0 28px 0 10px; border: 0; border-radius: var
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 #chips .chip { position: relative; height: 26px; padding: 0 9px; border: 0; background: var(--canvas); color: var(--ink-2); font-size: 12.5px; gap: 6px; overflow: hidden; }
 #chips .chip:hover { color: var(--ink); }
-#chips .chip[aria-pressed=true] { background: var(--ink); color: var(--on-ink); }
+#chips .chip[aria-pressed=true] { background: var(--accent); color: var(--on-accent); }
 #chips .cc { font-weight: 600; }
 #chips .cn { min-width: 0; max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #chips .chip { flex: 0 1 auto; min-width: 0; max-width: 100%; }
@@ -280,7 +390,7 @@ html[data-motion=reduce] #chips .indet::after { animation: none; width: 100%; op
 .smenu .ck { width: 14px; font-size: 12px; }
 .smenu hr { margin: 4px 0; border: 0; border-top: 1px solid var(--line); }
 .npw { position: sticky; top: 4px; z-index: 7; height: 0; display: flex; justify-content: flex-end; padding-right: 12px; overflow: visible; }   /* docked in the sticky section header's empty right side: never covers a room title */
-.newpill { height: 24px; padding: 0 12px; border: 0; border-radius: 12px; background: var(--ink); color: var(--on-ink); font-size: 12.5px; font-weight: 600; box-shadow: var(--shadow-float); animation: fade var(--dur-fast) ease-out; }
+.newpill { height: 24px; padding: 0 12px; border: 0; border-radius: 12px; background: var(--accent); color: var(--on-accent); font-size: 12.5px; font-weight: 600; box-shadow: var(--shadow-float); animation: fade var(--dur-fast) ease-out; }
 @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
 #lscroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 #rooms { outline: none; }
@@ -296,10 +406,10 @@ html[data-motion=reduce] #chips .indet::after { animation: none; width: 100%; op
 /* room row: 64 px, two lines; the waiting row grows by the ask bubble */
 .room { position: relative; --disc: var(--surface); background: var(--surface); cursor: pointer; }
 .room:hover { background: color-mix(in srgb, var(--canvas) 50%, var(--surface)); --disc: color-mix(in srgb, var(--canvas) 50%, var(--surface)); }
-.room[aria-selected=true] { background: var(--canvas); --disc: var(--canvas); }
+.room[aria-selected=true] { background: var(--row-sel); --disc: var(--row-sel); }
 
 .room::after { content: ""; position: absolute; left: 64px; right: 0; bottom: 0; border-bottom: 1px solid var(--line); }
-#rooms:focus-visible .room.active { outline: 2px solid var(--ink); outline-offset: -2px; }
+#rooms:focus-visible .room.active { outline: 2px solid var(--focus); outline-offset: -2px; }
 .rrow { display: grid; grid-template-columns: 36px minmax(0, 1fr); column-gap: 12px; align-items: center; padding: 14px 16px; min-height: 64px; }
 .rmain { min-width: 0; }
 .l1, .l2 { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
@@ -350,7 +460,7 @@ html[data-motion=reduce] #chips .indet::after { animation: none; width: 100%; op
 .implin { display: flex; align-items: flex-start; flex-wrap: wrap; gap: 6px; margin: 0; font-weight: 600; color: var(--ink); }
 .implin .gl { color: var(--ink); }
 .appbn { margin: 12px 16px 0; padding: 12px 12px 12px 16px; border-radius: var(--r-btn); background: var(--canvas); position: relative; overflow: hidden; display: grid; gap: 4px; }
-.appbn::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--ink); }
+.appbn::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--accent); }
 .appbn p { margin: 0; }
 .appbn .acts { display: flex; align-items: center; gap: 12px; margin-top: 4px; }
 .appbn a.btn { text-decoration: none; }
@@ -393,7 +503,7 @@ html[data-motion=reduce] #chips .indet::after { animation: none; width: 100%; op
 .msg .col:has(.askw), .msg .col:has(.pcard) { width: min(72%, 640px); }
 .msg .tm { flex: none; font-size: 12px; line-height: 16px; color: var(--ink-2); white-space: nowrap; min-width: 0; }
 .bub { padding: 8px 12px; border-radius: var(--r-bubble); border-top-left-radius: 4px; background: var(--surface); border: 1px solid var(--line); font-size: 14px; line-height: 21px; white-space: pre-wrap; overflow-wrap: anywhere; }
-.bub.user { background: var(--ink); border-color: var(--ink); color: var(--on-ink); border-top-left-radius: var(--r-bubble); border-top-right-radius: 4px; }
+.bub.user { background: var(--bub-me); border-color: var(--bub-me); color: var(--on-bub-me); border-top-left-radius: var(--r-bubble); border-top-right-radius: 4px; }
 .bub.tool { display: flex; align-items: center; gap: 8px; padding: 6px 10px; white-space: normal; }
 .bub.tool .tg { width: 12px; height: 12px; }
 .bub.tool .tnm { font-weight: 600; flex: none; }
@@ -414,7 +524,7 @@ html[data-motion=reduce] #chips .indet::after { animation: none; width: 100%; op
 .sysl { align-self: center; max-width: 90%; margin: 20px 0 6px; text-align: center; font-size: 12.5px; line-height: 18px; color: var(--ink-2); }
 .sysl .sg .gl { width: 12px; height: 12px; margin-right: 4px; vertical-align: -1px; }
 .dpill + .msg.first, .sysl + .msg.first { margin-top: 6px; }
-.newmsg { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); height: 30px; padding: 0 16px; border: 0; border-radius: 15px; background: var(--ink); color: var(--on-ink); font-size: 12.5px; font-weight: 600; box-shadow: var(--shadow-float); animation: fade var(--dur-fast) ease-out; }
+.newmsg { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); height: 30px; padding: 0 16px; border: 0; border-radius: 15px; background: var(--accent); color: var(--on-accent); font-size: 12.5px; font-weight: 600; box-shadow: var(--shadow-float); animation: fade var(--dur-fast) ease-out; }
 /* live tail: the only animation in the pane */
 .typing { display: flex; align-items: center; gap: 6px; padding: 6px 12px; color: var(--ink-2); font-size: 13px; line-height: 19px; white-space: normal; }
 .typing .dots { display: inline-flex; gap: 4px; }
@@ -461,13 +571,13 @@ html[data-motion=reduce] .typing .dots { display: none; } html[data-motion=reduc
 .room.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-card); --disc: var(--surface); overflow: hidden; }
 .room.card::after { display: none; }
 .room.card:hover { background: var(--surface); }
-.room.card[aria-current=true] { border-color: var(--ink); }
+.room.card[aria-current=true] { border-color: var(--accent); }
 .room.card .rrow { padding: 10px 12px; min-height: 56px; }
 .room.card.waiting { background: var(--surface); }
 .room.card .ask { margin: 0 12px 10px; }
 .room.card .rt { font-size: 14px; }
 .room.card.k-done { opacity: .75; }
-.room.card:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.room.card:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .cfoot { padding: 0 12px 10px; }
 .room.card.gone { opacity: .6; }
 .bcard.k-sum { margin: -4px 0 0 12px; cursor: default; border-style: dashed; display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; background: var(--surface); border: 1px dashed var(--line); border-radius: var(--r-card); }
@@ -552,10 +662,11 @@ body.room-composer #toasts { bottom: calc(var(--foot-h, 108px) + 16px); }
 
 /* ---- 35-overview.css ---- */
 /* ===== 35-overview.css — the overview in the empty right pane (OVERVIEW-CONTRACT §3): 배선 지도 (default) and 재미 모드 (픽셀 오피스).
-   Fan themes (Claude 풍 … Muse 풍) set --ov-* tokens on .ov only; the rest of the app keeps its own tokens. Light/dark follows html.dark. ===== */
+   Fan themes (Claude 풍 … Muse 풍) set --ov-* tokens on .ov only (data-ovt): always in 픽셀 오피스, and on the 배선 지도 only under the 기본 palette.
+   With any other colour palette (S.palette, 21-palettes.css) the 배선 지도 has no data-ovt and takes the defaults below, i.e. the app palette. Light/dark follows html.dark. ===== */
 .ov { --ov-font-display: inherit; --ov-r-card: 12px; --ov-r-chip: 999px; --ov-display-weight: 650; --ov-display-track: 0; --ov-label-case: none;
-  --ov-canvas: var(--canvas); --ov-surface: var(--surface); --ov-surface-2: var(--canvas); --ov-line: var(--line); --ov-line-strong: var(--line); --ov-ink: var(--ink); --ov-ink-2: var(--ink-2);
-  --ov-accent: var(--ink-2); --ov-accent-2: var(--ink-2); --ov-on-accent: var(--surface); --ov-signal: var(--signal); --ov-on-signal: var(--on-signal); --ov-warn: var(--warn); --ov-edge: var(--line); --ov-edge-act: var(--ink-2); }
+  --ov-canvas: var(--canvas); --ov-surface: var(--surface); --ov-surface-2: color-mix(in srgb, var(--canvas) 60%, var(--surface)); --ov-line: var(--line); --ov-line-strong: color-mix(in srgb, var(--line) 55%, var(--ink-2)); --ov-ink: var(--ink); --ov-ink-2: var(--ink-2);
+  --ov-accent: var(--st-work); --ov-accent-2: var(--accent-2); --ov-on-accent: var(--on-accent); --ov-signal: var(--signal); --ov-on-signal: var(--on-signal); --ov-warn: var(--warn); --ov-edge: color-mix(in srgb, var(--line) 75%, var(--ink-2)); --ov-edge-act: var(--accent); }
 .ov[data-ovt=claude] { --ov-font-display: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", "Noto Serif KR", "Batang", serif; --ov-r-card: 12px; --ov-r-chip: 8px; --ov-display-weight: 600;
   --ov-canvas: #F4EFE6; --ov-surface: #FFFCF7; --ov-surface-2: #F8F2E8; --ov-line: #E5DACB; --ov-line-strong: #CDBDA8; --ov-ink: #2A2420; --ov-ink-2: #7A6C5F; --ov-accent: #C2603F; --ov-accent-2: #8E5A3C; --ov-on-accent: #FFFFFF; --ov-signal: #D3352B; --ov-on-signal: #FFFFFF; --ov-warn: #9A5600; --ov-edge: #D3C4B0; --ov-edge-act: #C2603F; }
 html.dark .ov[data-ovt=claude] { --ov-canvas: #1D1A17; --ov-surface: #27231F; --ov-surface-2: #2F2A25; --ov-line: #3A332D; --ov-line-strong: #52483F; --ov-ink: #F1EAE0; --ov-ink-2: #A99B8C; --ov-accent: #E2865F; --ov-accent-2: #C79A6E; --ov-on-accent: #1D1A17; --ov-signal: #FF5E52; --ov-on-signal: #1D1A17; --ov-warn: #EBA55A; --ov-edge: #4A4038; --ov-edge-act: #E2865F; }
@@ -620,7 +731,7 @@ html.dark .ov[data-ovt=muse] { --ov-canvas: #17171C; --ov-surface: #212128; --ov
 .ovn.prj .t .nm { flex: none; font-family: var(--mono, ui-monospace, monospace); font-size: 12.5px; }
 .ovn .br { min-width: 0; overflow: hidden; text-overflow: ellipsis; font: 11px var(--mono, ui-monospace, monospace); color: var(--ov-ink-2); background: var(--ov-surface-2); border: 1px solid var(--ov-line); padding: 0 5px; border-radius: 4px; }
 .ovn .pn { flex: none; font-size: 11px; font-weight: 700; color: var(--ov-on-signal); background: var(--ov-signal); border-radius: 999px; padding: 0 6px; line-height: 16px; }
-.ovn .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; background: #3E8A5A; }
+.ovn .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--ok); }
 .ovn .dot.err { background: transparent; box-shadow: inset 0 0 0 2px var(--ov-ink-2); }
 button.ovn { cursor: pointer; }
 button.ovn:hover { border-color: var(--ov-line-strong); }
@@ -700,7 +811,7 @@ button.ovn.st-user[data-ack="1"] .stl, button.ovn.st-stall[data-ack="1"] .stl { 
 .snote { font-size: 12.5px; line-height: 18px; color: var(--ink-2); margin-top: 2px; }
 .snote.warn { color: var(--warn); margin: 0; padding: 4px 16px 8px; font-weight: 500; }
 .sctl { flex: none; display: flex; align-items: center; min-height: 32px; }
-.seg button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.seg button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .shd { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .shd + p.meta { margin: 0 0 8px 4px; }
 .ssec > p.meta { margin: 0 0 8px 4px; }
@@ -736,6 +847,23 @@ button.ovn.st-user[data-ack="1"] .stl, button.ovn.st-stall[data-ack="1"] .stl { 
 .ssec > .implin { margin: 0 0 8px 4px; }
 .sel-text { user-select: text; }
 .snote.mono { font-family: var(--mono); font-size: 12px; word-break: break-all; }
+/* 색 팔레트: a stacked row (label above), radio cards with a mini window drawn in each palette's own tokens (the swatch carries data-palette) */
+.srow.stack { flex-direction: column; align-items: stretch; gap: 10px; padding-bottom: 12px; }
+.srow.stack .sctl { flex: 1; }
+.palg { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 6px; width: 100%; }
+.palg button { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; padding: 6px 4px 5px; border: 1px solid transparent; border-radius: 10px; background: none; color: var(--ink-2); font-size: 12.5px; line-height: 16px; font-weight: 500; }
+.palg button:hover { background: var(--canvas); color: var(--ink); }
+.palg button[aria-checked=true] { color: var(--ink); border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); font-weight: 600; }
+.palg button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.pal-nm { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pal-sw { position: relative; display: block; width: 76px; height: 46px; flex: none; border-radius: 8px; background: var(--canvas); box-shadow: inset 0 0 0 1px var(--line), 0 1px 2px rgba(0,0,0,.08); overflow: hidden; }
+.pal-sw i { position: absolute; display: block; }
+.pal-sw .pr { left: 0; top: 0; bottom: 0; width: 13px; background: var(--rail-bg); box-shadow: inset -1px 0 0 var(--line); }
+.pal-sw .ps { left: 19px; right: 6px; top: 6px; bottom: 6px; border-radius: 5px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); }
+.pal-sw .pk { left: 25px; top: 12px; width: 26px; height: 4px; border-radius: 2px; background: var(--ink); }
+.pal-sw .pt { left: 25px; top: 20px; width: 36px; height: 3px; border-radius: 2px; background: var(--ink-2); opacity: .7; }
+.pal-sw .pa { left: 25px; bottom: 11px; width: 22px; height: 8px; border-radius: 4px; background: var(--accent); }
+.pal-sw .pd { right: 11px; bottom: 11px; width: 8px; height: 8px; border-radius: 50%; background: var(--signal); }
 
 /* ---- 37-palette.css ---- */
 /* ===== 37-palette.css — command palette + shortcut sheet (CHAT-UX §8). ===== */
@@ -874,7 +1002,7 @@ html[data-motion=reduce] .indet::after { animation: none; width: 100%; opacity: 
 code.nw, .nw { white-space: nowrap; }
 .dlg .bn-err[data-kind=host_key_changed] .acts .btn:not(.primary):not(.link) { flex-basis: 100%; order: 2; }
 .dlg .bn-err[data-kind=host_key_changed] .acts .btn.primary { order: 1; }
-.pchip[aria-pressed=true] { background: var(--ink); color: var(--on-ink); border-color: var(--ink); }
+.pchip[aria-pressed=true] { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
 .dlg [tabindex="-1"]:focus, .dlg [tabindex="-1"]:focus-visible { outline: none; }
 /* key_rejected: what the diagnosis found, and the exact commands a fix runs */
 .dlg .finds { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 6px; }
@@ -908,7 +1036,7 @@ code.nw, .nw { white-space: nowrap; }
 .tf .btn.link { color: var(--ink-2); font-size: 12.5px; line-height: 18px; }
 .tf .btn.link:hover { color: var(--ink); }
 /* my talk: outlined = sent from here (peer authority); the filled bubble stays the terminal prompt */
-.bub.talkme { border: 1.5px solid var(--ink); background: var(--surface); border-radius: var(--r-bubble); border-top-right-radius: 4px; }
+.bub.talkme { border: 1.5px solid var(--accent); background: var(--surface); border-radius: var(--r-bubble); border-top-right-radius: 4px; }
 .bub.talkme .th { color: var(--ink-2); }
 /* delivery state */
 .ds { display: inline-flex; align-items: center; gap: 6px; min-width: 0; color: var(--ink-2); }
@@ -934,7 +1062,7 @@ code.nw, .nw { white-space: nowrap; }
 .cmw { flex: 1; min-width: 0; }
 .cta { display: block; width: 100%; height: 40px; max-height: 124px; resize: none; border: 0; border-radius: var(--r-btn); background: var(--canvas); color: var(--ink); padding: 9px 12px; font: inherit; line-height: 21px; overflow-y: auto; }
 .cta::placeholder { color: var(--ink-2); }
-.cta:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.cta:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .csend { flex: none; min-width: 72px; }
 .ccnt { margin-top: 2px; text-align: right; font-size: 12.5px; line-height: 18px; color: var(--ink-2); }
 .ccnt.over { color: var(--ink); font-weight: 600; }
@@ -1230,7 +1358,7 @@ const R = (() => {
     set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { } },
   };
   // settings (room.settings) — DIRECTION §6
-  const S = Object.assign({ theme: 'system', motion: 'system', notify: false, titleBadge: true, interval: 3, stallMin: 5, longMin: 30, talkOn: true, fun: false, ovTheme: 'claude', ofcSize: 'm' }, store.get('room.settings', {}));   // fun = 재미 모드 (픽셀 오피스), ovTheme = 오버뷰 팬 테마 (OVERVIEW-CONTRACT §3)
+  const S = Object.assign({ theme: 'system', motion: 'system', notify: false, titleBadge: true, interval: 3, stallMin: 5, longMin: 30, talkOn: true, fun: false, ovTheme: 'claude', ofcSize: 'm', palette: 'default' }, store.get('room.settings', {}));   // fun = 재미 모드 (픽셀 오피스), ovTheme = 오버뷰 팬 테마 (OVERVIEW-CONTRACT §3), palette = 색 팔레트 (21-palettes.css)
   if (!['s', 'm', 'l'].includes(S.ofcSize)) S.ofcSize = 'm';   // 픽셀 오피스 크기: 작게 / 보통 / 크게 (Office.layout)
   delete S.showKids;   // moved to U.showKids (CHAT-UX §3)
   // per-user UI state (room.ui) — CHAT-UX §3: chip filter, sort, open room, drawer, last-viewed marks, 하위 rows, 조용함 expand
@@ -1332,14 +1460,31 @@ const R = (() => {
   }
   const acts = key => A.rooms[key] || [];
   const mq = matchMedia('(prefers-color-scheme: dark)');
+  // 색 팔레트 (설정 › 화면): token overrides in 21-palettes.css via html[data-palette]; 기본 = no attribute (the pre-palette look).
+  // 'match' follows the overview fan theme (S.ovTheme). The red alert family is the same in every palette.
+  const PALETTES = [['default', '기본'], ['claude', 'Claude 풍'], ['chatgpt', 'ChatGPT 풍'], ['gemini', 'Gemini 풍'], ['grok', 'Grok 풍'], ['muse', 'Muse 풍'], ['match', '테마 맞춤', '오버뷰 테마와 맞추기 — 픽셀 오피스 테마의 색을 앱 전체에']];
+  const FANS = ['claude', 'chatgpt', 'gemini', 'grok', 'muse'];
+  const palette = () => S.palette === 'match' ? (FANS.includes(S.ovTheme) ? S.ovTheme : 'claude') : S.palette;   // the palette in effect
+  let bgSig = '';
+  function nativeBg() {   // the WebView2 window's background before the page paints (app.py keeps it in ui.json for the next launch); no-op in a browser
+    try {
+      const api = window.pywebview && window.pywebview.api; if (!api || !api.bg) return;
+      const bg = getComputedStyle(document.documentElement).getPropertyValue('--canvas').trim(), dark = document.documentElement.classList.contains('dark'), sig = bg + dark + S.theme;
+      if (sig !== bgSig && /^#[0-9a-fA-F]{6}$/.test(bg)) { bgSig = sig; api.bg(bg, dark, S.theme === 'system'); }
+    } catch { }
+  }
+  addEventListener('pywebviewready', nativeBg);
   function applySettings() {
     const html = document.documentElement;
+    if (!PALETTES.some(p => p[0] === S.palette)) S.palette = 'default';
+    if (palette() === 'default') html.removeAttribute('data-palette'); else html.dataset.palette = palette();
     html.dataset.theme = S.theme === 'system' ? '' : S.theme;
     if (!html.dataset.theme) html.removeAttribute('data-theme');
     html.classList.toggle('dark', S.theme === 'dark' || (S.theme === 'system' && mq.matches));
     html.dataset.motion = S.motion === 'reduce' ? 'reduce' : S.motion === 'full' ? 'full' : '';
     if (!html.dataset.motion) html.removeAttribute('data-motion');
     text($('#pollsec'), S.interval + '초');
+    nativeBg();
     save(); emit('settings', S);
   }
   mq.addEventListener('change', applySettings);
@@ -1647,6 +1792,7 @@ const R = (() => {
   if (qs.get('motion')) S.motion = qs.get('motion');
   if (qs.get('fun')) S.fun = qs.get('fun') === '1';                                  // overview mode (재미 모드)
   if (qs.get('ovtheme')) S.ovTheme = qs.get('ovtheme');                               // overview fan theme (validated in 70-overview)
+  if (qs.get('palette')) S.palette = qs.get('palette');                               // colour palette (validated in applySettings)
 
   // server presets (ADD-SERVER-ENG §10): GET /api/presets -> [{name, host, port, added}]; refreshed when the channel list changes
   let presetSig = '';
@@ -1673,7 +1819,7 @@ const R = (() => {
     poll();
   }
   return { BADPERM, esc, num, str, koDur, normalize, h, svgUse, text, attr, cls, stClass, $, $$, keyed, keepScroll, isDead, setTimeFor, saveEvents, fmtDur, fmtLive, fmtAgo, sshHint, sshKind, sshFix, sshErr, fmtAbs, fmtHM, timeEl, setTime,
-           store, S, U, A, acts, msgs, mergeMsgs, saveTalks, saveMsgs, loadMsgs, validMsg, setFlow, accumulate, toolBase, save, applySettings, on, emit, ST, LIVE, REST, OLD, isWaiting, needsMe, isAcked, isApproval, rawWaiting, ack, markDone, unmarkDone, DONE_WHY, canHide, isHidden, hideRooms, unhideAll, waitCmp, waitT, M, agentsOf, chan, chName,
+           store, S, U, A, PALETTES, palette, acts, msgs, mergeMsgs, saveTalks, saveMsgs, loadMsgs, validMsg, setFlow, accumulate, toolBase, save, applySettings, on, emit, ST, LIVE, REST, OLD, isWaiting, needsMe, isAcked, isApproval, rawWaiting, ack, markDone, unmarkDone, DONE_WHY, canHide, isHidden, hideRooms, unhideAll, waitCmp, waitT, M, agentsOf, chan, chName,
            refresh, loadPresets, apiPost, setPaused, isPaused: () => paused, view, go, openRoom, closeRoom, openChannel, route, params: () => params, key, keys, onEsc, updateTitle, boot };
 })();
 
@@ -3294,6 +3440,15 @@ window.Importer = (() => {
     return h('label.sw', i, h('i'));
   }
 
+  // ---------- 색 팔레트: radio cards, each with a mini window in its own palette (data-palette scopes the tokens, 21-palettes.css) ----------
+  function palettes() {
+    const sw = v => h('span.pal-sw', { 'aria-hidden': 'true', data: { palette: v } }, h('i.pr'), h('i.ps'), h('i.pk'), h('i.pt'), h('i.pa'), h('i.pd'));
+    const r = radios('색 팔레트', R.PALETTES.map(([v, l, x]) => [v, [sw(v === 'match' ? S.ovTheme : v), h('span.pal-nm', l)], x]), () => S.palette, v => S.palette = v, 'palg');
+    const m = r.btns[r.btns.length - 1].querySelector('.pal-sw');
+    sync.push(() => { if (m.dataset.palette !== S.ovTheme) m.dataset.palette = S.ovTheme; });   // 맞추기 previews the current overview theme
+    return r;
+  }
+
   // ---------- 알림 permission ----------
   const denied = h('div.snote.warn', { role: 'alert', hidden: true }, '브라우저에서 알림이 차단되어 있습니다 — 주소창 자물쇠에서 허용하세요');
   function setNotify(input) {
@@ -3355,7 +3510,9 @@ window.Importer = (() => {
       const th = radios('테마', [['system', '시스템'], ['light', '라이트'], ['dark', '다크']], () => S.theme, v => S.theme = v);
       const mo = radios('움직임', [['system', '시스템'], ['reduce', '줄이기']], () => S.motion === 'reduce' ? 'reduce' : 'system', v => S.motion = v);
       const oz = radios('픽셀 오피스 크기', [['s', '작게'], ['m', '보통'], ['l', '크게']], () => S.ofcSize, v => S.ofcSize = v);
-      const ot = radios('오버뷰 테마', Overview.themes, () => S.ovTheme, v => S.ovTheme = v);   // fan themes style the overview pane only (OVERVIEW-CONTRACT §3)
+      const pa = palettes();
+      const ot = radios('오버뷰 테마', Overview.themes, () => S.ovTheme, v => S.ovTheme = v);   // fan themes style the 픽셀 오피스 (and the 배선 지도 under 기본) (OVERVIEW-CONTRACT §3)
+      const prow = row('palette', '색 팔레트', pa.g, '앱 전체의 색입니다. 라이트/다크는 위의 테마를 따르고, 안읽음·승인 요청 같은 빨간 표시는 모든 팔레트에서 같은 빨강입니다'); prow.classList.add('stack'); attr(pa.g, 'aria-describedby', 'n-palette');
       const chList = h('ul.clist'), keyList = h('ul.klist'), preList = h('ul.plist'); this.preList = preList;
       chList.append(this.noSsh = h('li.meta', { hidden: true }, '아직 서버가 없습니다 — 서버 추가로 첫 서버를 등록하세요'));   // unkeyed: R.keyed leaves it alone
       this.chList = chList; this.keyList = keyList;
@@ -3363,10 +3520,11 @@ window.Importer = (() => {
       const main = h('div.card.smain',
         sec('screen', '화면',
           row('theme', '테마', th.g, '시스템을 고르면 Windows의 라이트/다크 설정을 따릅니다'),
+          prow,
           row('motion', '움직임', mo.g, '입력 중 점의 움직임과 패널·서랍 전환 애니메이션을 끕니다'),
           row('fun', '재미 모드 (픽셀 오피스)', toggle('fun', '재미 모드 (픽셀 오피스)', 'fun'), '방을 열지 않았을 때 오른쪽 칸을 배선 지도 대신 픽셀 사무실로 보여 줍니다'),
           row('ofcsize', '픽셀 오피스 크기', oz.g, '픽셀 사무실의 도트 크기입니다 (오버뷰 위쪽 − / + 와 같음). 고해상도 화면에서는 작게와 보통이 같게 보일 수 있습니다'),
-          row('ovtheme', '오버뷰 테마', ot.g, '오버뷰 칸에만 적용됩니다 — 라이트/다크는 위의 테마를 따릅니다. 팬 테마이며 로고·상표는 쓰지 않습니다')),
+          row('ovtheme', '오버뷰 테마', ot.g, '픽셀 오피스의 테마입니다 (색 팔레트가 기본이면 배선 지도에도 적용) — 라이트/다크는 위의 테마를 따릅니다. 팬 테마이며 로고·상표는 쓰지 않습니다')),
         sec('notify', '알림',
           row('notify', 'Windows 알림', toggle('notify', 'Windows 알림', 'notify', setNotify), '입력 대기·응답 없음·중단됨·끊김으로 바뀔 때, 긴 프로세스가 끝날 때'),
           denied,
@@ -4121,6 +4279,9 @@ const Overview = (() => {
   let D = null, mode = null;
   const officeOk = () => typeof OvOffice !== 'undefined' && OvOffice.available();
   function setFun(v) { S.fun = !!v; R.applySettings(); }
+  // fan theme on the pane: the 픽셀 오피스 always wears it; the 배선 지도 wears it only under the 기본 palette, otherwise it is app chrome (palette tokens)
+  const ovt = () => S.fun || R.palette() === 'default' ? S.ovTheme : '';
+  const setOvt = () => { const t = ovt(); if (t) root.dataset.ovt = t; else delete root.dataset.ovt; };
   function header() {
     const n = M.waiting.length;
     text(turn, '안읽음 ' + n); turn.dataset.n = String(n); attr(turn, 'aria-disabled', n ? null : 'true');
@@ -4128,7 +4289,7 @@ const Overview = (() => {
     sum.replaceChildren(...['work', 'tool', 'child', 'idle', 'done'].filter(k => c[k]).map(k => h('span', C.glyph(k), ST[k] + ' ', h('b', String(c[k])))),
       h('span', '서버 ' + M.channels.filter(x => x.state === 'ok').length + '/' + M.channels.length + ' 연결'));
     segBtns.forEach(b => { const on_ = (b.dataset.v === 'office') === S.fun; attr(b, 'aria-checked', on_ ? 'true' : 'false'); b.tabIndex = on_ ? 0 : -1; });
-    root.dataset.ovt = S.ovTheme;
+    setOvt();
     text(zLbl, ZS[zi()][1]); zSync();
   }
   /* called by Room.renderEmpty (62) whenever no room is open; returns false while the model is not loaded (the loading card stays) */
@@ -4170,7 +4331,7 @@ const Overview = (() => {
   on('pause', kick); on('route', () => { hideTip(); setTimeout(kick, 0); });
   on('hidden', () => { if (root.isConnected && M.loaded && visible()) render(); });   // 정리 / 다시 보기 takes effect at once, not at the next poll
   let prevSig = '';
-  on('settings', () => { const sig = S.fun + S.ovTheme + S.ofcSize + dark() + reduced(); if (sig === prevSig) return; prevSig = sig; root.dataset.ovt = S.ovTheme; if (typeof OvOffice !== 'undefined') OvOffice.invalidate(); if (root.isConnected && M.loaded && visible()) render(); });
+  on('settings', () => { const sig = S.fun + S.ovTheme + S.ofcSize + R.palette() + dark() + reduced(); if (sig === prevSig) return; prevSig = sig; setOvt(); if (typeof OvOffice !== 'undefined') OvOffice.invalidate(); if (root.isConnected && M.loaded && visible()) render(); });
   new ResizeObserver(() => { if (visible()) relayout(); }).observe(pempty);
 
   const api = { label, bindAgent, reduced, dark, active, theme: () => S.ovTheme, kick };

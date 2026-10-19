@@ -148,7 +148,7 @@ const R = (() => {
     set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { } },
   };
   // settings (room.settings) — DIRECTION §6
-  const S = Object.assign({ theme: 'system', motion: 'system', notify: false, titleBadge: true, interval: 3, stallMin: 5, longMin: 30, talkOn: true, fun: false, ovTheme: 'claude', ofcSize: 'm' }, store.get('room.settings', {}));   // fun = 재미 모드 (픽셀 오피스), ovTheme = 오버뷰 팬 테마 (OVERVIEW-CONTRACT §3)
+  const S = Object.assign({ theme: 'system', motion: 'system', notify: false, titleBadge: true, interval: 3, stallMin: 5, longMin: 30, talkOn: true, fun: false, ovTheme: 'claude', ofcSize: 'm', palette: 'default' }, store.get('room.settings', {}));   // fun = 재미 모드 (픽셀 오피스), ovTheme = 오버뷰 팬 테마 (OVERVIEW-CONTRACT §3), palette = 색 팔레트 (21-palettes.css)
   if (!['s', 'm', 'l'].includes(S.ofcSize)) S.ofcSize = 'm';   // 픽셀 오피스 크기: 작게 / 보통 / 크게 (Office.layout)
   delete S.showKids;   // moved to U.showKids (CHAT-UX §3)
   // per-user UI state (room.ui) — CHAT-UX §3: chip filter, sort, open room, drawer, last-viewed marks, 하위 rows, 조용함 expand
@@ -250,14 +250,31 @@ const R = (() => {
   }
   const acts = key => A.rooms[key] || [];
   const mq = matchMedia('(prefers-color-scheme: dark)');
+  // 색 팔레트 (설정 › 화면): token overrides in 21-palettes.css via html[data-palette]; 기본 = no attribute (the pre-palette look).
+  // 'match' follows the overview fan theme (S.ovTheme). The red alert family is the same in every palette.
+  const PALETTES = [['default', '기본'], ['claude', 'Claude 풍'], ['chatgpt', 'ChatGPT 풍'], ['gemini', 'Gemini 풍'], ['grok', 'Grok 풍'], ['muse', 'Muse 풍'], ['match', '테마 맞춤', '오버뷰 테마와 맞추기 — 픽셀 오피스 테마의 색을 앱 전체에']];
+  const FANS = ['claude', 'chatgpt', 'gemini', 'grok', 'muse'];
+  const palette = () => S.palette === 'match' ? (FANS.includes(S.ovTheme) ? S.ovTheme : 'claude') : S.palette;   // the palette in effect
+  let bgSig = '';
+  function nativeBg() {   // the WebView2 window's background before the page paints (app.py keeps it in ui.json for the next launch); no-op in a browser
+    try {
+      const api = window.pywebview && window.pywebview.api; if (!api || !api.bg) return;
+      const bg = getComputedStyle(document.documentElement).getPropertyValue('--canvas').trim(), dark = document.documentElement.classList.contains('dark'), sig = bg + dark + S.theme;
+      if (sig !== bgSig && /^#[0-9a-fA-F]{6}$/.test(bg)) { bgSig = sig; api.bg(bg, dark, S.theme === 'system'); }
+    } catch { }
+  }
+  addEventListener('pywebviewready', nativeBg);
   function applySettings() {
     const html = document.documentElement;
+    if (!PALETTES.some(p => p[0] === S.palette)) S.palette = 'default';
+    if (palette() === 'default') html.removeAttribute('data-palette'); else html.dataset.palette = palette();
     html.dataset.theme = S.theme === 'system' ? '' : S.theme;
     if (!html.dataset.theme) html.removeAttribute('data-theme');
     html.classList.toggle('dark', S.theme === 'dark' || (S.theme === 'system' && mq.matches));
     html.dataset.motion = S.motion === 'reduce' ? 'reduce' : S.motion === 'full' ? 'full' : '';
     if (!html.dataset.motion) html.removeAttribute('data-motion');
     text($('#pollsec'), S.interval + '초');
+    nativeBg();
     save(); emit('settings', S);
   }
   mq.addEventListener('change', applySettings);
@@ -565,6 +582,7 @@ const R = (() => {
   if (qs.get('motion')) S.motion = qs.get('motion');
   if (qs.get('fun')) S.fun = qs.get('fun') === '1';                                  // overview mode (재미 모드)
   if (qs.get('ovtheme')) S.ovTheme = qs.get('ovtheme');                               // overview fan theme (validated in 70-overview)
+  if (qs.get('palette')) S.palette = qs.get('palette');                               // colour palette (validated in applySettings)
 
   // server presets (ADD-SERVER-ENG §10): GET /api/presets -> [{name, host, port, added}]; refreshed when the channel list changes
   let presetSig = '';
@@ -591,6 +609,6 @@ const R = (() => {
     poll();
   }
   return { BADPERM, esc, num, str, koDur, normalize, h, svgUse, text, attr, cls, stClass, $, $$, keyed, keepScroll, isDead, setTimeFor, saveEvents, fmtDur, fmtLive, fmtAgo, sshHint, sshKind, sshFix, sshErr, fmtAbs, fmtHM, timeEl, setTime,
-           store, S, U, A, acts, msgs, mergeMsgs, saveTalks, saveMsgs, loadMsgs, validMsg, setFlow, accumulate, toolBase, save, applySettings, on, emit, ST, LIVE, REST, OLD, isWaiting, needsMe, isAcked, isApproval, rawWaiting, ack, markDone, unmarkDone, DONE_WHY, canHide, isHidden, hideRooms, unhideAll, waitCmp, waitT, M, agentsOf, chan, chName,
+           store, S, U, A, PALETTES, palette, acts, msgs, mergeMsgs, saveTalks, saveMsgs, loadMsgs, validMsg, setFlow, accumulate, toolBase, save, applySettings, on, emit, ST, LIVE, REST, OLD, isWaiting, needsMe, isAcked, isApproval, rawWaiting, ack, markDone, unmarkDone, DONE_WHY, canHide, isHidden, hideRooms, unhideAll, waitCmp, waitT, M, agentsOf, chan, chName,
            refresh, loadPresets, apiPost, setPaused, isPaused: () => paused, view, go, openRoom, closeRoom, openChannel, route, params: () => params, key, keys, onEsc, updateTitle, boot };
 })();

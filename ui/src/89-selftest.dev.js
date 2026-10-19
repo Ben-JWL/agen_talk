@@ -200,6 +200,52 @@
         }
         ov.querySelector('.ov-seg [data-v=wire]').click(); await tick();
         A(S.fun === false && Overview.mode === 'wire', 'mode toggle back to 배선 지도');
+        // 색 팔레트 (21-palettes.css): 기본 = no data-palette and the pre-palette values; every palette moves --canvas/--accent but never the red
+        // alert family; contrast holds; 맞추기 follows S.ovTheme; the 배선 지도 wears the palette (fan theme only under 기본); persisted; picker works
+        {
+          const html = document.documentElement, tk = n => getComputedStyle(html).getPropertyValue(n).trim(), p0 = S.palette, t0 = S.theme, o0 = S.ovTheme;
+          const OLD = { light: { '--canvas': '#F2F2F5', '--surface': '#FFFFFF', '--line': '#E3E3E8', '--ink': '#1D1D1F', '--ink-2': '#6E6E73', '--signal': '#E5342B', '--signal-text': '#C4261E', '--warn': '#9E4F00' },
+                        dark: { '--canvas': '#1C1C1E', '--surface': '#2C2C2E', '--line': '#3A3A3C', '--ink': '#F5F5F7', '--ink-2': '#98989D', '--signal': '#FF5A4F', '--signal-text': '#FF7A70', '--warn': '#F0A24A' } };
+          const RED = ['--signal', '--signal-text', '--on-signal'];
+          const rgb = c => { const e = R.h('i'); e.style.color = c; document.body.append(e); const m = getComputedStyle(e).color.match(/\d+(\.\d+)?/g).slice(0, 3).map(Number); e.remove(); return m; };
+          const L = c => { const [r, g, b] = rgb(c).map(x => { x /= 255; return x <= 0.04045 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4; }); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+          const cr = (a, b) => { const x = L(tk(a)), y = L(tk(b)); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
+          const pb = R.h('button.btn.primary', { style: 'transition: none' }, 'x'); document.body.append(pb);   // no 120 ms background fade mid-check
+          for (const th of ['light', 'dark']) {
+            S.theme = th; S.palette = 'default'; R.applySettings();
+            A(!html.hasAttribute('data-palette') && Object.entries(OLD[th]).every(([k, v]) => tk(k) === v), '기본 keeps the pre-palette tokens (' + th + ')');
+            A(rgb(getComputedStyle(pb).backgroundColor).join() === rgb(tk('--ink')).join() && ov.dataset.ovt === S.ovTheme, '기본: primary = ink, 배선 지도 keeps the fan theme (' + th + ')');
+            const red = RED.map(tk).join(), seen = new Set();
+            for (const [p] of R.PALETTES) {
+              if (p === 'default' || p === 'match') continue;
+              S.palette = p; R.applySettings(); await tick();
+              A(html.dataset.palette === p && R.palette() === p, 'palette attribute ' + p);
+              A(RED.map(tk).join() === red, 'alert red is the same in ' + p + '/' + th);
+              A(tk('--canvas') !== OLD[th]['--canvas'] && tk('--accent') !== tk('--ink') && rgb(tk('--accent')).join() === rgb(getComputedStyle(pb).backgroundColor).join(), p + ' moves --canvas / --accent; the primary button follows');
+              A(cr('--ink', '--surface') >= 4.5 && cr('--ink', '--canvas') >= 4.5 && cr('--on-accent', '--accent') >= 4.5 && cr('--ink-2', '--surface') >= 3 && cr('--ink-2', '--canvas') >= 3 && cr('--focus', '--surface') >= 3 && cr('--signal-text', '--surface') >= 4.5, 'contrast in ' + p + '/' + th);
+              A(!ov.dataset.ovt && rgb(getComputedStyle(ov).backgroundColor).join() === rgb(tk('--canvas')).join(), '배선 지도 wears the ' + p + ' palette');
+              seen.add(tk('--canvas') + tk('--accent'));
+            }
+            A(seen.size === 5, 'five distinct palettes (' + th + ')');
+          }
+          S.palette = 'match'; S.ovTheme = 'gemini'; R.applySettings(); A(html.dataset.palette === 'gemini', '맞추기 follows the overview theme');
+          S.ovTheme = 'muse'; R.applySettings(); A(html.dataset.palette === 'muse' && R.palette() === 'muse', '맞추기 follows an overview theme change');
+          S.palette = 'nope'; R.applySettings(); A(S.palette === 'default' && !html.hasAttribute('data-palette'), 'unknown palette falls back to 기본');
+          S.palette = 'grok'; R.applySettings(); await new Promise(r => setTimeout(r, 250));
+          A(JSON.parse(localStorage.getItem('room.settings') || '{}').palette === 'grok', 'palette persists');
+          // the picker in 설정 › 화면: radio cards with swatches drawn in their own palette; click + arrow keys
+          location.hash = '#/settings'; await wait(() => document.querySelector('.palg') && document.querySelector('.palg').offsetParent);
+          const pg = document.querySelector('.palg'), rb = [...pg.querySelectorAll('[role=radio]')];
+          A(pg.getAttribute('role') === 'radiogroup' && rb.length === R.PALETTES.length && rb.every(b => b.querySelector('.pal-sw[data-palette]')) && rb.filter(b => b.tabIndex === 0).length === 1 && rb.find(b => b.dataset.v === 'grok').getAttribute('aria-checked') === 'true', 'palette picker: one radio per palette, roving tabindex, current checked');
+          const sc = n => getComputedStyle(rb.find(b => b.dataset.v === n).querySelector('.pal-sw')).backgroundColor;
+          A(sc('claude') !== sc('chatgpt') && sc('default') !== sc('grok'), 'swatches draw in their own palette');
+          rb.find(b => b.dataset.v === 'chatgpt').click(); A(S.palette === 'chatgpt' && html.dataset.palette === 'chatgpt', 'clicking a card applies it');
+          rb.find(b => b.dataset.v === 'chatgpt').focus(); rb[0].parentNode.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+          A(S.palette === 'gemini' && document.activeElement === rb.find(b => b.dataset.v === 'gemini'), 'arrow keys move the palette');
+          A(rb.find(b => b.dataset.v === 'match').querySelector('.pal-sw').dataset.palette === S.ovTheme, '맞추기 card previews the overview theme');
+          location.hash = '#/chat'; await wait(() => !document.querySelector('#pempty').hidden);
+          pb.remove(); S.palette = p0; S.theme = t0; S.ovTheme = o0; R.applySettings(); await tick();
+        }
         // clicking an agent routes to its room
         ov.querySelector('[data-agent="s01:cl-data"]').click();
         await wait(() => location.hash === '#/chat/s01/cl-data' && !document.querySelector('#proom').hidden);

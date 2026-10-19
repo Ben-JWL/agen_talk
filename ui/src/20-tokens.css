@@ -1,29 +1,41 @@
-/* ===== 20-tokens.css — CHAT-UX §2. Neutral surfaces, one signal colour (needs me), one evidence hue (stall). Hex lives ONLY here. ===== */
-:root {
+/* ===== 20-tokens.css — CHAT-UX §2. Neutral surfaces, one signal colour (needs me), one evidence hue (stall). Hex lives ONLY here and in 21-palettes.css.
+   This file is the 기본 palette (no data-palette on <html>); 21-palettes.css overrides the same tokens per S.palette. The signal (red alert) family is never overridden. ===== */
+:root, [data-palette=default] {
   --canvas: #F2F2F5; --surface: #FFFFFF; --line: #E3E3E8;
   --ink: #1D1D1F; --ink-2: #6E6E73; --on-ink: #FFFFFF;
   --signal: #E5342B; --signal-text: #C4261E; --on-signal: #FFFFFF; --warn: #9E4F00;
   --tint-signal: color-mix(in srgb, var(--signal) 8%, var(--surface));
   --tile: var(--canvas);
+  --ok: #3E8A5A;
   --shadow-float: 0 8px 32px rgba(0,0,0,.14);
   --scrim: rgba(0,0,0,.3);
-  /* status colours: shape carries the state, colour only echoes it */
-  --st-work: var(--ink-2); --st-tool: var(--ink-2); --st-child: var(--ink-2); --st-user: var(--signal); --st-stall: var(--warn);
-  --st-idle: var(--ink-2); --st-done: var(--ink-2); --st-stopped: var(--ink-2); --st-dead: var(--ink);
+}
+:root {
   --font: "Apple SD Gothic Neo", "Pretendard", "Malgun Gothic", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
   --mono: "Cascadia Mono", "D2Coding", Consolas, "Noto Sans Mono CJK KR", ui-monospace, monospace;
   --r-bubble: 16px; --r-av: 12px; --r-btn: 8px; --r-card: 12px; --r-dlg: 16px; --r-chip: 6px;
   --dur-fast: 120ms; --dur-mid: 160ms;
   color-scheme: light;
 }
+/* roles derived from the base colours; re-declared on every palette scope (the settings swatches carry data-palette too) so they resolve there.
+   기본: the accent IS the ink (black/white), so these are the same pixels as before palettes existed. */
+:root, [data-palette] {
+  --accent: var(--ink); --on-accent: var(--on-ink); --accent-2: var(--ink-2); --focus: var(--ink);
+  --row-sel: var(--canvas); --tab-sel: color-mix(in srgb, var(--ink) 8%, transparent); --tab-on: var(--ink); --rail-bg: var(--canvas);
+  --bub-me: var(--accent); --on-bub-me: var(--on-accent);
+  /* status colours: shape carries the state, colour only echoes it */
+  --st-work: var(--ink-2); --st-tool: var(--ink-2); --st-child: var(--ink-2); --st-user: var(--signal); --st-stall: var(--warn);
+  --st-idle: var(--ink-2); --st-done: var(--ink-2); --st-stopped: var(--ink-2); --st-dead: var(--ink);
+}
 html[data-theme=dark] { color-scheme: dark; }
 @media (prefers-color-scheme: dark) { html:not([data-theme=light]) { color-scheme: dark; } }
-html[data-theme=dark], html.dark {
+html[data-theme=dark], html.dark, .dark [data-palette=default] {
   --canvas: #1C1C1E; --surface: #2C2C2E; --line: #3A3A3C;
   --ink: #F5F5F7; --ink-2: #98989D; --on-ink: #1D1D1F;
   --signal: #FF5A4F; --signal-text: #FF7A70; --on-signal: #1D1D1F; --warn: #F0A24A;
   --tint-signal: color-mix(in srgb, var(--signal) 6%, var(--surface));
   --tile: #3A3A3C;
+  --ok: #3E8A5A;
   --shadow-float: 0 8px 32px rgba(0,0,0,.5);
   --scrim: rgba(0,0,0,.55);
 }
@@ -38,7 +50,7 @@ pre, code, .mono, .cmd { word-break: break-all; }
 button, input, select { font: inherit; color: inherit; letter-spacing: 0; }
 button { cursor: pointer; }
 a { color: inherit; }
-:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; border-radius: 4px; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
 h1, h2, h3, p { margin: 0; }
 ul { margin: 0; padding: 0; list-style: none; }
 svg { display: inline-block; vertical-align: middle; }

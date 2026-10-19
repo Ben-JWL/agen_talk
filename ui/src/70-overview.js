@@ -137,6 +137,9 @@ const Overview = (() => {
   let D = null, mode = null;
   const officeOk = () => typeof OvOffice !== 'undefined' && OvOffice.available();
   function setFun(v) { S.fun = !!v; R.applySettings(); }
+  // fan theme on the pane: the 픽셀 오피스 always wears it; the 배선 지도 wears it only under the 기본 palette, otherwise it is app chrome (palette tokens)
+  const ovt = () => S.fun || R.palette() === 'default' ? S.ovTheme : '';
+  const setOvt = () => { const t = ovt(); if (t) root.dataset.ovt = t; else delete root.dataset.ovt; };
   function header() {
     const n = M.waiting.length;
     text(turn, '안읽음 ' + n); turn.dataset.n = String(n); attr(turn, 'aria-disabled', n ? null : 'true');
@@ -144,7 +147,7 @@ const Overview = (() => {
     sum.replaceChildren(...['work', 'tool', 'child', 'idle', 'done'].filter(k => c[k]).map(k => h('span', C.glyph(k), ST[k] + ' ', h('b', String(c[k])))),
       h('span', '서버 ' + M.channels.filter(x => x.state === 'ok').length + '/' + M.channels.length + ' 연결'));
     segBtns.forEach(b => { const on_ = (b.dataset.v === 'office') === S.fun; attr(b, 'aria-checked', on_ ? 'true' : 'false'); b.tabIndex = on_ ? 0 : -1; });
-    root.dataset.ovt = S.ovTheme;
+    setOvt();
     text(zLbl, ZS[zi()][1]); zSync();
   }
   /* called by Room.renderEmpty (62) whenever no room is open; returns false while the model is not loaded (the loading card stays) */
@@ -186,7 +189,7 @@ const Overview = (() => {
   on('pause', kick); on('route', () => { hideTip(); setTimeout(kick, 0); });
   on('hidden', () => { if (root.isConnected && M.loaded && visible()) render(); });   // 정리 / 다시 보기 takes effect at once, not at the next poll
   let prevSig = '';
-  on('settings', () => { const sig = S.fun + S.ovTheme + S.ofcSize + dark() + reduced(); if (sig === prevSig) return; prevSig = sig; root.dataset.ovt = S.ovTheme; if (typeof OvOffice !== 'undefined') OvOffice.invalidate(); if (root.isConnected && M.loaded && visible()) render(); });
+  on('settings', () => { const sig = S.fun + S.ovTheme + S.ofcSize + R.palette() + dark() + reduced(); if (sig === prevSig) return; prevSig = sig; setOvt(); if (typeof OvOffice !== 'undefined') OvOffice.invalidate(); if (root.isConnected && M.loaded && visible()) render(); });
   new ResizeObserver(() => { if (visible()) relayout(); }).observe(pempty);
 
   const api = { label, bindAgent, reduced, dark, active, theme: () => S.ovTheme, kick };

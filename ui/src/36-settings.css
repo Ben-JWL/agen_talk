@@ -16,7 +16,7 @@
 .snote { font-size: 12.5px; line-height: 18px; color: var(--ink-2); margin-top: 2px; }
 .snote.warn { color: var(--warn); margin: 0; padding: 4px 16px 8px; font-weight: 500; }
 .sctl { flex: none; display: flex; align-items: center; min-height: 32px; }
-.seg button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.seg button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .shd { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .shd + p.meta { margin: 0 0 8px 4px; }
 .ssec > p.meta { margin: 0 0 8px 4px; }
@@ -52,3 +52,20 @@
 .ssec > .implin { margin: 0 0 8px 4px; }
 .sel-text { user-select: text; }
 .snote.mono { font-family: var(--mono); font-size: 12px; word-break: break-all; }
+/* 색 팔레트: a stacked row (label above), radio cards with a mini window drawn in each palette's own tokens (the swatch carries data-palette) */
+.srow.stack { flex-direction: column; align-items: stretch; gap: 10px; padding-bottom: 12px; }
+.srow.stack .sctl { flex: 1; }
+.palg { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 6px; width: 100%; }
+.palg button { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; padding: 6px 4px 5px; border: 1px solid transparent; border-radius: 10px; background: none; color: var(--ink-2); font-size: 12.5px; line-height: 16px; font-weight: 500; }
+.palg button:hover { background: var(--canvas); color: var(--ink); }
+.palg button[aria-checked=true] { color: var(--ink); border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); font-weight: 600; }
+.palg button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.pal-nm { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pal-sw { position: relative; display: block; width: 76px; height: 46px; flex: none; border-radius: 8px; background: var(--canvas); box-shadow: inset 0 0 0 1px var(--line), 0 1px 2px rgba(0,0,0,.08); overflow: hidden; }
+.pal-sw i { position: absolute; display: block; }
+.pal-sw .pr { left: 0; top: 0; bottom: 0; width: 13px; background: var(--rail-bg); box-shadow: inset -1px 0 0 var(--line); }
+.pal-sw .ps { left: 19px; right: 6px; top: 6px; bottom: 6px; border-radius: 5px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); }
+.pal-sw .pk { left: 25px; top: 12px; width: 26px; height: 4px; border-radius: 2px; background: var(--ink); }
+.pal-sw .pt { left: 25px; top: 20px; width: 36px; height: 3px; border-radius: 2px; background: var(--ink-2); opacity: .7; }
+.pal-sw .pa { left: 25px; bottom: 11px; width: 22px; height: 8px; border-radius: 4px; background: var(--accent); }
+.pal-sw .pd { right: 11px; bottom: 11px; width: 8px; height: 8px; border-radius: 50%; background: var(--signal); }
