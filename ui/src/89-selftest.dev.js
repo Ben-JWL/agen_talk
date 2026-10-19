@@ -158,6 +158,16 @@
         if (Overview.mode === 'office') {   // idle walks: scheduled for idle agents, never under reduced motion
           A(OvOffice.walkTest(true) === 0, 'idle walks never start under reduced motion');
           A(OvOffice.walkTest(false) === 1, 'an idle agent gets up for a walk (one per scheduling step)');
+          // spatial variety: archetypes per project room, filler kinds, desk variants; all deterministic
+          const sc = OvOffice.scene(), ar = sc.rooms.filter(r => r.arch), fl = sc.rooms.filter(r => r.filler);
+          A(ar.length >= 3 && new Set(ar.map(r => r.arch)).size >= 3 && ar.every(r => OvOffice.archs().includes(r.arch)), 'at least 3 distinct room archetypes in the scene (' + ar.map(r => r.arch).join(',') + ')');
+          A(ar.every((r, i) => !ar.some((q, j) => j !== i && q.si === r.si && q.arch === r.arch)), 'rooms on one storey never share an archetype');
+          A(fl.every(r => r.spots > 0) && new Set(Array.from({ length: 24 }, (_, i) => OvOffice.fillKind('s' + i, 200))).size >= 5, 'filler rooms vary (' + (fl.map(r => r.filler).join(',') || 'none at this width') + ') and each has an idle-walk spot');
+          A(sc.desks.length && sc.desks.every(d => d.v === OvOffice.deskOf(d.id, d.kind)) && new Set(sc.desks.map(d => d.v)).size >= 4 && new Set(sc.desks.map(d => d.scr)).size >= 3, 'desk variants are a pure function of the agent id and vary (screen rect per variant)');
+          const ids = Array.from({ length: 40 }, (_, i) => 'proj-' + i);
+          A(ids.every(id => OvOffice.archOf(id) === OvOffice.archOf(id)) && new Set(ids.map(OvOffice.archOf)).size >= 6 && new Set(ids.map(id => OvOffice.deskOf(id, 'lead'))).size >= 8, 'archetype / desk pickers are deterministic and spread');
+          const key = x => JSON.stringify([x.rooms.filter(r => r.arch).map(r => r.id + '=' + r.arch), x.desks.map(d => d.id + '=' + d.v)]);
+          OvOffice.relayout(); A(key(OvOffice.scene()) === key(sc), 'a relayout assigns the same archetypes and desks');   // fillers follow the width, which a relayout may change (scrollbar)
         }
         ov.querySelector('.ov-seg [data-v=wire]').click(); await tick();
         A(S.fun === false && Overview.mode === 'wire', 'mode toggle back to 배선 지도');
