@@ -5,7 +5,8 @@
   // ---------- classification ----------
   const toWait = e => (e.type === 'chan' && e.to === 'error') || e.type === 'start' && (e.to === 'user' || e.to === 'stall') || e.type === 'status' && (e.to === 'user' || e.to === 'stall' || ((e.to === 'stopped' || e.to === 'dead') && (LIVE.has(e.from) || e.from === 'user')));
   const longProc = e => e.type === 'proc-done' && e.dur >= S.longMin * 60;
-  const notable = e => toWait(e) || longProc(e);                               // toast + Windows notification set
+  const readWait = e => toWait(e) && e.type !== 'chan' && e.agent && R.M.agents.get(e.key) === e.agent && !R.needsMe(e.agent);   // 읽음 / 작업 완료: this episode was already seen
+  const notable = e => (toWait(e) && !readWait(e)) || longProc(e);              // toast + Windows notification set
   const reason = e => { const a = e.agent || {}; if (e.type === 'talk') return ''; if (e.type === 'chan') { const c = R.chan(e.ch); return e.to === 'error' ? String(c && c.error || '').split('\n')[0] : ''; } return e.type === 'proc-done' ? String(e.cmd || '') : e.to === 'user' ? (a.now || a.why || '') : (a.why || ''); };
   const toastSentence = e => e.type === 'talk' ? (e.kind === 'held' ? '보낸 톡이 터미널에서 승인을 기다립니다 (5분)' : e.kind === 'unreach' ? '보낸 톡이 연결 안 됨으로 닿지 못했습니다' : '보낸 톡이 거절되었습니다') : e.type === 'chan' ? '연결이 끊겼습니다 — 이 채널의 에이전트 상태를 확인할 수 없습니다' : e.type === 'proc-done' ? '오래 걸린 작업이 끝났습니다 (' + R.fmtDur(e.dur) + (e.cmd ? ', ' + R.str(e.cmd, 40) : '') + ')'
     : { user: '입력을 기다립니다', stall: '응답이 없습니다', stopped: '중단되었습니다', dead: '연결이 끊겼습니다' }[e.to];
@@ -50,6 +51,15 @@
   }
   // a talk I sent needs attention (TALK-UX §5.5): held always (the answer is at another window), refused/unreachable only when its room is not open
   const clearKey = k => { const n = notes.get(k); if (n) { n.close(); notes.delete(k); } for (const t of [...stack.children]) if (t._key === k) dismiss(t); };
+  // 읽음 / 작업 완료 clear what was shown for those rooms; 작업 완료 offers 되돌리기 for a few seconds
+  on('ack', keys => { for (const k of keys) clearKey(k); });
+  on('undo', u => {
+    for (const t of [...stack.children]) if (t._key === 'undo:' + u.key) t.remove();
+    const t = h('div.toast.undo', h('div.tx', h('div.meta', u.text)),
+      h('div.ta', h('button.btn.sm.undob', { type: 'button', on: { click: () => { dismiss(t); u.undo(); } } }, '되돌리기'),
+        h('button.x', { type: 'button', 'aria-label': '닫기', title: '닫기', on: { click: () => dismiss(t) } }, '×')));
+    t._key = 'undo:' + u.key; t._tm = setTimeout(() => dismiss(t), 8000); stack.append(t);
+  });
   on('talk', e => { if (e.kind === 'clear') return clearKey(e.key); toast(e); if (canNotify()) notify(e); });   // 'clear': the held talk was approved / expired, its toast is stale
   on('events', evs => {
     if (!evs || !evs.length) return;

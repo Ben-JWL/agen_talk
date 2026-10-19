@@ -88,13 +88,13 @@ const OvWire = (() => {
       } else {
         const n = byKey.get(b.n.key) || b.n; b.n = n;
         el.className = 'ovn' + (b.kind === 'kid' ? ' kid' : '');
-        R.stClass(el, n.st); el.dataset.st = n.st; el.dataset.w = n.waiting ? '1' : '';
+        R.stClass(el, n.st); el.dataset.st = n.st; el.dataset.w = n.waiting ? '1' : ''; el.dataset.ack = n.ack ? '1' : '';
         attr(el, 'aria-label', A.label(n));
         text(el.querySelector('.nm'), n.name);
         C.setGlyph(el.querySelector('.s .gl'), n.st);
         text(el.querySelector('.stl'), SHORT[n.st] || ST[n.st]);
         const sub = n.st === 'tool' && n.a.now ? n.a.now : n.why;
-        text(el.querySelector('.why'), (sub ? '· ' + sub : '') + (n.kids.length < n.nKids ? ' · 하위 ' + n.nKids : ''));
+        text(el.querySelector('.why'), (sub ? '· ' + sub : '') + (n.ack ? ' · 읽음' : '') + (n.kids.length < n.nKids ? ' · 하위 ' + n.nKids : ''));
       }
     }
     edges(D);

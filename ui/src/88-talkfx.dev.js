@@ -15,7 +15,7 @@
   const kid = (parent, id, tool, name, st, why, age, since, down, o = {}) => nd(id, tool, name, st, why, age, since, { ...o, msgs: [down ? (down.enc ? M_('down', tool === 'codex' ? 'codex' : 'agent', parent.id, id, parent.name, down.ago, '', { encrypted: true, role: down.role || 'worker' }) : M_('down', 'agent', parent.id, id, parent.name, down.ago, down.t)) : null, ...(o.msgs || [])].filter(Boolean) });
 
   // 1. Claude root with sub-agents: parent room, child rooms, report, follow-up, locked (codex) instruction, cross-process child
-  const P = nd('cl-data', 'claude', '데이터셋 정리', 'user', '답변 끝남 · 입력 기다림', 240, 3100, { meta: 'pid 51044 · ~/work/data · claude-opus-4', talk: TOK, hidden: 0 });
+  const P = nd('cl-data', 'claude', '데이터셋 정리', 'user', '질문함 · 답변 기다림', 240, 3100, { last: 'data_lint 승인이 끝나면 통계까지 이어서 진행할까요?', meta: 'pid 51044 · ~/work/data · claude-opus-4', talk: TOK, hidden: 0 });
   P.kids = [
     kid(P, 'data-dedupe', 'claude', 'data_dedupe', 'done', '완료 보고됨', 900, null, { ago: 3000, t: '데이터셋 v2에서 중복 행을 찾아 제거해 줘.\n같은 키는 하나만 남기고, 제거 목록은 results/dups.txt 에 남겨 줘.\n통계는 건드리지 마.' }, { meta: 'general-purpose', msgs: [M_('up', 'agent', 'data-dedupe', 'cl-data', '데이터셋 정리', 1800, '중복 12건 제거함. 제거 목록은 results/dups.txt.')] }),
     kid(P, 'data-stats', 'codex', 'data_stats', 'work', '모델 응답 중', 8, 1500, { enc: true, ago: 1520, role: 'worker' }, { meta: 'gpt-5.1 · worker', now: '통계 요약을 작성하는 중입니다', acts: acts([1500, 'say', '통계 요약을 작성하는 중입니다'], [1490, 'tool', '$ python stats.py --lib v2']),
@@ -32,8 +32,8 @@
   const MM = nd('cl-parse', 'claude', '검색 결과 파싱', 'tool', 'Bash 실행 중 3m', 2, 190, { now: 'Bash: python parse.py --all results/', meta: 'pid 51022 · ~/work/msa · claude-opus-4', talk: TOK,
     acts: acts([900, 'user', 'results/ 의 검색 결과를 전부 파싱해서 TSV 로 합쳐 줘.'], [880, 'say', '결과 파일 240개를 읽는 중입니다.'], [800, 'tool', 'Read: results/batch_01.m8'], [190, 'tool', 'Bash: python parse.py --all results/']),
     msgs: [M_('down', 'talk', 'agen-talk:alice@OTHER-PC', 'cl-parse', '에겐 톡', 500, '파싱 끝나면 요약 표도 같이 만들어 주세요.', { msg_id: 'at-0badf00d', by: 'alice@OTHER-PC' }), M_('down', 'peer', 'cl-data', 'cl-parse', '데이터셋 정리', 300, '결과 위치는 ~/work/data/results 야.')] });
-  // 3. bypass room with every delivery state seeded
-  const BY = nd('cl-bypass', 'claude', '테스트 결과 점검', 'user', '답변 끝남 · 입력 기다림', 60, null, { meta: 'pid 51100 · ~/work/tests · claude-opus-4 · --dangerously-skip-permissions', talk: { ok: true, hold: true, max: 4000 }, acts: acts([4000, 'user', '정렬 결과를 점검해 줘.'], [3900, 'say', '정렬 결과 12개를 점검했고 이상은 없습니다.']) });
+  // 3. bypass room with every delivery state seeded (its turn ended with a plain answer: done, not 입력 대기)
+  const BY = nd('cl-bypass', 'claude', '테스트 결과 점검', 'done', '답변 완료', 60, null, { meta: 'pid 51100 · ~/work/tests · claude-opus-4 · --dangerously-skip-permissions', talk: { ok: true, hold: true, max: 4000 }, acts: acts([4000, 'user', '정렬 결과를 점검해 줘.'], [3900, 'say', '정렬 결과 12개를 점검했고 이상은 없습니다.']) });
   // 4. waiting for approval (confirm card adds the line)
   const WA = nd('cl-wait', 'claude', '로그 정리 스크립트', 'user', '명령 승인 대기', 130, 400, { now: '$ rm -rf build/ && make all', meta: 'pid 51200 · ~/work/logs · claude-opus-4', talk: TOK, acts: acts([420, 'user', 'build 폴더 정리하고 다시 빌드해 줘.'], [400, 'say', 'build/ 를 지우고 다시 빌드하겠습니다.'], [130, 'ask', '$ rm -rf build/ && make all']) });
   // 5. codex: daemon-hosted (steer line), --no-daemon
@@ -83,7 +83,7 @@
   const find = (id, list = Object.values(ROOTS).flat()) => { for (const n of list) { if (n.id === id) return n; const r = find(id, n.kids); if (r) return r; } return null; };
   // ?walk=1 (screenshots): the pixel office starts an idle walk as soon as an idle agent is on screen, with a long stay
   if (new URLSearchParams(location.search).has('walk')) setTimeout(() => { if (typeof OvOffice !== 'undefined') OvOffice.walkNow(); }, 300);
-  const fx = window.__fx = { down: false, nodes: ROOTS, talkOn: true, posts: [], find,
+  const fx = window.__fx = { down: false, nodes: ROOTS, talkOn: true, posts: [], srvPosts: [], srvJob: { id: null }, find,
     deliver(key) { const [ch, id] = [key.slice(0, key.indexOf(':')), key.slice(key.indexOf(':') + 1)], n = find(id), e = (R.A.talks[key] || []).slice().reverse().find(x => x.mid); if (!n || !e) return false; n.msgs = [...n.msgs, M_('down', 'talk', 'agen-talk:alice@PC', id, '에겐 톡', 1, e.text, { msg_id: e.mid, by: 'alice@PC' })]; return true; } };
   const j = (code, body, wait = 0) => new Promise(r => setTimeout(() => r(new Response(JSON.stringify(body), { status: code, headers: { 'Content-Type': 'application/json' } })), wait));
   window.fetch = (url, opts) => {
@@ -93,6 +93,20 @@
     if (p === 'api/state') { const ch = u.searchParams.get('ch'), dt = (Date.now() - T0) / 1000; return j(200, { time: new Date().toTimeString().slice(0, 8), ts: Date.now() / 1000, host: ch, user: 'me', os: ch === 'pc' ? 'windows' : 'linux', warnings: [], agents: aged(ROOTS[ch] || [], dt) }); }
     if (p === 'api/app') return j(200, { version: 'dev-talkfx', mode: 'cli', logdir: '', talk_on: fx.talkOn, talk_max: 4000 });
     if (p === 'api/presets') return j(200, []);
+    // 서버 추가 jobs (key_rejected flow): POST -> diagnosing -> confirm_fix (a group-writable home) -> the answer -> fixing -> done | error
+    const sj = fx.srvJob;
+    if (p === 'api/servers' && opts && opts.method === 'POST') { const b = JSON.parse(opts.body); fx.srvPosts.push({ ...b, password: b.password ? '***' : '' }); Object.assign(sj, { id: 'fxjob' + (++seq), n: 0, choice: null, after: 0 }); return j(202, { job: sj.id }); }
+    if (p === 'api/servers/job/confirm') { const b = JSON.parse(opts.body); if (b.id !== sj.id) return j(404, { error: 'nf' }); if (b.action === 'fix') { sj.choice = b.choice; sj.after = 0; } return j(200, { ok: true }); }
+    if (p === 'api/servers/job/cancel') { sj.choice = 'cancel'; return j(200, { ok: true }); }
+    if (p === 'api/servers/job') {
+      if (u.searchParams.get('id') !== sj.id) return j(404, { error: 'nf' });
+      const base = { id: sj.id, key: 'C:\\fx\\id_ed25519.pub', comment: 'agen-talk@FX', findings: [{ id: 'home_w', level: 'fix', text: '홈 디렉터리(~)를 그룹/다른 사용자가 쓸 수 있어서 sshd(StrictModes)가 키를 무시합니다 (현재 775)', fix: 'home_w' }, { id: 'nocfg', level: 'info', text: '<b>sshd</b> 설정 파일을 읽을 수 없어 서버 설정은 확인하지 못했습니다', fix: null }], fix_cmds: ['chmod go-w ~'], session_ok: true };
+      if (++sj.n === 1) return j(200, { ...base, state: 'diagnosing', phase: 'diagnosing' });
+      if (!sj.choice) return j(200, { ...base, state: 'confirm_fix', phase: 'confirm_fix' });
+      if (sj.choice === 'fix' && ++sj.after === 1) return j(200, { ...base, state: 'fixing', phase: 'fixing' });
+      if (sj.choice === 'fix' || sj.choice === 'session') return j(200, { ...base, state: 'done', phase: 'verifying', channel: { id: 'pwsess', name: 'lab-b' }, auth: sj.choice === 'session' ? 'password-session' : undefined, fixed: sj.choice === 'fix' ? ['chmod go-w ~'] : undefined });
+      return j(200, { ...base, state: 'error', phase: 'confirm_fix', kind: sj.choice === 'cancel' ? 'cancelled' : 'key_rejected', message: '키는 등록됐지만 키 로그인이 거절됐습니다' });
+    }
     if (p === 'api/talk/setting') { const b = JSON.parse(opts.body); fx.talkOn = !!b.on; return j(200, { on: fx.talkOn }); }
     if (p === 'api/talk') {
       const b = JSON.parse(opts.body); fx.posts.push(b); const t = b.text, mid = 'at-' + Math.random().toString(16).slice(2, 10).padEnd(8, '0'), wait = /#slow/.test(t) ? 4000 : 150;

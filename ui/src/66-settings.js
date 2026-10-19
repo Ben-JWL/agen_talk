@@ -57,6 +57,7 @@
   // ---------- 채널 ----------
   function chanRow(c) {
     const el = h('li.crow', h('svg.cic', { 'aria-hidden': 'true' }, h('use')), h('div.cmain', h('div.cname', h('b', h('a', { href: '#/chat' })), ' ', h('span.meta.tgt')), h('div.verdict', h('span.vs'), R.timeEl(Date.now(), 'live', 'vt'), h('span.ve')), h('div.meta.cwarn', { hidden: true }), h('div.cbp', { hidden: true }, h('b.bpt', R.BADPERM.title), h('p.meta.bpb'), States.badperm())), h('div.cacts', h('button.btn.sm.primary.fix', { type: 'button', hidden: true, on: { click: () => AddServer.open({ ch: el.dataset.key }) } }, '이 서버에 키 등록하기'),
+      h('button.btn.sm.rekey', { type: 'button', hidden: true, title: '이 서버는 키 로그인이 거절되어 실행할 때마다 비밀번호를 묻습니다. 키를 다시 등록하고, 거절되면 원인(폴더 권한 등)을 찾아 고칩니다.', on: { click: () => AddServer.open({ ch: el.dataset.key, rekey: true }) } }, '키 로그인 다시 설정'),
       h('button.btn.sm.retry', { type: 'button', title: '허브가 자동으로 다시 연결합니다 (최대 1분 간격). 이 버튼은 지금 한 번 확인합니다.', on: { click: () => R.refresh() } }, '지금 확인')));
     return el;
   }
@@ -73,7 +74,9 @@
     const bk = c.kind === 'ssh' && c.state === 'error' ? R.sshKind(c.error) : '', bpm = bk === 'badperm' || bk === 'badpermx', bx = el.querySelector('.cbp'); bx.hidden = !bpm;
     if (bpm) { text(bx.querySelector('.bpb'), R.sshHint(c.error)); bx.querySelector('.bperm').hidden = bk !== 'badperm'; }   // the copy-paste fix only fits %USERPROFILE%\.ssh\config
     const fx = R.sshFix(c), rb = el.querySelector('.retry');
-    el.querySelector('.fix').hidden = !fx; rb.hidden = c.state !== 'error'; cls(rb, 'link', fx); cls(rb, 'sm', !fx);
+    const pws = c.kind === 'ssh' && c.auth === 'password-session', fb = el.querySelector('.fix');   // password-session: the key was refused once; offer the key again
+    fb.hidden = !fx; text(fb, pws ? '비밀번호로 다시 연결' : '이 서버에 키 등록하기'); rb.hidden = c.state !== 'error'; cls(rb, 'link', fx); cls(rb, 'sm', !fx);
+    el.querySelector('.rekey').hidden = !pws;
   }
 
   // ---------- 단축키 ----------

@@ -10,7 +10,7 @@ const Room = (() => {
   const dayLabel = ms => { const k = dayKey(ms), t = dayKey(Date.now()), y = dayKey(Date.now() - 864e5), d = new Date(ms); return k === t ? '오늘' : k === y ? '어제' : (d.getMonth() + 1) + '월 ' + d.getDate() + '일'; };
   const small = () => matchMedia('(max-width: 760px)').matches;
   const cache = new Map();                       // key -> last known agent (a session that disappeared keeps its room)
-  let key = null, a = null, prevIds = new Set(), lastId = null, opening = true, tailOk = false, wantFocus = false, sawAgent = false;
+  let key = null, a = null, prevIds = new Set(), lastId = null, opening = true, tailOk = false, wantFocus = false, sawAgent = false, ackOpen = false;
 
   // ---------- skeleton of the pane ----------
   const ptitle = h('h2.t-title.ptitle'), pproj = h('span.pj', { hidden: true }), pmeta = h('div.pmeta.meta'), crumb = h('a.crumb.lnk', { href: '#/chat' }), back = h('button.back.btn.link', { type: 'button', title: '오버뷰로 (Esc)', on: { click: () => R.closeRoom() } }, '‹ 오버뷰');
@@ -21,7 +21,26 @@ const Room = (() => {
   const seg = h('div.seg.fseg', { role: 'group', 'aria-label': '보기', hidden: true }, ...segB);   // 대화 | 흐름 (TALK-UX §4): only when the room's tree has children
   // 정리: a finished room can be hidden from the list and the overview (it returns by itself if the session works or waits again)
   const hideBtn = h('button.btn.sm.hidebtn', { type: 'button', hidden: true, title: '끝난 방을 목록과 오버뷰에서 숨깁니다', on: { click: () => { if (a && R.canHide(a)) { R.hideRooms([a.key]); R.closeRoom(); } } } }, '목록에서 숨기기');
-  const phead = h('header.phead', back, crumb, h('div.hrow', av, h('div.htxt', ptitle, h('div.pmrow', pproj, pmeta)), h('div.hlinks', seg, lkKids, lkPar, hideBtn, info)));
+  // 작업 완료 (CHAT-UX: a wait the user knows is over): the view treats this waiting episode as done; 방 나가기 also hides the room.
+  // Nothing is sent to the agent. A new episode (it works or waits again) clears the mark by itself (50-core applyMark).
+  const KEEP = '에이전트는 종료하지 않습니다 — 목록에서만 정리합니다';
+  const doneBtn = h('button.btn.sm.donebtn', { type: 'button', hidden: true, title: '이 대기를 끝난 것으로 표시합니다 · ' + KEEP, on: { click: () => doneAct(false) } }, '작업 완료');
+  const leaveBtn = h('button.btn.sm.leavebtn', { type: 'button', hidden: true, title: '작업 완료로 표시하고 목록에서 숨긴 뒤 방을 닫습니다 · ' + KEEP, on: { click: () => doneAct(true) } }, '작업 완료 · 방 나가기');
+  const cfGo = h('button.btn.sm.primary', { type: 'button', on: { click: () => finishDone(cfLeave) } }, '완료로 표시'), cfNo = h('button.btn.sm', { type: 'button', on: { click: () => { donecf.hidden = true; } } }, '취소');
+  const donecf = h('div.donecf', { role: 'group', 'aria-label': '작업 완료 확인', hidden: true }, h('span', '정말 완료로 표시할까요? 에이전트는 계속 승인을 기다립니다'), cfGo, cfNo);
+  let cfLeave = false;
+  function doneAct(leave) {
+    if (!a || !R.rawWaiting(a) || a.marked) return;
+    if (R.isApproval(a)) { cfLeave = leave; donecf.hidden = false; cfGo.focus(); return; }   // a real blocker: one more step
+    finishDone(leave);
+  }
+  function finishDone(leave) {
+    donecf.hidden = true;
+    const k = a && a.key; if (!k || !R.markDone([k]).length) return;
+    if (leave) { R.hideRooms([k]); R.closeRoom(); }
+    R.emit('undo', { key: k, text: leave ? '작업 완료로 표시하고 방을 나갔습니다' : '작업 완료로 표시했습니다', undo: () => { R.unmarkDone([k]); if (leave && R.U.hidden && R.U.hidden[k]) { delete R.U.hidden[k]; R.save(); R.emit('hidden'); } } });
+  }
+  const phead = h('header.phead', back, crumb, h('div.hrow', av, h('div.htxt', ptitle, h('div.pmrow', pproj, pmeta)), h('div.hlinks', seg, lkKids, lkPar, doneBtn, leaveBtn, hideBtn, info)), donecf);
   const tl = h('div#tl', { role: 'log', 'aria-live': 'polite', 'aria-relevant': 'additions', tabindex: '-1', 'aria-label': '대화' }), tlin = h('div.tlin');
   tl.append(tlin);
   const newmsg = h('button.newmsg', { type: 'button', hidden: true, on: { click: () => { tl.scrollTop = tl.scrollHeight; newmsg.hidden = true; } } }, '새 메시지 ↓');
@@ -43,7 +62,7 @@ const Room = (() => {
     for (const x of ring) L.push({ id: 'a|' + x.k + '|' + x.t + '|' + (x.k === 'tool' ? R.toolBase(x.x) : x.x), t: x.t, kind: x.k, x: x.x });
     for (const e of evs.slice().reverse()) L.push({ id: 'e|' + e.id, t: e.t, kind: e.type, e });
     const lastK = ring.length ? ring[ring.length - 1].k : '';   // a room that waits always ends in its question, even when the collector sent no ask act
-    if (a && a.st === 'user' && lastK !== 'ask' && !/^답변 끝남/.test(a.why || '') && (a.now || a.why)) L.push({ id: 'syn|ask', t: Math.max(R.waitT(a) || Date.now(), ring.length ? ring[ring.length - 1].t : 0) + 1, kind: 'ask', x: a.now || a.why });
+    if (a && a.st === 'user' && lastK !== 'ask' && !/^(답변 끝남|질문함)/.test(a.why || '') && (a.now || a.why)) L.push({ id: 'syn|ask', t: Math.max(R.waitT(a) || Date.now(), ring.length ? ring[ring.length - 1].t : 0) + 1, kind: 'ask', x: a.now || a.why });
     if (a && R.isDead(a.ch)) { const c = R.chan(a.ch), st = M.states[a.ch]; L.push({ id: 'stale', t: Infinity, kind: 'stale', x: (c && c.t ? fmtHM(c.t) : st && st.time ? st.time.slice(0, 5) : '') + ' 이후 수집 안 됨 — ' + (M.hubDown ? '허브에 연결할 수 없습니다' : c && c.kind === 'ssh' ? 'SSH 연결이 끊겼습니다' : '수집 오류') }); }
     if (!a && sawAgent) L.push({ id: 'miss', t: Infinity, kind: 'miss', x: '세션 정보를 가져오지 못했습니다 — 터널 끊김 / 세션 종료 / 권한' });
     Talk.collect(key, a, L);   // talk cards, spawn bodies, fan-out line; drops what a card replaces
@@ -238,7 +257,7 @@ const Room = (() => {
     eGl.style.display = ''; eH.hidden = false;
     const cnt = k => [...M.agents.values()].filter(x => x.st === k).length;
     const live = [...M.agents.values()].filter(x => R.LIVE.has(x.st)).length, ok = M.channels.filter(c => c.state === 'ok').length;
-    if (w) { const cw = k => M.waiting.filter(x => x.st === k).length; C.setGlyph(eGl, 'user'); text(eT, [['입력 대기', cw('user')], ['응답 없음', cw('stall')], ['중단됨', cw('stopped')], ['끊김', cw('dead')]].filter(x => x[1]).map(x => x[0] + ' ' + x[1]).join(' · ')); }   // same set (R.isWaiting) as the rail badge
+    if (w) { const cw = k => M.waiting.filter(x => x.st === k).length; C.setGlyph(eGl, 'user'); text(eT, [['입력 대기', cw('user')], ['응답 없음', cw('stall')], ['중단됨', cw('stopped')], ['끊김', cw('dead')]].filter(x => x[1]).map(x => x[0] + ' ' + x[1]).join(' · ')); }   // same set (R.needsMe) as the rail badge
     else { C.setGlyph(eGl, 'done'); text(eT, '기다리는 것 없음'); }
     text(eS, '에이전트 ' + live + '개 작업 중 · 채널 ' + ok + '/' + M.channels.length + ' 연결');
   }
@@ -249,6 +268,7 @@ const Room = (() => {
     if (k !== key) {
       key = k; opening = true; prevIds = new Set(); sawAgent = false; newmsg.hidden = true; tlin.replaceChildren();
       if (k) { R.U.seen[k] = Date.now(); R.save(); }
+      ackOpen = !!k; donecf.hidden = true;
       chat.dataset.room = k ? 'open' : 'none';
     }
     applyDrawer();
@@ -261,6 +281,10 @@ const Room = (() => {
     if (!M.loaded) { proom.hidden = true; pempty.hidden = false; document.body.classList.remove('room-composer'); renderEmpty(); return; }
     pempty.hidden = true; proom.hidden = false;
     text(back, small() ? '‹ 목록' : '‹ 오버뷰'); hideBtn.hidden = !(a && R.canHide(a));
+    const canDone = !!a && R.rawWaiting(a) && !a.marked; doneBtn.hidden = leaveBtn.hidden = !canDone; if (!canDone) donecf.hidden = true;
+    // 읽음: opening a waiting room (or watching it while a new wait starts) acknowledges that episode — after this pass, not inside it
+    if (a && R.needsMe(a) && (ackOpen || document.hasFocus())) { const k = key; setTimeout(() => { if (key === k && R.params().view === 'chat') R.ack([k]); }, 0); }
+    if (a) ackOpen = false;
     if (a || ghost) renderHead(a || ghost); else { text(ptitle, key.slice(key.indexOf(':') + 1)); text(pmeta, R.chName(key.split(':')[0])); lkKids.hidden = lkPar.hidden = crumb.hidden = true; }
     const rt = a && M.agents.get(a.root), tree = !!rt && Detail.subtree(rt).length > 0, was = flowOn;
     flowOn = tree && !!R.params().flow; seg.hidden = !tree; segB.forEach((b, i) => attr(b, 'aria-pressed', (i ? flowOn : !flowOn) ? 'true' : 'false'));

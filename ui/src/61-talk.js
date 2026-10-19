@@ -158,7 +158,7 @@ const Talk = (() => {
 
   function lines(a, text_) {   // situational lines of the confirm card, in the TALK-UX §5.3 order
     const o = [], es = A.talks[shown] || [], last = es[es.length - 1];
-    if (a.st === 'user' && !/^답변 끝남/.test(a.why || '')) o.push(['g-user', '이 세션은 승인을 기다리는 중입니다 — 톡은 승인 뒤에 읽히고, 톡으로 승인할 수는 없습니다']);
+    if (a.st === 'user' && !/^(답변 끝남|질문함)/.test(a.why || '')) o.push(['g-user', '이 세션은 승인을 기다리는 중입니다 — 톡은 승인 뒤에 읽히고, 톡으로 승인할 수는 없습니다']);
     if (a.talk && a.talk.hold) o.push(['g-user', '--dangerously-skip-permissions 세션입니다 — 터미널에 승인 창이 뜨고, 5분 안에 승인해야 전달됩니다']);
     if (last && last.text === text_) o.push(['g-stall', '바로 전에 보낸 톡과 같은 내용입니다 — 에이전트가 중복으로 거를 수 있습니다']);
     if (a.tool === 'codex' && R.LIVE.has(a.st)) o.push(['g-work', '진행 중인 턴에 끼워 넣습니다 (turn/steer)']);

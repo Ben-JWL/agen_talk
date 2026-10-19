@@ -30,12 +30,12 @@ const Overview = (() => {
   const projOf = a => a && a.project ? a.project : null;
   function label(n) {
     const p = n.p, sv = R.chan(n.ch);
-    return n.name + ', ' + (TOOL[n.tool] || n.tool) + ', ' + ST[n.st] + (n.why ? ' (' + n.why + ')' : '') + ', 프로젝트 ' + (p ? p.name : ETC) + ', 서버 ' + (sv ? sv.name : n.ch) + (n.nKids ? ', 하위 ' + n.nKids + '개' : '');
+    return n.name + ', ' + (TOOL[n.tool] || n.tool) + ', ' + ST[n.st] + (n.why ? ' (' + n.why + ')' : '') + (n.ack ? ', 읽음' : '') + ', 프로젝트 ' + (p ? p.name : ETC) + ', 서버 ' + (sv ? sv.name : n.ch) + (n.nKids ? ', 하위 ' + n.nKids + '개' : '');
   }
   function showTip(n, el) {
     const p = n.p, sv = R.chan(n.ch), g = h('div.tr');
     const row = (k, v) => g.append(h('span', k), h('b', v));
-    row('상태', ST[n.st] + (n.why ? ' — ' + n.why : ''));
+    row('상태', ST[n.st] + (n.why ? ' — ' + n.why : '') + (n.ack ? ' · 읽음' : ''));
     row('프로젝트', p ? p.name + (p.branch ? ' · ' + p.branch : '') : ETC);
     row('서버', sv ? sv.name + (sv.kind === 'local' ? ' (내 PC)' : '') : n.ch);
     if (n.parentName) row('부모', n.parentName);
@@ -95,8 +95,9 @@ const Overview = (() => {
     if (!s) seen.set(a.key, s = { st: a.st, t: -1e9 });
     else if (s.st !== a.st) { s.st = a.st; s.t = now; }
     const kids = a.kids.map(k => M.agents.get(k)).filter(k => k && !R.isHidden(k));   // tidied subagents go too
+    // waiting = unread (red '!'); ack = a read wait (calm marker)
     return { key: a.key, id: a.key, ch: a.ch, aid: a.id, tool: a.tool, name: a.name, st: a.st, why: a.why, a, p: projOf(a), project: pid, server: a.ch, enteredPerf: s.t,
-      waiting: R.isWaiting(a), parentName, nKids: kids.length, kids: depth < 1 ? kids.map(k => node(k, pid, depth + 1, a.name)) : [],
+      waiting: R.needsMe(a), ack: R.isAcked(a), parentName, nKids: kids.length, kids: depth < 1 ? kids.map(k => node(k, pid, depth + 1, a.name)) : [],
       talk: a.msgs.some(m => m.kind === 'talk' && Date.now() - m.t < 1800e3) };
   }
   function build() {

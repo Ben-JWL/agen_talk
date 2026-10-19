@@ -44,6 +44,10 @@ Every agent node that has a working directory gets an optional `project` field. 
 - The wiring map groups by server → project → agent.
 - The office has one room per project.
 
+### Waiting cues
+- Only an unread wait (the UI's `R.needsMe`) is an alert: the red '!' bubble, the blinking screen and the room lamp in the office, the red card on the wiring map.
+- A wait the user already opened (`ack`) shows a calm grey '…' in the office and a plain card marked 읽음 on the map. A room marked 작업 완료 is drawn as done.
+
 ### Hard constraints
 - One inline script (the CSP hash).
 - No `innerHTML` with data (`ui/build.py` asserts this).

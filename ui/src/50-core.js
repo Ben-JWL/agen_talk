@@ -154,6 +154,7 @@ const R = (() => {
   const U = Object.assign({ expanded: {}, chFilter: 'all', sort: 'recent', room: null, drawer: false, seen: {}, showKids: false, quietOpen: false, flowText: false }, store.get('room.ui', {}));
   delete U.lastFocus;   // retired field (nothing read it)
   if (!U.seen || typeof U.seen !== 'object') U.seen = {};
+  for (const k of ['ack', 'doneMark']) if (!U[k] || typeof U[k] !== 'object') U[k] = {};   // 읽음 / 작업 완료 marks: {key: {s: episode signature, t: wait start ms}}
   { const old = store.get('room.settings', {}); if (old && old.showKids === true && !U.showKids) U.showKids = true; }   // moved from room.settings (CHAT-UX §3)
   if (!['recent', 'long', 'name'].includes(U.sort)) U.sort = 'recent';
   if (typeof U.chFilter !== 'string') U.chFilter = 'all';
@@ -278,11 +279,46 @@ const R = (() => {
   const isHidden = a => !!(a && U.hidden && U.hidden[a.key]) && REST.has(a.st) && !isWaiting(a);
   const hideRooms = keys => { if (!U.hidden || typeof U.hidden !== 'object') U.hidden = {}; for (const k of keys) U.hidden[k] = Date.now(); save(); emit('hidden'); };
   const unhideAll = () => { U.hidden = {}; save(); emit('hidden'); };
-  // 나를 기다림 order: blockers first (oldest-waiting first inside a rank); '답변 끝남' rows last, newest first
-  const calm = a => a.st === 'user' && /^답변 끝남/.test(a.why);
+  // 나를 기다림 order: blockers first (oldest-waiting first inside a rank). A turn that simply ended with an answer is 'done' (collector), not waiting.
   const waitT = a => a.lastAt != null ? a.lastAt : a.t0 != null ? a.t0 : 0;
-  const wrank = a => calm(a) ? 2 : a.st === 'user' ? 0 : 1;   // 0 asks me something, 1 stalled/stopped/dead, 2 turn just ended
-  const waitCmp = (a, b) => (wrank(a) - wrank(b)) || (wrank(a) === 2 ? waitT(b) - waitT(a) : waitT(a) - waitT(b)) || (a.key < b.key ? -1 : 1);
+  const wrank = a => a.st === 'user' ? 0 : 1;   // 0 asks me something (approval, question), 1 stalled/stopped/dead
+  const waitCmp = (a, b) => (wrank(a) - wrank(b)) || (waitT(a) - waitT(b)) || (a.key < b.key ? -1 : 1);
+  // 읽음 (ack) and 작업 완료 (doneMark) belong to one waiting episode: its raw state (+ why for 'user') and when it began.
+  // A new episode (the session works again, or waits with a newer signal / another reason) alerts again.
+  const EP_TOL = 60000;   // ms: the wait start is derived from whole-second ages and the poll time; only a clearly newer signal is a new episode
+  const raw = a => a.raw || a;
+  const rawWaiting = a => isWaiting({ st: raw(a).st, age: a.age });
+  const epSig = a => { const r = raw(a); return r.st + (r.st === 'user' ? '|' + (r.why || '') : ''); };
+  const epOf = a => ({ s: epSig(a), t: waitT(a) });
+  const sameEp = (a, m) => !!m && typeof m === 'object' && m.s === epSig(a) && waitT(a) <= (+m.t || 0) + EP_TOL;
+  const isAcked = a => !!a && isWaiting(a) && sameEp(a, U.ack[a.key]);
+  const needsMe = a => !!a && isWaiting(a) && !isAcked(a);           // counts, badges, notifications, the office '!'
+  const isApproval = a => !!a && raw(a).st === 'user' && /승인/.test(raw(a).why || '');
+  const DONE_WHY = '사용자가 완료 처리';
+  function applyMark(a) {   // 작업 완료: the view treats the episode as done; the raw collector state stays in a.raw
+    if (!a.raw) a.raw = { st: a.st, why: a.why };
+    const on_ = rawWaiting(a) && sameEp(a, U.doneMark[a.key]);
+    a.st = on_ ? 'done' : a.raw.st; a.why = on_ ? DONE_WHY : a.raw.why; a.marked = on_;
+  }
+  function derive() {
+    M.waiting = [...M.agents.values()].filter(needsMe);
+    M.counts = {}; for (const a of M.agents.values()) { M.counts[a.st] = (M.counts[a.st] || 0) + 1; M.counts.all = (M.counts.all || 0) + 1; }
+    M.counts.waiting = M.waiting.length;
+  }
+  const remark = () => { for (const a of M.agents.values()) applyMark(a); derive(); save(); emit('marks'); emit('model', M); };
+  // 읽음: opening a waiting room (or 모두 읽음) acknowledges the current episode
+  function ack(keys) {
+    let n = 0; for (const k of keys) { const a = M.agents.get(k); if (a && isWaiting(a) && !sameEp(a, U.ack[k])) { U.ack[k] = epOf(a); n++; } }
+    if (n) { emit('ack', keys); remark(); }
+    return n;
+  }
+  // 작업 완료: the user declares the episode finished (the agent is not touched). undo() puts it back (as read).
+  function markDone(keys) {
+    const done = []; for (const k of keys) { const a = M.agents.get(k); if (a && rawWaiting(a)) { U.doneMark[k] = epOf(a); U.ack[k] = epOf(a); done.push(k); } }
+    if (done.length) { emit('ack', done); remark(); }
+    return done;
+  }
+  function unmarkDone(keys) { for (const k of keys) { delete U.doneMark[k]; const a = M.agents.get(k); if (a && rawWaiting(a)) U.ack[k] = epOf(a); } remark(); }
   const M = {
     channels: [],          // [{id,name,kind,state,error,t,ms(latency ms|null),stale}]
     states: {},            // chId -> raw collector state (time, host, user, os, warnings)
@@ -344,6 +380,8 @@ const R = (() => {
       acts: normActs(n.acts, skew), msgs: normMsgs(n.msgs, skew, ch), talk: normTalk(n.talk),
       project: normProject(n.project) || (parent && out.get(parent) ? out.get(parent).project : null),   // a subagent without its own repo inherits the parent's
     };
+    if (a.st === 'user' && /^답변 끝남/.test(a.why)) { a.st = 'done'; a.why = '답변 완료'; }   // older collectors (remote servers): a finished answer is done, not waiting
+    a.raw = { st: a.st, why: a.why };
     a.t0 = a.since == null ? null : recvMs - a.since * 1000;
     a.lastAt = a.age == null ? null : recvMs - a.age * 1000;
     a.root = parent ? out.get(parent).root : a.key;
@@ -354,7 +392,7 @@ const R = (() => {
   function merge(chans, states) {
     const prevCh = new Map(M.channels.map(c => [c.id, c.state])), recvMs = Date.now(), seen0 = new Set(Object.keys(M.states)), prev = M.agents, next = new Map(), roots = {}, events = [];
     M.channels = chans.map(c => ({ id: str(c.id, 64), name: str(c.name, 80) || str(c.id, 64), kind: ['ssh', 'local', 'argv'].includes(c.kind) ? c.kind : 'ssh', state: ['ok', 'connecting', 'error'].includes(c.state) ? c.state : 'error', error: c.error == null ? null : str(c.error, 300), t: c.t == null ? null : num(c.t) * 1000, stale: false,
-      port: Number.isInteger(c.port) && c.port >= 1 && c.port <= 65535 ? c.port : null, auth: str(c.auth, 20), ssh: str(c.ssh, 200), args: Array.isArray(c.ssh_args) ? c.ssh_args.map(x => str(x, 300)) : [] }));
+      port: Number.isInteger(c.port) && c.port >= 1 && c.port <= 65535 ? c.port : null, auth: str(c.auth, 20), session_pw: c.session_pw === true, ssh: str(c.ssh, 200), args: Array.isArray(c.ssh_args) ? c.ssh_args.map(x => str(x, 300)) : [] }));
     for (const c of M.channels) {
       const s = states[c.id];
       if (!s || typeof s !== 'object' || !Array.isArray(s.agents) || (c.state === 'error' && M.states[c.id])) { if (M.states[c.id]) c.stale = true; roots[c.id] = M.roots[c.id] || []; continue; }
@@ -373,6 +411,8 @@ const R = (() => {
     }
     // keep agents of stale channels (last snapshot) so the list never blanks out
     for (const c of M.channels) if (c.stale) for (const [k, a] of prev) if (a.ch === c.id) next.set(k, a);
+    // 읽음 / 작업 완료 marks: a session seen not waiting ends the episode (the next wait alerts again); a different episode drops a stale mark
+    for (const [k, a] of next) { for (const m of [U.ack, U.doneMark]) if (m[k] && (!rawWaiting(a) || !sameEp(a, m[k]))) delete m[k]; applyMark(a); }
     // channel transitions: losing a server is exactly what has to be pushed to the owner
     for (const c of M.channels) { const was = prevCh.get(c.id); if (was === 'ok' && c.state === 'error') events.push({ type: 'chan', key: 'chan:' + c.id, to: 'error', ch: c.id }); else if (was === 'error' && c.state === 'ok') events.push({ type: 'chan', key: 'chan:' + c.id, to: 'ok', ch: c.id }); }
     // transitions
@@ -391,15 +431,13 @@ const R = (() => {
     let pruned = false;
     for (const k of Object.keys(A.at)) if (recvMs - A.at[k] > 864e5) { delete A.rooms[k]; delete A.at[k]; delete A.scroll[k]; delete A.mg[k]; pruned = true; }
     let uPruned = false;   // per-room UI marks die with the room's data, or room.ui grows forever
-    for (const m of [U.seen, U.expanded, U.boardExp, U.hidden]) if (m && typeof m === 'object') for (const k of Object.keys(m)) if (!next.has(k) && !(k in A.at)) { delete m[k]; uPruned = true; }
+    for (const m of [U.seen, U.expanded, U.boardExp, U.hidden, U.ack, U.doneMark]) if (m && typeof m === 'object') for (const k of Object.keys(m)) if (!next.has(k) && !(k in A.at)) { delete m[k]; uPruned = true; }
     if (U.hidden && typeof U.hidden === 'object') for (const k of Object.keys(U.hidden)) { const a = next.get(k); if (a && !REST.has(a.st)) { delete U.hidden[k]; uPruned = true; } }   // working or waiting again: show it
     if (uPruned) save();
     for (const [k, mp] of Object.entries(A.mg)) { for (const [id, m] of mp) if (recvMs - m.t > 864e5) { mp.delete(id); pruned = true; } if (!mp.size) delete A.mg[k]; }
     if (pruned) saveMsgs();
     // derived
-    M.waiting = [...next.values()].filter(isWaiting);
-    M.counts = {}; for (const a of next.values()) { M.counts[a.st] = (M.counts[a.st] || 0) + 1; M.counts.all = (M.counts.all || 0) + 1; }
-    M.counts.waiting = M.waiting.length;
+    derive();
     M.first = false; M.loaded = true;
     emit('model', M);
     if (events.length) emit('events', events);
@@ -552,6 +590,6 @@ const R = (() => {
     poll();
   }
   return { BADPERM, esc, num, str, koDur, normalize, h, svgUse, text, attr, cls, stClass, $, $$, keyed, keepScroll, isDead, setTimeFor, saveEvents, fmtDur, fmtLive, fmtAgo, sshHint, sshKind, sshFix, sshErr, fmtAbs, fmtHM, timeEl, setTime,
-           store, S, U, A, acts, msgs, mergeMsgs, saveTalks, saveMsgs, loadMsgs, validMsg, setFlow, accumulate, toolBase, save, applySettings, on, emit, ST, LIVE, REST, OLD, isWaiting, canHide, isHidden, hideRooms, unhideAll, waitCmp, waitT, M, agentsOf, chan, chName,
+           store, S, U, A, acts, msgs, mergeMsgs, saveTalks, saveMsgs, loadMsgs, validMsg, setFlow, accumulate, toolBase, save, applySettings, on, emit, ST, LIVE, REST, OLD, isWaiting, needsMe, isAcked, isApproval, rawWaiting, ack, markDone, unmarkDone, DONE_WHY, canHide, isHidden, hideRooms, unhideAll, waitCmp, waitT, M, agentsOf, chan, chName,
            refresh, loadPresets, apiPost, setPaused, isPaused: () => paused, view, go, openRoom, closeRoom, openChannel, route, params: () => params, key, keys, onEsc, updateTitle, boot };
 })();

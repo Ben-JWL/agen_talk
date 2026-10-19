@@ -75,6 +75,7 @@
     if (U.boardCh && !ch) U.boardCh = '';
     const all = R.agentsOf(ch || 'all'), hidden = new Set(), fans = new Map(), total = { wait: 0, work: 0, child: 0, done: 0 };
     for (const a of all) total[bucketOf(a)]++;
+    const nWait = all.filter(R.needsMe).length;   // the lane keeps read waits (last, marked 읽음) but counts only the unread ones
     for (const a of all) if (a.kids.length >= FAN && !hidden.has(a.key)) {
       const ds = desc(a), d = { all: ds.length, wait: 0, live: 0, done: 0 };
       for (const c of ds) { const b = bucketOf(c); d[b === 'wait' ? 'wait' : b === 'done' ? 'done' : 'live']++; if (b !== 'wait' && !U.boardExp[a.key]) hidden.add(c.key); }
@@ -89,10 +90,10 @@
     }
     for (const [k, o] of ord) if (!M.agents.has(k)) { ord.delete(k); cards.delete(k); sums.delete(k); }
     for (const [id, l] of Object.entries(lanes)) {
-      const items = [], list = by[id].sort((x, y) => (id === 'wait' ? R.waitCmp(x, y) : 0) || (ord.get(x.key).t - ord.get(y.key).t) || (x.key < y.key ? -1 : 1));
+      const items = [], list = by[id].sort((x, y) => (id === 'wait' ? (R.isAcked(x) - R.isAcked(y)) || R.waitCmp(x, y) : 0) || (ord.get(x.key).t - ord.get(y.key).t) || (x.key < y.key ? -1 : 1));
       for (const a of list) { items.push({ a, b: id }); if (fans.has(a.key)) items.push({ sum: a, d: fans.get(a.key) }); }
       const collapsed = id === 'done' && !U.boardDone && total[id] > 0;
-      text(l.n, total[id]); l.sec.dataset.n = total[id];
+      const shown = id === 'wait' ? nWait : total[id]; text(l.n, shown); l.sec.dataset.n = shown;
       l.empty.hidden = !!total[id]; l.body.hidden = collapsed;
       if (id === 'done') {
         l.tog.hidden = !total[id]; text(l.tog, collapsed ? total[id] + '개 (펼치기)' : '접기'); attr(l.tog, 'aria-expanded', collapsed ? 'false' : 'true');

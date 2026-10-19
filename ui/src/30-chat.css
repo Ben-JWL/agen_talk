@@ -108,3 +108,7 @@ html[data-motion=reduce] #chips .indet::after { animation: none; width: 100%; op
 .appbn .acts { display: flex; align-items: center; gap: 12px; margin-top: 4px; }
 .appbn a.btn { text-decoration: none; }
 .implin > span { flex: 1 1 160px; min-width: 0; }
+/* 읽음: a waiting room I already opened — quiet row, small marker (approvals keep "승인 대기 · 읽음") */
+.ackm { flex: none; white-space: nowrap; padding: 0 6px; border: 1px solid var(--line); border-radius: 9px; font-size: 11.5px; line-height: 16px; color: var(--ink-2); }
+.sec .ackall { margin-left: auto; height: auto; padding: 0; font-size: 12px; font-weight: 600; color: var(--ink-2); }
+.sec .ackall:hover { color: var(--ink); text-decoration: underline; }

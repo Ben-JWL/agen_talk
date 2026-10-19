@@ -200,7 +200,79 @@
         document.querySelector('.unhide').click();
         await wait(() => ov.querySelectorAll('[data-agent]').length === cards0);
         A(!fin.some(R.isHidden), '다시 보기 restores every hidden room');
+        // 답변 완료 is not 입력 대기: a plain answer is done (never counted); a question waits; an older collector's '답변 끝남' reads as done
+        const U = R.U, ag = k => R.M.agents.get(k), rowEl = k => document.querySelector('#rooms [data-key="' + CSS.escape(k) + '"]'), qo0 = U.quietOpen; U.quietOpen = true;
+        for (const k of Object.keys(U.ack)) delete U.ack[k]; for (const k of Object.keys(U.doneMark)) delete U.doneMark[k]; R.unmarkDone([]);   // the rooms opened above were acked: start clean
+        const byA = ag('s01:cl-bypass'), qA = ag('s01:cl-data'), WK = 's01:cl-wait';
+        A(byA.st === 'done' && !R.isWaiting(byA) && !R.M.waiting.includes(byA) && R.needsMe(qA) && R.M.waiting.includes(qA), 'an answered session is not counted; a question is');
+        A(R.normalize('old', { id: 'o', st: 'user', why: '답변 끝남 · 입력 기다림' }, null, 0, new Map(), 0).st === 'done', "an older collector's 답변 끝남 is read as done");
+        const n0 = R.M.counts.waiting;
+        A(n0 >= 3 && R.needsMe(ag(WK)) && rowEl(WK).closest('#rooms') && document.querySelector('#rooms .sec.s-wait .ackall'), '나를 기다림 lists the approval; 모두 읽음 is offered');
+        S.fun = true; R.applySettings(); await tick();
+        const office = Overview.mode === 'office';
+        if (office) A(OvOffice.cue(WK) === 'bang', "pixel office shows the red '!' for an unread wait");
+        S.fun = false; R.applySettings(); await tick();
+        A(ov.querySelector('[data-agent="' + WK + '"]').dataset.w === '1', 'wiring map: unread wait is an alert');
+        // 읽음: opening the room acknowledges this waiting episode
+        R.openRoom('s01', 'cl-wait'); await wait(() => R.isAcked(ag(WK)));
+        A(R.M.counts.waiting === n0 - 1 && !R.M.waiting.some(x => x.key === WK) && R.isWaiting(ag(WK)), 'opening a waiting room acks it: out of the count (still waiting underneath)');
+        A(!S.titleBadge || document.title.startsWith('(' + (n0 - 1) + ')'), 'title badge follows the read count');
+        A(!rowEl(WK).classList.contains('waiting') && rowEl(WK).querySelector('.ackm').textContent === '승인 대기 · 읽음' && !rowEl(WK).querySelector('.ackm').hidden, 'a read approval leaves 나를 기다림 and keeps a 승인 대기 · 읽음 hint');
+        A(!R.canHide(ag(WK)), 'a read approval is still not hideable');
+        R.closeRoom(); await wait(() => !document.querySelector('#pempty').hidden);
+        A(ov.querySelector('[data-agent="' + WK + '"]').dataset.w === '' && ov.querySelector('[data-agent="' + WK + '"]').dataset.ack === '1', 'wiring map: a read wait is calm');
+        if (office) { S.fun = true; R.applySettings(); await tick(); A(OvOffice.cue(WK) === 'read', "pixel office: a read wait shows the calm '…', not '!'"); S.fun = false; R.applySettings(); await tick(); }
+        // a new episode (another reason / a newer signal) alerts again
+        const fxW = window.__fx.find('cl-wait'), why0 = fxW.why; fxW.why = '권한 승인 대기: Bash';
+        R.refresh(); await wait(() => ag(WK).why === fxW.why);
+        A(R.needsMe(ag(WK)) && !U.ack[WK], 'a new waiting episode alerts again');
+        // 모두 읽음: acks every room in 나를 기다림 (current filter)
+        document.querySelector('#rooms .sec.s-wait .ackall').click(); await tick();
+        A(R.M.counts.waiting === 0 && !document.querySelector('#rooms .sec.s-wait') && document.querySelector('#rooms .secnone'), '모두 읽음 clears 나를 기다림');
+        // 작업 완료: the episode is done in the view (hideable, no alert); 되돌리기 puts it back; the room stays
+        R.openRoom('s01', 'cl-data'); await wait(() => Room.key === 's01:cl-data' && !document.querySelector('#proom').hidden && !document.querySelector('#proom .donebtn').hidden);
+        const dBtn = document.querySelector('#proom .donebtn'), lBtn = document.querySelector('#proom .leavebtn');
+        A(/에이전트는 종료하지 않습니다/.test(lBtn.title) && /에이전트는 종료하지 않습니다/.test(dBtn.title), 'done buttons say the agent keeps running');
+        dBtn.click(); await tick();
+        A(ag('s01:cl-data').st === 'done' && ag('s01:cl-data').why === R.DONE_WHY && R.canHide(ag('s01:cl-data')) && !R.isWaiting(ag('s01:cl-data')) && location.hash === '#/chat/s01/cl-data' && rowEl('s01:cl-data'), '작업 완료: shown as done, hideable, the room stays');
+        const undo = () => [...document.querySelectorAll('#toasts .toast.undo .undob')].pop();
+        A(undo(), '작업 완료 offers 되돌리기'); undo().click(); await tick();
+        A(ag('s01:cl-data').st === 'user' && !U.doneMark['s01:cl-data'] && R.isAcked(ag('s01:cl-data')), '되돌리기 restores the wait (as read)');
+        document.querySelector('#proom .leavebtn').click(); await wait(() => location.hash === '#/chat');
+        A(R.isHidden(ag('s01:cl-data')) && !rowEl('s01:cl-data'), '작업 완료 · 방 나가기: done, hidden, closed');
+        undo().click(); await tick();
+        A(!R.isHidden(ag('s01:cl-data')) && ag('s01:cl-data').st === 'user' && rowEl('s01:cl-data'), '되돌리기 after leaving brings the room back');
+        // an approval asks once more before it is marked done
+        R.openRoom('s01', 'cl-wait'); await wait(() => Room.key === WK && !document.querySelector('#proom .donebtn').hidden);
+        document.querySelector('#proom .donebtn').click(); await tick();
+        const cf = document.querySelector('#proom .donecf');
+        A(!cf.hidden && /에이전트는 계속 승인을 기다립니다/.test(cf.textContent) && ag(WK).st === 'user', 'approval: 작업 완료 asks for confirmation first');
+        cf.querySelector('.btn.primary').click(); await tick();
+        A(ag(WK).st === 'done' && cf.hidden, 'approval: confirmed 작업 완료');
+        R.closeRoom(); await wait(() => !document.querySelector('#pempty').hidden);
+        // a new episode clears the mark by itself
+        fxW.why = why0; R.refresh(); await wait(() => ag(WK).st === 'user');
+        A(!U.doneMark[WK] && R.needsMe(ag(WK)), 'a new episode clears 작업 완료 and alerts again');
+        U.quietOpen = qo0; for (const k of Object.keys(U.ack)) delete U.ack[k]; R.unmarkDone([]);
         S.fun = fun0; R.applySettings();
+        // 키 로그인 다시 설정 on a password-session channel: key_rejected -> confirm_fix card (findings + exact command) -> fix -> done
+        const fxs = window.__fx, pch = { id: 'pwsess', name: 'lab-b', kind: 'ssh', state: 'error', error: 'Permission denied: x', t: null, stale: false, port: 22, auth: 'password-session', session_pw: true, ssh: 'alice@example.org', args: [] };
+        R.M.channels.push(pch);
+        try {
+          AddServer.open({ ch: 'pwsess', rekey: true });
+          const dl = document.querySelector('dialog.addsrv'), fb = dl.querySelector('.fixc');
+          A(dl.open && /^키 로그인 다시 설정 — lab-b$/.test(dl.querySelector('#as-title').textContent) && !dl.querySelector('.sess').hidden && !dl.querySelector('.sess input').checked && /이번 실행에서 입력한 비밀번호/.test(dl.querySelector('#as-pw').placeholder), 'rekey dialog: title, session box offered but off, password reuse');
+          dl.querySelector('#as-form button[type=submit]').click();
+          await wait(() => !fb.hidden, 8000);
+          const sp = fxs.srvPosts[fxs.srvPosts.length - 1];
+          A(sp.id === 'pwsess' && sp.reuse_password === true && !sp.session_password && sp.password === '', 'rekey posts the channel id, reuses this run\'s password, no session mode');
+          A(fb.querySelector('.fixcmd').textContent === 'chmod go-w ~' && fb.querySelectorAll('.finds li').length === 2 && fb.querySelector('.finds li[data-lv=fix] .lv').textContent === '고칠 수 있음' && !fb.querySelector('.finds b') && /<b>sshd<\/b>/.test(fb.textContent), 'confirm_fix card lists the findings (as text) and the exact fix command');
+          A(document.activeElement === fb.querySelector('.btn.primary') && fb.querySelector('.btn.primary').textContent === '권한 고치고 다시 시도' && !fb.querySelectorAll('.btn')[1].hidden, 'fix is the default; session password stays an option');
+          fb.querySelector('.btn.primary').click();
+          await wait(() => dl.querySelector('h3.t-section') && dl.querySelector('h3.t-section').textContent === '연결 완료' && !dl.querySelector('h3.t-section').closest('div').hidden, 8000);
+          A(fxs.srvJob.choice === 'fix' && /고친 내용: chmod go-w ~/.test(dl.textContent) && /키로 접속합니다/.test(dl.textContent), 'the fix answer goes to job/confirm; done says what was fixed');
+          dl.close();
+        } finally { const pi = R.M.channels.indexOf(pch); if (pi >= 0) R.M.channels.splice(pi, 1); }
         console.log('SELFTEST ok'); document.title = 'SELFTEST ok';
       } catch (e) { console.log('SELFTEST FAIL ' + e.message); document.title = 'SELFTEST FAIL'; }
     })();

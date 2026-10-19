@@ -348,6 +348,10 @@ html[data-motion=reduce] #chips .indet::after { animation: none; width: 100%; op
 .appbn .acts { display: flex; align-items: center; gap: 12px; margin-top: 4px; }
 .appbn a.btn { text-decoration: none; }
 .implin > span { flex: 1 1 160px; min-width: 0; }
+/* 읽음: a waiting room I already opened — quiet row, small marker (approvals keep "승인 대기 · 읽음") */
+.ackm { flex: none; white-space: nowrap; padding: 0 6px; border: 1px solid var(--line); border-radius: 9px; font-size: 11.5px; line-height: 16px; color: var(--ink-2); }
+.sec .ackall { margin-left: auto; height: auto; padding: 0; font-size: 12px; font-weight: 600; color: var(--ink-2); }
+.sec .ackall:hover { color: var(--ink); text-decoration: underline; }
 
 /* ---- 32-room.css ---- */
 /* ===== 32-room.css — conversation pane: header, timeline bubbles, live tail, status bar. CHAT-UX §2, §5. ===== */
@@ -428,6 +432,11 @@ html[data-motion=reduce] .typing .dots { display: none; } html[data-motion=reduc
 .sleft .rel.warn { color: var(--warn); font-weight: 600; }
 .sright { display: flex; gap: 8px; flex: none; }
 @media (max-width: 760px) { #sbar { flex-wrap: wrap; } .swhy { display: none; } }
+/* 작업 완료 / 작업 완료 · 방 나가기 (waiting rooms) + the approval confirm row */
+.donebtn, .leavebtn { white-space: nowrap; }
+.donecf { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 8px; padding: 8px 12px; border: 1px solid var(--line); border-radius: var(--r-card); background: var(--canvas); font-size: 12.5px; line-height: 18px; }
+.donecf[hidden] { display: none; }
+.donecf span { flex: 1 1 200px; min-width: 0; }
 
 /* ---- 33-board.css ---- */
 /* ===== 33-board.css — 보드: unboxed lanes on the canvas, cards = list rows (CHAT-UX §8). ===== */
@@ -532,6 +541,7 @@ body.room-composer #toasts { bottom: calc(var(--foot-h, 108px) + 16px); }
 .toast .tx .meta { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .toast .ta { display: flex; align-items: center; gap: 4px; }
 .toast .x { border: 0; background: none; color: var(--ink-2); font-size: 18px; line-height: 1; padding: 0 4px; }
+.toast.undo { grid-template-columns: minmax(0, 1fr) auto; }
 
 /* ---- 35-overview.css ---- */
 /* ===== 35-overview.css — the overview in the empty right pane (OVERVIEW-CONTRACT §3): 배선 지도 (default) and 재미 모드 (픽셀 오피스).
@@ -647,6 +657,11 @@ html.dark .ovo-vig { background: radial-gradient(ellipse 85% 80% at 50% 45%, tra
 .ov { position: relative; }
 @media (prefers-reduced-motion: reduce) { .ov * { transition: none !important; animation: none !important; } }
 .ovo .sgn { position: absolute; pointer-events: none; font-weight: 700; white-space: nowrap; letter-spacing: 0; }   /* non-ASCII project names on the room sign (see Office.sign) */
+/* 읽음: a wait I already opened is calm on the map and in the office (the red alert is for unread waits only) */
+button.ovn.st-user[data-ack="1"], button.ovn.st-stall[data-ack="1"] { border-color: var(--ov-line); background: var(--ov-surface); box-shadow: inset 3px 0 0 var(--ov-line-strong); }
+button.ovn.st-user[data-ack="1"] .stl, button.ovn.st-stall[data-ack="1"] .stl { color: var(--ov-ink-2); }
+.ovo .hit.st-user[data-ack="1"] .np { background: var(--ov-surface); color: var(--ov-ink); font-weight: 600; }
+.ovo .hit.st-user[data-ack="1"] .np i { background: var(--ov-ink-2); }
 
 /* ---- 36-settings.css ---- */
 /* ===== 36-settings.css — 설정 as inset groups (CHAT-UX §8): surface groups, 44 px rows, hairlines inset 16 px. ===== */
@@ -835,6 +850,14 @@ code.nw, .nw { white-space: nowrap; }
 .dlg .bn-err[data-kind=host_key_changed] .acts .btn.primary { order: 1; }
 .pchip[aria-pressed=true] { background: var(--ink); color: var(--on-ink); border-color: var(--ink); }
 .dlg [tabindex="-1"]:focus, .dlg [tabindex="-1"]:focus-visible { outline: none; }
+/* key_rejected: what the diagnosis found, and the exact commands a fix runs */
+.dlg .finds { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 6px; }
+.dlg .finds li { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; align-items: baseline; overflow-wrap: anywhere; }
+.dlg .finds .lv { padding: 0 6px; border: 1px solid var(--line); border-radius: var(--r-btn); font-size: 11.5px; line-height: 18px; white-space: nowrap; color: var(--ink-2); }
+.dlg .finds li[data-lv=fix] .lv { border-color: var(--signal); color: var(--signal-text); }
+.dlg .finds li[data-lv=admin] .lv { border-color: var(--ink); color: var(--ink); }
+.dlg .fixcmd { display: block; margin: 0; padding: 6px 10px; border-radius: var(--r-btn); background: var(--surface); font-size: 12.5px; white-space: pre-wrap; overflow-wrap: anywhere; user-select: all; }
+.dlg .bn-err .finds { margin: 8px 0 2px; }
 
 /* ---- 39-talk.css ---- */
 /* ===== 39-talk.css — talk cards, name line, composer, confirm card, delivery states, 흐름 tree (TALK-UX). Tokens only; no hex. ===== */
@@ -1187,6 +1210,7 @@ const R = (() => {
   const U = Object.assign({ expanded: {}, chFilter: 'all', sort: 'recent', room: null, drawer: false, seen: {}, showKids: false, quietOpen: false, flowText: false }, store.get('room.ui', {}));
   delete U.lastFocus;   // retired field (nothing read it)
   if (!U.seen || typeof U.seen !== 'object') U.seen = {};
+  for (const k of ['ack', 'doneMark']) if (!U[k] || typeof U[k] !== 'object') U[k] = {};   // 읽음 / 작업 완료 marks: {key: {s: episode signature, t: wait start ms}}
   { const old = store.get('room.settings', {}); if (old && old.showKids === true && !U.showKids) U.showKids = true; }   // moved from room.settings (CHAT-UX §3)
   if (!['recent', 'long', 'name'].includes(U.sort)) U.sort = 'recent';
   if (typeof U.chFilter !== 'string') U.chFilter = 'all';
@@ -1311,11 +1335,46 @@ const R = (() => {
   const isHidden = a => !!(a && U.hidden && U.hidden[a.key]) && REST.has(a.st) && !isWaiting(a);
   const hideRooms = keys => { if (!U.hidden || typeof U.hidden !== 'object') U.hidden = {}; for (const k of keys) U.hidden[k] = Date.now(); save(); emit('hidden'); };
   const unhideAll = () => { U.hidden = {}; save(); emit('hidden'); };
-  // 나를 기다림 order: blockers first (oldest-waiting first inside a rank); '답변 끝남' rows last, newest first
-  const calm = a => a.st === 'user' && /^답변 끝남/.test(a.why);
+  // 나를 기다림 order: blockers first (oldest-waiting first inside a rank). A turn that simply ended with an answer is 'done' (collector), not waiting.
   const waitT = a => a.lastAt != null ? a.lastAt : a.t0 != null ? a.t0 : 0;
-  const wrank = a => calm(a) ? 2 : a.st === 'user' ? 0 : 1;   // 0 asks me something, 1 stalled/stopped/dead, 2 turn just ended
-  const waitCmp = (a, b) => (wrank(a) - wrank(b)) || (wrank(a) === 2 ? waitT(b) - waitT(a) : waitT(a) - waitT(b)) || (a.key < b.key ? -1 : 1);
+  const wrank = a => a.st === 'user' ? 0 : 1;   // 0 asks me something (approval, question), 1 stalled/stopped/dead
+  const waitCmp = (a, b) => (wrank(a) - wrank(b)) || (waitT(a) - waitT(b)) || (a.key < b.key ? -1 : 1);
+  // 읽음 (ack) and 작업 완료 (doneMark) belong to one waiting episode: its raw state (+ why for 'user') and when it began.
+  // A new episode (the session works again, or waits with a newer signal / another reason) alerts again.
+  const EP_TOL = 60000;   // ms: the wait start is derived from whole-second ages and the poll time; only a clearly newer signal is a new episode
+  const raw = a => a.raw || a;
+  const rawWaiting = a => isWaiting({ st: raw(a).st, age: a.age });
+  const epSig = a => { const r = raw(a); return r.st + (r.st === 'user' ? '|' + (r.why || '') : ''); };
+  const epOf = a => ({ s: epSig(a), t: waitT(a) });
+  const sameEp = (a, m) => !!m && typeof m === 'object' && m.s === epSig(a) && waitT(a) <= (+m.t || 0) + EP_TOL;
+  const isAcked = a => !!a && isWaiting(a) && sameEp(a, U.ack[a.key]);
+  const needsMe = a => !!a && isWaiting(a) && !isAcked(a);           // counts, badges, notifications, the office '!'
+  const isApproval = a => !!a && raw(a).st === 'user' && /승인/.test(raw(a).why || '');
+  const DONE_WHY = '사용자가 완료 처리';
+  function applyMark(a) {   // 작업 완료: the view treats the episode as done; the raw collector state stays in a.raw
+    if (!a.raw) a.raw = { st: a.st, why: a.why };
+    const on_ = rawWaiting(a) && sameEp(a, U.doneMark[a.key]);
+    a.st = on_ ? 'done' : a.raw.st; a.why = on_ ? DONE_WHY : a.raw.why; a.marked = on_;
+  }
+  function derive() {
+    M.waiting = [...M.agents.values()].filter(needsMe);
+    M.counts = {}; for (const a of M.agents.values()) { M.counts[a.st] = (M.counts[a.st] || 0) + 1; M.counts.all = (M.counts.all || 0) + 1; }
+    M.counts.waiting = M.waiting.length;
+  }
+  const remark = () => { for (const a of M.agents.values()) applyMark(a); derive(); save(); emit('marks'); emit('model', M); };
+  // 읽음: opening a waiting room (or 모두 읽음) acknowledges the current episode
+  function ack(keys) {
+    let n = 0; for (const k of keys) { const a = M.agents.get(k); if (a && isWaiting(a) && !sameEp(a, U.ack[k])) { U.ack[k] = epOf(a); n++; } }
+    if (n) { emit('ack', keys); remark(); }
+    return n;
+  }
+  // 작업 완료: the user declares the episode finished (the agent is not touched). undo() puts it back (as read).
+  function markDone(keys) {
+    const done = []; for (const k of keys) { const a = M.agents.get(k); if (a && rawWaiting(a)) { U.doneMark[k] = epOf(a); U.ack[k] = epOf(a); done.push(k); } }
+    if (done.length) { emit('ack', done); remark(); }
+    return done;
+  }
+  function unmarkDone(keys) { for (const k of keys) { delete U.doneMark[k]; const a = M.agents.get(k); if (a && rawWaiting(a)) U.ack[k] = epOf(a); } remark(); }
   const M = {
     channels: [],          // [{id,name,kind,state,error,t,ms(latency ms|null),stale}]
     states: {},            // chId -> raw collector state (time, host, user, os, warnings)
@@ -1377,6 +1436,8 @@ const R = (() => {
       acts: normActs(n.acts, skew), msgs: normMsgs(n.msgs, skew, ch), talk: normTalk(n.talk),
       project: normProject(n.project) || (parent && out.get(parent) ? out.get(parent).project : null),   // a subagent without its own repo inherits the parent's
     };
+    if (a.st === 'user' && /^답변 끝남/.test(a.why)) { a.st = 'done'; a.why = '답변 완료'; }   // older collectors (remote servers): a finished answer is done, not waiting
+    a.raw = { st: a.st, why: a.why };
     a.t0 = a.since == null ? null : recvMs - a.since * 1000;
     a.lastAt = a.age == null ? null : recvMs - a.age * 1000;
     a.root = parent ? out.get(parent).root : a.key;
@@ -1387,7 +1448,7 @@ const R = (() => {
   function merge(chans, states) {
     const prevCh = new Map(M.channels.map(c => [c.id, c.state])), recvMs = Date.now(), seen0 = new Set(Object.keys(M.states)), prev = M.agents, next = new Map(), roots = {}, events = [];
     M.channels = chans.map(c => ({ id: str(c.id, 64), name: str(c.name, 80) || str(c.id, 64), kind: ['ssh', 'local', 'argv'].includes(c.kind) ? c.kind : 'ssh', state: ['ok', 'connecting', 'error'].includes(c.state) ? c.state : 'error', error: c.error == null ? null : str(c.error, 300), t: c.t == null ? null : num(c.t) * 1000, stale: false,
-      port: Number.isInteger(c.port) && c.port >= 1 && c.port <= 65535 ? c.port : null, auth: str(c.auth, 20), ssh: str(c.ssh, 200), args: Array.isArray(c.ssh_args) ? c.ssh_args.map(x => str(x, 300)) : [] }));
+      port: Number.isInteger(c.port) && c.port >= 1 && c.port <= 65535 ? c.port : null, auth: str(c.auth, 20), session_pw: c.session_pw === true, ssh: str(c.ssh, 200), args: Array.isArray(c.ssh_args) ? c.ssh_args.map(x => str(x, 300)) : [] }));
     for (const c of M.channels) {
       const s = states[c.id];
       if (!s || typeof s !== 'object' || !Array.isArray(s.agents) || (c.state === 'error' && M.states[c.id])) { if (M.states[c.id]) c.stale = true; roots[c.id] = M.roots[c.id] || []; continue; }
@@ -1406,6 +1467,8 @@ const R = (() => {
     }
     // keep agents of stale channels (last snapshot) so the list never blanks out
     for (const c of M.channels) if (c.stale) for (const [k, a] of prev) if (a.ch === c.id) next.set(k, a);
+    // 읽음 / 작업 완료 marks: a session seen not waiting ends the episode (the next wait alerts again); a different episode drops a stale mark
+    for (const [k, a] of next) { for (const m of [U.ack, U.doneMark]) if (m[k] && (!rawWaiting(a) || !sameEp(a, m[k]))) delete m[k]; applyMark(a); }
     // channel transitions: losing a server is exactly what has to be pushed to the owner
     for (const c of M.channels) { const was = prevCh.get(c.id); if (was === 'ok' && c.state === 'error') events.push({ type: 'chan', key: 'chan:' + c.id, to: 'error', ch: c.id }); else if (was === 'error' && c.state === 'ok') events.push({ type: 'chan', key: 'chan:' + c.id, to: 'ok', ch: c.id }); }
     // transitions
@@ -1424,15 +1487,13 @@ const R = (() => {
     let pruned = false;
     for (const k of Object.keys(A.at)) if (recvMs - A.at[k] > 864e5) { delete A.rooms[k]; delete A.at[k]; delete A.scroll[k]; delete A.mg[k]; pruned = true; }
     let uPruned = false;   // per-room UI marks die with the room's data, or room.ui grows forever
-    for (const m of [U.seen, U.expanded, U.boardExp, U.hidden]) if (m && typeof m === 'object') for (const k of Object.keys(m)) if (!next.has(k) && !(k in A.at)) { delete m[k]; uPruned = true; }
+    for (const m of [U.seen, U.expanded, U.boardExp, U.hidden, U.ack, U.doneMark]) if (m && typeof m === 'object') for (const k of Object.keys(m)) if (!next.has(k) && !(k in A.at)) { delete m[k]; uPruned = true; }
     if (U.hidden && typeof U.hidden === 'object') for (const k of Object.keys(U.hidden)) { const a = next.get(k); if (a && !REST.has(a.st)) { delete U.hidden[k]; uPruned = true; } }   // working or waiting again: show it
     if (uPruned) save();
     for (const [k, mp] of Object.entries(A.mg)) { for (const [id, m] of mp) if (recvMs - m.t > 864e5) { mp.delete(id); pruned = true; } if (!mp.size) delete A.mg[k]; }
     if (pruned) saveMsgs();
     // derived
-    M.waiting = [...next.values()].filter(isWaiting);
-    M.counts = {}; for (const a of next.values()) { M.counts[a.st] = (M.counts[a.st] || 0) + 1; M.counts.all = (M.counts.all || 0) + 1; }
-    M.counts.waiting = M.waiting.length;
+    derive();
     M.first = false; M.loaded = true;
     emit('model', M);
     if (events.length) emit('events', events);
@@ -1585,7 +1646,7 @@ const R = (() => {
     poll();
   }
   return { BADPERM, esc, num, str, koDur, normalize, h, svgUse, text, attr, cls, stClass, $, $$, keyed, keepScroll, isDead, setTimeFor, saveEvents, fmtDur, fmtLive, fmtAgo, sshHint, sshKind, sshFix, sshErr, fmtAbs, fmtHM, timeEl, setTime,
-           store, S, U, A, acts, msgs, mergeMsgs, saveTalks, saveMsgs, loadMsgs, validMsg, setFlow, accumulate, toolBase, save, applySettings, on, emit, ST, LIVE, REST, OLD, isWaiting, canHide, isHidden, hideRooms, unhideAll, waitCmp, waitT, M, agentsOf, chan, chName,
+           store, S, U, A, acts, msgs, mergeMsgs, saveTalks, saveMsgs, loadMsgs, validMsg, setFlow, accumulate, toolBase, save, applySettings, on, emit, ST, LIVE, REST, OLD, isWaiting, needsMe, isAcked, isApproval, rawWaiting, ack, markDone, unmarkDone, DONE_WHY, canHide, isHidden, hideRooms, unhideAll, waitCmp, waitT, M, agentsOf, chan, chName,
            refresh, loadPresets, apiPost, setPaused, isPaused: () => paused, view, go, openRoom, closeRoom, openChannel, route, params: () => params, key, keys, onEsc, updateTitle, boot };
 })();
 
@@ -1654,13 +1715,12 @@ const C = (() => {
   }
   const lastT = a => { const x = lastAct(a); return x ? x.t : a.lastAt != null ? a.lastAt : a.t0; };
   const isCmd = s => /^\$ /.test(s || '');
-  const calm = a => a.st === 'user' && /^답변 끝남/.test(a.why || '');
   const WAIT_WORD = { stall: '조용함', stopped: '중단됨', dead: '끊김' };   // the row's '…째 X' must agree with the ask box below it
   // what a waiting room asks of me: {head, body, mono, warn, cmd}
   function waitInfo(a) {
     if (a.st === 'user') {
       const body = a.now || a.last || a.why || '', cmd = isCmd(body);
-      return { head: cmd || /승인/.test(a.why || '') ? '승인 요청' : calm(a) ? '입력 대기' : '질문', body, mono: cmd, cmd: cmd ? body.slice(2) : '' };
+      return { head: cmd || /승인/.test(a.why || '') ? '승인 요청' : '질문', body, mono: cmd, cmd: cmd ? body.slice(2) : '' };
     }
     if (a.st === 'stall') {
       const cpu = a.procs.length ? Math.max(...a.procs.map(p => p.cpu)) : null, q = a.age != null ? a.age : a.since;
@@ -1727,14 +1787,14 @@ const C = (() => {
     const ask = askBubble(true);
     const el = h('div.room', { role: kind === 'card' ? 'button' : 'option', tabindex: kind === 'card' ? '-1' : null, class: kind === 'card' ? 'card bcard' : '' },
       h('div.rrow', avatar(a), h('div.rmain', h('div.l1', h('span.rt'), h('span.pj', { hidden: true }), h('span.rtm')),
-        h('div.l2', h('span.rch'), h('span.pp'), timeEl(Date.now(), 'live', 'pt rel'), h('span.pe'), h('span.rb', timeEl(Date.now(), 'live', 'rlong rel'), h('span.bdg'))))), ask,
+        h('div.l2', h('span.rch'), h('span.pp'), timeEl(Date.now(), 'live', 'pt rel'), h('span.pe'), h('span.ackm', { hidden: true }), h('span.rb', timeEl(Date.now(), 'live', 'rlong rel'), h('span.bdg'))))), ask,
       kind === 'card' ? h('div.cfoot', h('button.btn.sm', { type: 'button', tabindex: '-1', 'aria-hidden': 'true' }, '방 열기')) : null);
     el._ask = ask; return el;
   }
   // o: {scoped (channel chip active → leave the channel out), badge {red,n}, long (오래 도는 순), ghost (사라진 시각 ms)}
   function setRoomRow(el, a, o = {}) {
-    const dead = R.isDead(a.ch), w = !o.ghost && R.isWaiting(a);
-    stClass(el, a.st); cls(el, 'waiting', w); cls(el, 'rest', R.REST.has(a.st) && !w); cls(el, 'stale', dead); cls(el, 'kidrow', !!a.parent);
+    const dead = R.isDead(a.ch), w = !o.ghost && R.needsMe(a), ack = !o.ghost && R.isAcked(a);   // 읽음: a waiting room I already opened reads like a quiet one
+    stClass(el, a.st); cls(el, 'waiting', w); cls(el, 'acked', ack); cls(el, 'rest', R.REST.has(a.st) && !w); cls(el, 'stale', dead); cls(el, 'kidrow', !!a.parent);
     setAvatar(el.querySelector('.av'), a);
     const t = el.querySelector('.rt'); text(t, prefix(a) + a.name); attr(t, 'title', a.name);
     setProj(el.querySelector('.pj'), a);
@@ -1749,6 +1809,7 @@ const C = (() => {
     else if (kid && !o.ghost) { text(pp, ST[a.st]); attr(pp, 'title', preview(a)); const tt = R.LIVE.has(a.st) ? (a.t0 != null ? a.t0 : a.lastAt) : a.lastAt; R.setTimeFor(pt, tt, R.LIVE.has(a.st) ? 'live' : 'ago', a.ch); pt.hidden = tt == null; text(pe, ''); }
     else { const pv = o.ghost ? '사라짐 · ' + R.fmtHM(o.ghost) : preview(a); text(pp, pv); attr(pp, 'title', pv); pt.hidden = true; text(pe, ''); }
     pe.hidden = !w;
+    const am = el.querySelector('.ackm'); am.hidden = !ack; text(am, ack ? (R.isApproval(a) ? '승인 대기 · 읽음' : '읽음') : ''); attr(am, 'title', ack ? (R.isApproval(a) ? '아직 승인을 기다립니다 — 터미널에서 승인하세요' : '읽은 대기 — 새로 기다리기 시작하면 다시 알립니다') : null);
     const rl = el.querySelector('.rlong'); rl.hidden = !(o.long && !w && a.t0 != null); if (!rl.hidden) R.setTimeFor(rl, a.t0, 'live', a.ch);
     const bd = el.querySelector('.bdg'); badge(bd, o.badge);
     cls(el, 'hasask', w); el._ask.hidden = !w;
@@ -1822,7 +1883,7 @@ const ChatList = (() => {
   const rooms = $('#rooms'), lscroll = $('#lscroll'), chips = $('#chips'), search = $('#search'), sumtxt = $('#sumtxt'), sortw = $('#sortw'), warnln = $('#warnln'), lnote = $('#lnote'), lempty = $('#lempty'), newpill = $('#newpill'), chat = $('#chat');
   const SORTS = [['recent', '최근 순'], ['long', '오래 도는 순'], ['name', '이름 순']];
   const QUIET_N = 5, GHOST_MS = 600000, BASE_MS = 600000;
-  let moreN = 0, q = '', fkey = null, firstFocus = true, lastScroll = 0, applyT = 0, pending = 0, visKeys = [], seenAgents = new Map(); const ghosts = new Map(), ordT = new Map(), waitAt = new Map(); let forceApply = false;
+  let waitKeys = [], moreN = 0, q = '', fkey = null, firstFocus = true, lastScroll = 0, applyT = 0, pending = 0, visKeys = [], seenAgents = new Map(); const ghosts = new Map(), ordT = new Map(), waitAt = new Map(); let forceApply = false;
   const lt = a => C.lastT(a) || 0;
   const enc = R.openRoom;
 
@@ -1839,7 +1900,7 @@ const ChatList = (() => {
   // ---------- which rooms, in which order ----------
   const match = a => { if (!q) return true; const s = [a.name, a.why, a.now, a.last, a.meta, R.chName(a.ch)].join('\n').toLowerCase(); return s.includes(q); };
   const inFilter = a => U.chFilter === 'all' || a.ch === U.chFilter;
-  const listed = a => !R.isHidden(a) && (!a.parent || R.isWaiting(a) || U.showKids);
+  const listed = a => !R.isHidden(a) && (!a.parent || R.needsMe(a) || U.showKids);
   const holding = () => !forceApply && (rooms.contains(document.activeElement) || Date.now() - lastScroll < 1200 || !document.hasFocus());
   const cmpBy = sort => sort === 'name' ? (x, y) => x.name.localeCompare(y.name, 'ko') || (x.key < y.key ? -1 : 1)
     : sort === 'long' ? (x, y) => (y.since == null ? -1 : y.since) - (x.since == null ? -1 : x.since) || lt(y) - lt(x) || (x.key < y.key ? -1 : 1)
@@ -1853,7 +1914,7 @@ const ChatList = (() => {
     const counts = { all: 0 }; for (const a of all) if (listed(a)) { counts.all++; counts[a.ch] = (counts[a.ch] || 0) + 1; }
     const keys = new Set(all.map(a => a.key)); for (const k of ordT.keys()) if (!keys.has(k)) ordT.delete(k);
     for (const k of waitAt.keys()) if (!keys.has(k)) waitAt.delete(k);
-    for (const a of all) { if (!gk.has(a.key) && R.isWaiting(a)) { if (!waitAt.has(a.key)) waitAt.set(a.key, ordT.has(a.key) ? now : Math.min(R.waitT(a) || now, now)); } else waitAt.delete(a.key); }
+    for (const a of all) { if (!gk.has(a.key) && R.needsMe(a)) { if (!waitAt.has(a.key)) waitAt.set(a.key, ordT.has(a.key) ? now : Math.min(R.waitT(a) || now, now)); } else waitAt.delete(a.key); }
     const hold = holding(); let moved = 0;
     for (const a of all) {   // 2.5 s tolerance: collector ages are whole seconds, so a quiet room's last-signal time jitters by up to 1 s
       const t = lt(a), o = ordT.get(a.key);
@@ -1861,8 +1922,9 @@ const ChatList = (() => {
     }
     pending = hold ? moved : 0;
     const pool = all.filter(a => inFilter(a) && listed(a) && match(a));
-    const wait = pool.filter(a => !gk.has(a.key) && R.isWaiting(a)).sort(R.waitCmp), rest = pool.filter(a => gk.has(a.key) || !R.isWaiting(a)), inRest = new Set(rest.map(a => a.key));
-    const cmp = cmpBy(U.sort), roots = rest.filter(a => !(a.parent && inRest.has(a.parent) && !R.isWaiting(M.agents.get(a.parent) || {}))).sort(cmp), seq = [];
+    // 나를 기다림 = waits for me and not read yet (R.needsMe); a read wait sits with the quiet rooms, newest first, marked 읽음
+    const wait = pool.filter(a => !gk.has(a.key) && R.needsMe(a)).sort(R.waitCmp), rest = pool.filter(a => gk.has(a.key) || !R.needsMe(a)), inRest = new Set(rest.map(a => a.key));
+    const cmp = cmpBy(U.sort), roots = rest.filter(a => !(a.parent && inRest.has(a.parent) && !R.needsMe(M.agents.get(a.parent)))).sort(cmp), seq = [];
     const sectionOf = a => gk.has(a.key) || !R.LIVE.has(a.st) ? 'quiet' : 'work';
     const dfs = (a, sec) => { seq.push({ a, sec }); if (U.showKids) for (const k of a.kids.map(x => M.agents.get(x)).filter(x => x && inRest.has(x.key)).sort(cmp)) dfs(k, sec); };
     for (const a of roots) dfs(a, sectionOf(a));
@@ -1872,7 +1934,8 @@ const ChatList = (() => {
   // ---------- keyed items ----------
   function mkItem(it) {
     if (it.room) { const el = C.roomRow(it.room); el.id = 'rm-' + (++uid); el.addEventListener('click', () => { fkey = el.dataset.key; R.openRoom(el._a.ch, el._a.id); }); return el; }
-    if (it.sec) return h('div.sec', { role: 'presentation', class: 's-' + it.sec }, h('span.stt'), h('span.sn'));
+    if (it.sec) return h('div.sec', { role: 'presentation', class: 's-' + it.sec }, h('span.stt'), h('span.sn'),
+      it.sec === 'wait' ? h('button.btn.link.ackall', { type: 'button', title: '지금 기다리는 방을 모두 읽음으로 표시합니다 — 새로 기다리기 시작하면 다시 알립니다', on: { click: e => { e.stopPropagation(); R.ack(waitKeys); } } }, '모두 읽음') : null);
     if (it.none) return h('div.secnone', { role: 'presentation' }, C.glyph('done'), h('span', '기다리는 것 없음'));
     return h('div');
   }
@@ -1913,13 +1976,14 @@ const ChatList = (() => {
   const unhideBtn = h('button.more.unhide.btn.link', { type: 'button', hidden: true, on: { click: () => R.unhideAll() } });
   lscroll.insertBefore(h('div.tidyrow', tidyBtn, unhideBtn), lempty);
   on('hidden', () => render());
+  on('marks', () => { if (!R.isPaused() && M.loaded) { forceApply = true; render(); forceApply = false; } });   // 읽음 / 작업 완료 move the row at once
   function patchItem(el, it) {
     if (it.room) {
-      const a = it.room, g = it.ghost, w = !g && R.isWaiting(a), k = U.room === a.key;
+      const a = it.room, g = it.ghost, w = !g && R.needsMe(a), k = U.room === a.key;
       el._a = a; cls(el, 'ghost', !!g);
       C.setRoomRow(el, a, { scoped: U.chFilter !== 'all', badge: g ? null : badgeOf(a, w), long: U.sort === 'long', ghost: g ? it.gat : 0 });
       attr(el, 'aria-selected', k ? 'true' : 'false'); cls(el, 'active', a.key === fkey);
-      attr(el, 'aria-label', a.name + ', ' + R.ST[a.st] + (el.querySelector('.bdg.on') ? ', ' + el.querySelector('.bdg').getAttribute('aria-label') : ''));
+      attr(el, 'aria-label', a.name + ', ' + R.ST[a.st] + (!g && R.isAcked(a) ? ', 읽음' : '') + (el.querySelector('.bdg.on') ? ', ' + el.querySelector('.bdg').getAttribute('aria-label') : ''));
     } else if (it.sec) {
       text(el.querySelector('.stt'), it.title); const n = el.querySelector('.sn'); text(n, it.n); cls(n, 'red', it.sec === 'wait'); attr(el, 'aria-label', it.title + ' ' + it.n);
     }
@@ -1929,6 +1993,7 @@ const ChatList = (() => {
   function render() {
     const P = plan(), items = []; moreN = 0;
     const wk = P.seq.filter(x => x.sec === 'work'), qt = P.seq.filter(x => x.sec === 'quiet');
+    waitKeys = P.wait.map(a => a.key);   // 모두 읽음: what the 나를 기다림 section shows (current filter + search)
     if (P.wait.length) { items.push({ k: 'sec:wait', sec: 'wait', title: '나를 기다림', n: P.wait.length }); for (const a of P.wait) items.push({ k: a.key, room: a }); }
     else if (P.total) items.push({ k: 'none:wait', none: true });
     if (U.sort === 'long') { for (const x of P.seq) items.push({ k: x.a.key, room: x.a, ghost: P.gk.has(x.a.key), gat: (ghosts.get(x.a.key) || {}).at }); }
@@ -2029,7 +2094,7 @@ const ChatList = (() => {
   rooms.addEventListener('focus', () => { if (fkey) render(); });
   on('arrow', e => { if (R.params().view !== 'chat') return; e.preventDefault(); rooms.focus(); });
   on('resort', () => { forceApply = true; render(); forceApply = false; });
-  function focusFirstWaiting() { const w = [...M.agents.values()].filter(a => R.isWaiting(a) && inFilter(a)).sort(R.waitCmp)[0]; if (w) { fkey = w.key; render(); } rooms.focus(); }
+  function focusFirstWaiting() { const w = [...M.agents.values()].filter(a => R.needsMe(a) && inFilter(a)).sort(R.waitCmp)[0]; if (w) { fkey = w.key; render(); } rooms.focus(); }
   function step(d) {   // j / k: next / previous room inside the current filter + sort
     if (!U.room) return; const i = visKeys.indexOf(U.room), t = visKeys[i + d]; if (i < 0 || !t) return;
     const a = M.agents.get(t) || (ghosts.get(t) || {}).a; if (a) { fkey = t; R.openRoom(a.ch, a.id); }
@@ -2287,7 +2352,7 @@ const Flow = (() => {
     C.setAvatar(r.querySelector('.av'), a || { tool: 'claude', st: 'done', parent: null }); text(r.querySelector('.dt-nm'), nm); attr(r, 'title', nm);
     text(r.querySelector('.cnt'), it.nk ? '· ' + it.nk : ''); r.querySelector('.xp').hidden = !(a && !root && Detail.isCross(a));
     const gl = r.querySelector('.fst .gl'), fsl = r.querySelector('.fsl'), tm = r.querySelector('.el');
-    if (a) { gl.style.display = ''; C.setGlyph(gl, a.st); text(fsl, ST[a.st]); const [t, m] = Detail.when(a); R.setTimeFor(tm, t, m, a.ch); tm.hidden = t == null; C.badge(r.querySelector('.bdg'), ChatList.badgeOf(a, R.isWaiting(a))); }
+    if (a) { gl.style.display = ''; C.setGlyph(gl, a.st); text(fsl, ST[a.st]); const [t, m] = Detail.when(a); R.setTimeFor(tm, t, m, a.ch); tm.hidden = t == null; C.badge(r.querySelector('.bdg'), ChatList.badgeOf(a, R.needsMe(a))); }
     else { gl.style.display = 'none'; text(fsl, '(끝남)'); tm.hidden = true; C.badge(r.querySelector('.bdg'), null); }
     setLines(r.querySelector('.ft'), linesOf(a ? a.key : ms2.ck, root));
   }
@@ -2470,7 +2535,7 @@ const Talk = (() => {
 
   function lines(a, text_) {   // situational lines of the confirm card, in the TALK-UX §5.3 order
     const o = [], es = A.talks[shown] || [], last = es[es.length - 1];
-    if (a.st === 'user' && !/^답변 끝남/.test(a.why || '')) o.push(['g-user', '이 세션은 승인을 기다리는 중입니다 — 톡은 승인 뒤에 읽히고, 톡으로 승인할 수는 없습니다']);
+    if (a.st === 'user' && !/^(답변 끝남|질문함)/.test(a.why || '')) o.push(['g-user', '이 세션은 승인을 기다리는 중입니다 — 톡은 승인 뒤에 읽히고, 톡으로 승인할 수는 없습니다']);
     if (a.talk && a.talk.hold) o.push(['g-user', '--dangerously-skip-permissions 세션입니다 — 터미널에 승인 창이 뜨고, 5분 안에 승인해야 전달됩니다']);
     if (last && last.text === text_) o.push(['g-stall', '바로 전에 보낸 톡과 같은 내용입니다 — 에이전트가 중복으로 거를 수 있습니다']);
     if (a.tool === 'codex' && R.LIVE.has(a.st)) o.push(['g-work', '진행 중인 턴에 끼워 넣습니다 (turn/steer)']);
@@ -2571,7 +2636,7 @@ const Room = (() => {
   const dayLabel = ms => { const k = dayKey(ms), t = dayKey(Date.now()), y = dayKey(Date.now() - 864e5), d = new Date(ms); return k === t ? '오늘' : k === y ? '어제' : (d.getMonth() + 1) + '월 ' + d.getDate() + '일'; };
   const small = () => matchMedia('(max-width: 760px)').matches;
   const cache = new Map();                       // key -> last known agent (a session that disappeared keeps its room)
-  let key = null, a = null, prevIds = new Set(), lastId = null, opening = true, tailOk = false, wantFocus = false, sawAgent = false;
+  let key = null, a = null, prevIds = new Set(), lastId = null, opening = true, tailOk = false, wantFocus = false, sawAgent = false, ackOpen = false;
 
   // ---------- skeleton of the pane ----------
   const ptitle = h('h2.t-title.ptitle'), pproj = h('span.pj', { hidden: true }), pmeta = h('div.pmeta.meta'), crumb = h('a.crumb.lnk', { href: '#/chat' }), back = h('button.back.btn.link', { type: 'button', title: '오버뷰로 (Esc)', on: { click: () => R.closeRoom() } }, '‹ 오버뷰');
@@ -2582,7 +2647,26 @@ const Room = (() => {
   const seg = h('div.seg.fseg', { role: 'group', 'aria-label': '보기', hidden: true }, ...segB);   // 대화 | 흐름 (TALK-UX §4): only when the room's tree has children
   // 정리: a finished room can be hidden from the list and the overview (it returns by itself if the session works or waits again)
   const hideBtn = h('button.btn.sm.hidebtn', { type: 'button', hidden: true, title: '끝난 방을 목록과 오버뷰에서 숨깁니다', on: { click: () => { if (a && R.canHide(a)) { R.hideRooms([a.key]); R.closeRoom(); } } } }, '목록에서 숨기기');
-  const phead = h('header.phead', back, crumb, h('div.hrow', av, h('div.htxt', ptitle, h('div.pmrow', pproj, pmeta)), h('div.hlinks', seg, lkKids, lkPar, hideBtn, info)));
+  // 작업 완료 (CHAT-UX: a wait the user knows is over): the view treats this waiting episode as done; 방 나가기 also hides the room.
+  // Nothing is sent to the agent. A new episode (it works or waits again) clears the mark by itself (50-core applyMark).
+  const KEEP = '에이전트는 종료하지 않습니다 — 목록에서만 정리합니다';
+  const doneBtn = h('button.btn.sm.donebtn', { type: 'button', hidden: true, title: '이 대기를 끝난 것으로 표시합니다 · ' + KEEP, on: { click: () => doneAct(false) } }, '작업 완료');
+  const leaveBtn = h('button.btn.sm.leavebtn', { type: 'button', hidden: true, title: '작업 완료로 표시하고 목록에서 숨긴 뒤 방을 닫습니다 · ' + KEEP, on: { click: () => doneAct(true) } }, '작업 완료 · 방 나가기');
+  const cfGo = h('button.btn.sm.primary', { type: 'button', on: { click: () => finishDone(cfLeave) } }, '완료로 표시'), cfNo = h('button.btn.sm', { type: 'button', on: { click: () => { donecf.hidden = true; } } }, '취소');
+  const donecf = h('div.donecf', { role: 'group', 'aria-label': '작업 완료 확인', hidden: true }, h('span', '정말 완료로 표시할까요? 에이전트는 계속 승인을 기다립니다'), cfGo, cfNo);
+  let cfLeave = false;
+  function doneAct(leave) {
+    if (!a || !R.rawWaiting(a) || a.marked) return;
+    if (R.isApproval(a)) { cfLeave = leave; donecf.hidden = false; cfGo.focus(); return; }   // a real blocker: one more step
+    finishDone(leave);
+  }
+  function finishDone(leave) {
+    donecf.hidden = true;
+    const k = a && a.key; if (!k || !R.markDone([k]).length) return;
+    if (leave) { R.hideRooms([k]); R.closeRoom(); }
+    R.emit('undo', { key: k, text: leave ? '작업 완료로 표시하고 방을 나갔습니다' : '작업 완료로 표시했습니다', undo: () => { R.unmarkDone([k]); if (leave && R.U.hidden && R.U.hidden[k]) { delete R.U.hidden[k]; R.save(); R.emit('hidden'); } } });
+  }
+  const phead = h('header.phead', back, crumb, h('div.hrow', av, h('div.htxt', ptitle, h('div.pmrow', pproj, pmeta)), h('div.hlinks', seg, lkKids, lkPar, doneBtn, leaveBtn, hideBtn, info)), donecf);
   const tl = h('div#tl', { role: 'log', 'aria-live': 'polite', 'aria-relevant': 'additions', tabindex: '-1', 'aria-label': '대화' }), tlin = h('div.tlin');
   tl.append(tlin);
   const newmsg = h('button.newmsg', { type: 'button', hidden: true, on: { click: () => { tl.scrollTop = tl.scrollHeight; newmsg.hidden = true; } } }, '새 메시지 ↓');
@@ -2604,7 +2688,7 @@ const Room = (() => {
     for (const x of ring) L.push({ id: 'a|' + x.k + '|' + x.t + '|' + (x.k === 'tool' ? R.toolBase(x.x) : x.x), t: x.t, kind: x.k, x: x.x });
     for (const e of evs.slice().reverse()) L.push({ id: 'e|' + e.id, t: e.t, kind: e.type, e });
     const lastK = ring.length ? ring[ring.length - 1].k : '';   // a room that waits always ends in its question, even when the collector sent no ask act
-    if (a && a.st === 'user' && lastK !== 'ask' && !/^답변 끝남/.test(a.why || '') && (a.now || a.why)) L.push({ id: 'syn|ask', t: Math.max(R.waitT(a) || Date.now(), ring.length ? ring[ring.length - 1].t : 0) + 1, kind: 'ask', x: a.now || a.why });
+    if (a && a.st === 'user' && lastK !== 'ask' && !/^(답변 끝남|질문함)/.test(a.why || '') && (a.now || a.why)) L.push({ id: 'syn|ask', t: Math.max(R.waitT(a) || Date.now(), ring.length ? ring[ring.length - 1].t : 0) + 1, kind: 'ask', x: a.now || a.why });
     if (a && R.isDead(a.ch)) { const c = R.chan(a.ch), st = M.states[a.ch]; L.push({ id: 'stale', t: Infinity, kind: 'stale', x: (c && c.t ? fmtHM(c.t) : st && st.time ? st.time.slice(0, 5) : '') + ' 이후 수집 안 됨 — ' + (M.hubDown ? '허브에 연결할 수 없습니다' : c && c.kind === 'ssh' ? 'SSH 연결이 끊겼습니다' : '수집 오류') }); }
     if (!a && sawAgent) L.push({ id: 'miss', t: Infinity, kind: 'miss', x: '세션 정보를 가져오지 못했습니다 — 터널 끊김 / 세션 종료 / 권한' });
     Talk.collect(key, a, L);   // talk cards, spawn bodies, fan-out line; drops what a card replaces
@@ -2799,7 +2883,7 @@ const Room = (() => {
     eGl.style.display = ''; eH.hidden = false;
     const cnt = k => [...M.agents.values()].filter(x => x.st === k).length;
     const live = [...M.agents.values()].filter(x => R.LIVE.has(x.st)).length, ok = M.channels.filter(c => c.state === 'ok').length;
-    if (w) { const cw = k => M.waiting.filter(x => x.st === k).length; C.setGlyph(eGl, 'user'); text(eT, [['입력 대기', cw('user')], ['응답 없음', cw('stall')], ['중단됨', cw('stopped')], ['끊김', cw('dead')]].filter(x => x[1]).map(x => x[0] + ' ' + x[1]).join(' · ')); }   // same set (R.isWaiting) as the rail badge
+    if (w) { const cw = k => M.waiting.filter(x => x.st === k).length; C.setGlyph(eGl, 'user'); text(eT, [['입력 대기', cw('user')], ['응답 없음', cw('stall')], ['중단됨', cw('stopped')], ['끊김', cw('dead')]].filter(x => x[1]).map(x => x[0] + ' ' + x[1]).join(' · ')); }   // same set (R.needsMe) as the rail badge
     else { C.setGlyph(eGl, 'done'); text(eT, '기다리는 것 없음'); }
     text(eS, '에이전트 ' + live + '개 작업 중 · 채널 ' + ok + '/' + M.channels.length + ' 연결');
   }
@@ -2810,6 +2894,7 @@ const Room = (() => {
     if (k !== key) {
       key = k; opening = true; prevIds = new Set(); sawAgent = false; newmsg.hidden = true; tlin.replaceChildren();
       if (k) { R.U.seen[k] = Date.now(); R.save(); }
+      ackOpen = !!k; donecf.hidden = true;
       chat.dataset.room = k ? 'open' : 'none';
     }
     applyDrawer();
@@ -2822,6 +2907,10 @@ const Room = (() => {
     if (!M.loaded) { proom.hidden = true; pempty.hidden = false; document.body.classList.remove('room-composer'); renderEmpty(); return; }
     pempty.hidden = true; proom.hidden = false;
     text(back, small() ? '‹ 목록' : '‹ 오버뷰'); hideBtn.hidden = !(a && R.canHide(a));
+    const canDone = !!a && R.rawWaiting(a) && !a.marked; doneBtn.hidden = leaveBtn.hidden = !canDone; if (!canDone) donecf.hidden = true;
+    // 읽음: opening a waiting room (or watching it while a new wait starts) acknowledges that episode — after this pass, not inside it
+    if (a && R.needsMe(a) && (ackOpen || document.hasFocus())) { const k = key; setTimeout(() => { if (key === k && R.params().view === 'chat') R.ack([k]); }, 0); }
+    if (a) ackOpen = false;
     if (a || ghost) renderHead(a || ghost); else { text(ptitle, key.slice(key.indexOf(':') + 1)); text(pmeta, R.chName(key.split(':')[0])); lkKids.hidden = lkPar.hidden = crumb.hidden = true; }
     const rt = a && M.agents.get(a.root), tree = !!rt && Detail.subtree(rt).length > 0, was = flowOn;
     flowOn = tree && !!R.params().flow; seg.hidden = !tree; segB.forEach((b, i) => attr(b, 'aria-pressed', (i ? flowOn : !flowOn) ? 'true' : 'false'));
@@ -2930,6 +3019,7 @@ const Room = (() => {
     if (U.boardCh && !ch) U.boardCh = '';
     const all = R.agentsOf(ch || 'all'), hidden = new Set(), fans = new Map(), total = { wait: 0, work: 0, child: 0, done: 0 };
     for (const a of all) total[bucketOf(a)]++;
+    const nWait = all.filter(R.needsMe).length;   // the lane keeps read waits (last, marked 읽음) but counts only the unread ones
     for (const a of all) if (a.kids.length >= FAN && !hidden.has(a.key)) {
       const ds = desc(a), d = { all: ds.length, wait: 0, live: 0, done: 0 };
       for (const c of ds) { const b = bucketOf(c); d[b === 'wait' ? 'wait' : b === 'done' ? 'done' : 'live']++; if (b !== 'wait' && !U.boardExp[a.key]) hidden.add(c.key); }
@@ -2944,10 +3034,10 @@ const Room = (() => {
     }
     for (const [k, o] of ord) if (!M.agents.has(k)) { ord.delete(k); cards.delete(k); sums.delete(k); }
     for (const [id, l] of Object.entries(lanes)) {
-      const items = [], list = by[id].sort((x, y) => (id === 'wait' ? R.waitCmp(x, y) : 0) || (ord.get(x.key).t - ord.get(y.key).t) || (x.key < y.key ? -1 : 1));
+      const items = [], list = by[id].sort((x, y) => (id === 'wait' ? (R.isAcked(x) - R.isAcked(y)) || R.waitCmp(x, y) : 0) || (ord.get(x.key).t - ord.get(y.key).t) || (x.key < y.key ? -1 : 1));
       for (const a of list) { items.push({ a, b: id }); if (fans.has(a.key)) items.push({ sum: a, d: fans.get(a.key) }); }
       const collapsed = id === 'done' && !U.boardDone && total[id] > 0;
-      text(l.n, total[id]); l.sec.dataset.n = total[id];
+      const shown = id === 'wait' ? nWait : total[id]; text(l.n, shown); l.sec.dataset.n = shown;
       l.empty.hidden = !!total[id]; l.body.hidden = collapsed;
       if (id === 'done') {
         l.tog.hidden = !total[id]; text(l.tog, collapsed ? total[id] + '개 (펼치기)' : '접기'); attr(l.tog, 'aria-expanded', collapsed ? 'false' : 'true');
@@ -3034,7 +3124,8 @@ window.Importer = (() => {
   // ---------- classification ----------
   const toWait = e => (e.type === 'chan' && e.to === 'error') || e.type === 'start' && (e.to === 'user' || e.to === 'stall') || e.type === 'status' && (e.to === 'user' || e.to === 'stall' || ((e.to === 'stopped' || e.to === 'dead') && (LIVE.has(e.from) || e.from === 'user')));
   const longProc = e => e.type === 'proc-done' && e.dur >= S.longMin * 60;
-  const notable = e => toWait(e) || longProc(e);                               // toast + Windows notification set
+  const readWait = e => toWait(e) && e.type !== 'chan' && e.agent && R.M.agents.get(e.key) === e.agent && !R.needsMe(e.agent);   // 읽음 / 작업 완료: this episode was already seen
+  const notable = e => (toWait(e) && !readWait(e)) || longProc(e);              // toast + Windows notification set
   const reason = e => { const a = e.agent || {}; if (e.type === 'talk') return ''; if (e.type === 'chan') { const c = R.chan(e.ch); return e.to === 'error' ? String(c && c.error || '').split('\n')[0] : ''; } return e.type === 'proc-done' ? String(e.cmd || '') : e.to === 'user' ? (a.now || a.why || '') : (a.why || ''); };
   const toastSentence = e => e.type === 'talk' ? (e.kind === 'held' ? '보낸 톡이 터미널에서 승인을 기다립니다 (5분)' : e.kind === 'unreach' ? '보낸 톡이 연결 안 됨으로 닿지 못했습니다' : '보낸 톡이 거절되었습니다') : e.type === 'chan' ? '연결이 끊겼습니다 — 이 채널의 에이전트 상태를 확인할 수 없습니다' : e.type === 'proc-done' ? '오래 걸린 작업이 끝났습니다 (' + R.fmtDur(e.dur) + (e.cmd ? ', ' + R.str(e.cmd, 40) : '') + ')'
     : { user: '입력을 기다립니다', stall: '응답이 없습니다', stopped: '중단되었습니다', dead: '연결이 끊겼습니다' }[e.to];
@@ -3079,6 +3170,15 @@ window.Importer = (() => {
   }
   // a talk I sent needs attention (TALK-UX §5.5): held always (the answer is at another window), refused/unreachable only when its room is not open
   const clearKey = k => { const n = notes.get(k); if (n) { n.close(); notes.delete(k); } for (const t of [...stack.children]) if (t._key === k) dismiss(t); };
+  // 읽음 / 작업 완료 clear what was shown for those rooms; 작업 완료 offers 되돌리기 for a few seconds
+  on('ack', keys => { for (const k of keys) clearKey(k); });
+  on('undo', u => {
+    for (const t of [...stack.children]) if (t._key === 'undo:' + u.key) t.remove();
+    const t = h('div.toast.undo', h('div.tx', h('div.meta', u.text)),
+      h('div.ta', h('button.btn.sm.undob', { type: 'button', on: { click: () => { dismiss(t); u.undo(); } } }, '되돌리기'),
+        h('button.x', { type: 'button', 'aria-label': '닫기', title: '닫기', on: { click: () => dismiss(t) } }, '×')));
+    t._key = 'undo:' + u.key; t._tm = setTimeout(() => dismiss(t), 8000); stack.append(t);
+  });
   on('talk', e => { if (e.kind === 'clear') return clearKey(e.key); toast(e); if (canNotify()) notify(e); });   // 'clear': the held talk was approved / expired, its toast is stale
   on('events', evs => {
     if (!evs || !evs.length) return;
@@ -3148,6 +3248,7 @@ window.Importer = (() => {
   // ---------- 채널 ----------
   function chanRow(c) {
     const el = h('li.crow', h('svg.cic', { 'aria-hidden': 'true' }, h('use')), h('div.cmain', h('div.cname', h('b', h('a', { href: '#/chat' })), ' ', h('span.meta.tgt')), h('div.verdict', h('span.vs'), R.timeEl(Date.now(), 'live', 'vt'), h('span.ve')), h('div.meta.cwarn', { hidden: true }), h('div.cbp', { hidden: true }, h('b.bpt', R.BADPERM.title), h('p.meta.bpb'), States.badperm())), h('div.cacts', h('button.btn.sm.primary.fix', { type: 'button', hidden: true, on: { click: () => AddServer.open({ ch: el.dataset.key }) } }, '이 서버에 키 등록하기'),
+      h('button.btn.sm.rekey', { type: 'button', hidden: true, title: '이 서버는 키 로그인이 거절되어 실행할 때마다 비밀번호를 묻습니다. 키를 다시 등록하고, 거절되면 원인(폴더 권한 등)을 찾아 고칩니다.', on: { click: () => AddServer.open({ ch: el.dataset.key, rekey: true }) } }, '키 로그인 다시 설정'),
       h('button.btn.sm.retry', { type: 'button', title: '허브가 자동으로 다시 연결합니다 (최대 1분 간격). 이 버튼은 지금 한 번 확인합니다.', on: { click: () => R.refresh() } }, '지금 확인')));
     return el;
   }
@@ -3164,7 +3265,9 @@ window.Importer = (() => {
     const bk = c.kind === 'ssh' && c.state === 'error' ? R.sshKind(c.error) : '', bpm = bk === 'badperm' || bk === 'badpermx', bx = el.querySelector('.cbp'); bx.hidden = !bpm;
     if (bpm) { text(bx.querySelector('.bpb'), R.sshHint(c.error)); bx.querySelector('.bperm').hidden = bk !== 'badperm'; }   // the copy-paste fix only fits %USERPROFILE%\.ssh\config
     const fx = R.sshFix(c), rb = el.querySelector('.retry');
-    el.querySelector('.fix').hidden = !fx; rb.hidden = c.state !== 'error'; cls(rb, 'link', fx); cls(rb, 'sm', !fx);
+    const pws = c.kind === 'ssh' && c.auth === 'password-session', fb = el.querySelector('.fix');   // password-session: the key was refused once; offer the key again
+    fb.hidden = !fx; text(fb, pws ? '비밀번호로 다시 연결' : '이 서버에 키 등록하기'); rb.hidden = c.state !== 'error'; cls(rb, 'link', fx); cls(rb, 'sm', !fx);
+    el.querySelector('.rekey').hidden = !pws;
   }
 
   // ---------- 단축키 ----------
@@ -3493,6 +3596,7 @@ window.States = (() => {
       text(p.err.querySelector('.t'), bpm ? R.BADPERM.title : c.state === 'ok' ? '수집이 중단되었습니다' : ssh ? 'SSH 연결이 끊겼습니다' : '연결 오류');
       text(p.err.querySelector('.sub'), (c.t ? '마지막 수집 ' + R.fmtHM(c.t) : '아직 받은 데이터가 없습니다') + ' · 허브가 자동으로 다시 연결합니다 (최대 1분 간격)');
       const fx = R.sshFix(c); p.fixBtn.hidden = !fx; cls(p.again2, 'primary', !fx); cls(p.again2, 'link', fx);
+      text(p.fixBtn, c.auth === 'password-session' ? '비밀번호로 다시 연결 (또는 키 로그인 다시 설정)' : '이 서버에 키 등록하기');   // the dialog offers both
       p.tunnel.hidden = !ssh; p.sep1.hidden = true;   // the hint is long: it wraps, a leading dot would dangle
       if (ssh) text(p.tunnel, R.sshHint(c.error) + ' (' + R.sshErr(c.error) + ')');
       text(p.log, c.error || '허브가 오류 내용을 보내지 않았습니다');
@@ -3520,13 +3624,19 @@ window.States = (() => {
 /* ---- 69-addserver.js ---- */
 /* ===== 69-addserver.js — 서버 추가 dialog (IN-APP-SSH-ENG §3/§5). window.AddServer.open({ch?, host?, port?, name?}).
    Host, port, account and password are typed here; the password goes only into the POST body, is cleared from the field right after submit
-   and is never kept by the page. Hub strings go through textContent only. ===== */
+   and is never kept by the page. Hub strings go through textContent only.
+   key_rejected: the hub diagnoses over the still-open password session and waits in state confirm_fix; the card lists what it found and
+   the exact fix commands, the answer goes to api/servers/job/confirm {action: 'fix', choice: fix | session | none}.
+   open({ch, rekey: true}) on a password-session channel = 키 로그인 다시 설정 (reuses this run's password when the hub still has it). ===== */
 window.AddServer = (() => {
   const { h, svgUse, text, attr, cls, M } = R;
   const TOKEN = (document.querySelector('meta[name=at-token]') || {}).content || '';
   const RE = { host: /^[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?$/, user: /^[A-Za-z_][A-Za-z0-9._-]{0,31}$/ };
   const STEPS = ['연결', '서버 확인', '키 등록', '접속 확인', '채널 등록'], GL = { pending: 'g-idle', active: 'g-work', user: 'g-user', done: 'g-done', error: 'g-dead' };
-  const PH = { connecting: 0, confirm_hostkey: 1, installing_key: 2, verifying: 3 };
+  const PH = { connecting: 0, confirm_hostkey: 1, installing_key: 2, verifying: 3, diagnosing: 3, confirm_fix: 3, fixing: 3 };
+  const LIVE = ['connecting', 'confirm_hostkey', 'installing_key', 'verifying', 'diagnosing', 'confirm_fix', 'fixing'];
+  const LV = { fix: '고칠 수 있음', admin: '관리자 필요', info: '참고' };
+  const WHY_KR = '서버에서 찾은 원인은 아래와 같습니다. 이 내용을 서버 관리자에게 전달하거나, 이 세션 동안만 비밀번호로 연결할 수 있습니다 (비밀번호는 디스크에 저장되지 않고, 에겐 톡을 닫으면 사라집니다).';
   const SUB = '주소, 계정, 비밀번호를 적으면 이 PC 전용 키를 서버에 등록합니다.';
   const PRIV_S = '비밀번호는 디스크에 저장되지 않고 에겐 톡을 닫으면 사라집니다';
   // kind -> [title, plain-language sub, failed step (index) or fn(job), actions]; actions: [label, 'p'rimary | 'b'utton | 'l'ink, fn name]
@@ -3540,7 +3650,7 @@ window.AddServer = (() => {
     hub_lost: ['허브가 응답하지 않습니다', '허브와의 연결이 끊겨 등록이 어디까지 진행됐는지 알 수 없습니다. 에겐 톡을 다시 시작한 뒤 다시 시도하세요. 이미 비밀번호를 보냈다면 서버에 키가 등록됐을 수 있습니다 — 서버의 ~/.ssh/authorized_keys 에서 \'agen-talk@PC이름\' 줄로 확인하세요.', (p, j) => PH[j.phase || p.phase] || 0, [['다시 입력', 'p', 'retry'], ['닫기', 'b', 'close']]],
     other: ['등록하지 못했습니다', '아래 로그를 확인하세요. 같은 내용이 반복되면 에겐 톡 로그 폴더의 로그와 함께 알려 주세요.', (p, j) => PH[j.phase || p.phase] || 0, [['다시 입력', 'p', 'retry'], ['계정 수정', 'l', 'user'], ['닫기', 'b', 'close']]],
   };
-  let dlg, E = {}, job = null, timer = 0, flashT = 0, opener = null, fix = null, fixName = '';
+  let dlg, E = {}, job = null, timer = 0, flashT = 0, opener = null, fix = null, fixName = '', rekey = false, reusePw = false, sub0 = SUB;
 
   const api = (path, body) => fetch(path, body === undefined ? { cache: 'no-store' } : { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-AT-Token': TOKEN }, body: JSON.stringify(body) })
     .then(async r => ({ status: r.status, body: await r.json().catch(() => null) }));   // relative paths: the page lives under /<secret>/
@@ -3548,7 +3658,7 @@ window.AddServer = (() => {
   const flash = (msg, ms) => { clearTimeout(flashT); text(E.flash, msg); E.flash.hidden = !msg; if (msg && ms) flashT = setTimeout(() => flash(''), ms); };
   const err = (k, msg, link) => { E[k + 'Err'].replaceChildren(...[msg, link].filter(Boolean)); E[k + 'Err'].hidden = !msg; attr(E[k], 'aria-invalid', msg ? 'true' : null); };
   const running = () => !!job && job.running;
-  const pane = (n, sub) => { for (const k of ['form', 'prog', 'done']) E[k].hidden = k !== n; if (E.presets) E.presets.hidden = n !== 'form' || E.presets.children.length < 2; text(E.sub, sub || SUB); text(E.title, fix ? '이 서버에 키 등록하기' + (fixName ? ' — ' + fixName : '') : '서버 추가'); };
+  const pane = (n, sub) => { for (const k of ['form', 'prog', 'done']) E[k].hidden = k !== n; if (E.presets) E.presets.hidden = n !== 'form' || E.presets.children.length < 2; text(E.sub, sub || sub0); text(E.title, fix ? (rekey ? '키 로그인 다시 설정' : '이 서버에 키 등록하기') + (fixName ? ' — ' + fixName : '') : '서버 추가'); };
 
   function fld(k, label, attrs, extra) {
     const input = E[k] = h('input', Object.assign({ id: 'as-' + k, autocomplete: 'off', spellcheck: 'false', 'aria-describedby': 'as-' + k + '-err' }, attrs));
@@ -3581,17 +3691,23 @@ window.AddServer = (() => {
     E.steps = h('ol.steps', { role: 'status', 'aria-live': 'polite' }, STEPS.map(l => h('li', { data: { st: 'pending' } }, svgUse('g-idle', 'gl'), h('b', l), h('span.d'))));
     E.logBtn = h('button.btn.link', { type: 'button', 'aria-expanded': 'false', 'aria-controls': 'as-log', on: { click: () => { E.log.hidden = !E.log.hidden; attr(E.logBtn, 'aria-expanded', E.log.hidden ? 'false' : 'true'); } } }, '로그 보기');
     E.log = h('pre.inset', { id: 'as-log', hidden: true });
-    E.band = h('div.bn-err', { role: 'alert', hidden: true }, h('div.ttl', svgUse('g-dead', 'gl'), h('span.t')), h('div.sub', h('span.why'), ' ', h('code.mono.msg')), h('div.meta.kh', { hidden: true }), E.acts = h('div.acts'), E.log);
+    E.band = h('div.bn-err', { role: 'alert', hidden: true }, h('div.ttl', svgUse('g-dead', 'gl'), h('span.t')), h('div.sub', h('span.why'), ' ', h('code.mono.msg')), h('div.meta.kh', { hidden: true }), E.bfinds = h('ul.finds', { hidden: true }), E.acts = h('div.acts'), E.log);
+    // key_rejected with the password session still open: what the diagnosis found, the exact fix commands, the user's choice
+    E.fixT = h('b.ah'); E.fixWhy = h('p'); E.finds = h('ul.finds'); E.fixCmdL = h('p.meta', '실행할 명령 (이 계정 권한으로만 실행하고, 다른 것은 바꾸지 않습니다):'); E.fixCmd = h('code.mono.fixcmd');
+    E.fixGo = h('button.btn.primary', { type: 'button', on: { click: () => answerFix('fix') } }, '권한 고치고 다시 시도');
+    E.fixSess = h('button.btn', { type: 'button', on: { click: () => answerFix('session') } }, '이 세션 동안만 비밀번호로 연결');
+    E.fixNo = h('button.btn', { type: 'button', on: { click: () => answerFix('none') } }, '고치지 않기');
+    E.fixbox = h('div.confirm.fixc', { role: 'alert', hidden: true, on: { keydown: guardKey, keyup: guardKey } }, E.fixT, E.fixWhy, E.finds, E.fixCmdL, E.fixCmd, h('div.acts', E.fixNo, E.fixSess, E.fixGo));
     // first connection to a server: show its fingerprint, the user decides (never auto-accepted)
     E.fp = h('code.mono.fp');
     E.confirm = h('div.confirm', { role: 'alert', hidden: true, on: { keydown: guardKey, keyup: guardKey } }, h('b.ah', '처음 연결하는 서버입니다'), h('p', '서버 관리자가 알려 준 지문과 같으면 [연결]을 누르세요. 모르는 서버라면 취소하세요.'), E.fp, h('p.meta', '한 번 연결하면 이 PC는 이 서버를 기억합니다 — 다음부터 묻지 않습니다'),
       h('div.acts', E.fpNo = h('button.btn', { type: 'button', on: { click: () => confirmKey(false) } }, '취소'), E.fpYes = h('button.btn.primary', { type: 'button', on: { click: () => confirmKey(true) } }, '연결')));
     E.cancel = h('button.btn', { type: 'button', on: { click: cancel } }, '취소');
-    E.prog = h('div', { tabindex: '-1' }, E.band, E.steps, E.confirm, E.pacts = h('div.acts', E.cancel));
+    E.prog = h('div', { tabindex: '-1' }, E.band, E.steps, E.confirm, E.fixbox, E.pacts = h('div.acts', E.cancel));
     E.okTitle = h('h3.t-section'); E.okLine = h('p'); E.okNote = h('p.meta');
     E.open = h('button.btn.primary', { type: 'button' }, '채널 열기');
     E.done = h('div', h('div.ttl', svgUse('g-done', 'gl lg'), E.okTitle), E.okLine, E.okNote,
-      h('div.acts', h('button.btn.link', { type: 'button', on: { click: () => { reset(); pane('form'); paintPresets(); E.host.focus(); } } }, '서버 하나 더 추가'), h('button.btn', { type: 'button', on: { click: () => tryClose(true) } }, '닫기'), E.open));
+      h('div.acts', h('button.btn.link', { type: 'button', on: { click: () => { fix = null; fixName = ''; rekey = reusePw = false; sub0 = SUB; reset(); E.pw.placeholder = '서버 로그인 비밀번호'; pane('form'); paintPresets(); E.host.focus(); } } }, '서버 하나 더 추가'), h('button.btn', { type: 'button', on: { click: () => tryClose(true) } }, '닫기'), E.open));
     dlg = h('dialog.dlg.addsrv', { 'aria-labelledby': 'as-title', 'aria-describedby': 'as-sub' }, h('div.hd', E.title), E.sub, E.presets, E.form, E.prog, E.done, E.flash, close);
     dlg.addEventListener('cancel', e => { if (running()) { e.preventDefault(); flash('진행 중입니다 — 중단하려면 취소를 누르세요', 3000); } });   // Esc
     dlg.addEventListener('close', () => { E.pw.value = ''; if (running()) cancel(); if (opener && opener.isConnected) opener.focus(); });
@@ -3611,9 +3727,16 @@ window.AddServer = (() => {
     if (!dlg) mount();
     opener = document.activeElement;
     if (!running()) {
-      const c = o.ch && R.chan(o.ch);
+      const c = o.ch && R.chan(o.ch), sessCh = !!c && c.kind === 'ssh' && c.auth === 'password-session';
       fix = c ? c.id : null; fixName = c ? c.name : '';
-      reset(c ? Object.assign(parse(c), { name: '' }) : o); pane('form');
+      rekey = sessCh && !!o.rekey; reusePw = rekey && !!c.session_pw;   // 키 로그인 다시 설정: the hub may still hold this run's password
+      sub0 = rekey ? '이 서버는 키 로그인이 거절되어 비밀번호로 연결해 왔습니다. 키를 다시 등록하고, 또 거절되면 원인(폴더 권한 등)을 찾아 고칠 수 있게 안내합니다.' + (reusePw ? ' 이번 실행에서 입력한 비밀번호를 다시 쓰므로 비워 두어도 됩니다.' : '')
+        : sessCh ? '이 서버는 이번 실행 동안만 비밀번호로 연결합니다. 비밀번호를 입력하면 다시 연결합니다 — 매번 묻지 않게 하려면 아래 체크를 끄거나 설정 › 채널의 \'키 로그인 다시 설정\'을 쓰세요.' : SUB;
+      reset(c ? Object.assign(parse(c), { name: '' }) : o);
+      if (sessCh) { E.sessrow.hidden = false; E.sess.checked = !rekey; }
+      E.sess.dispatchEvent(new Event('change'));
+      E.pw.placeholder = reusePw ? '비워 두면 이번 실행에서 입력한 비밀번호를 씁니다' : '서버 로그인 비밀번호';
+      pane('form');
     }
     paintPresets();
     if (!dlg.open) dlg.showModal();
@@ -3647,9 +3770,10 @@ window.AddServer = (() => {
     if (fix) body.id = fix;
     if (!E.pyrow.hidden && E.py.value.trim()) { body.python = E.py.value.trim(); rq.python = body.python; }
     if (!E.sessrow.hidden && E.sess.checked) body.session_password = true;
+    if (reusePw && !body.password) body.reuse_password = true;   // the hub uses the password it holds for this channel in this run
     flash(''); E.go.disabled = true;
     E.band.hidden = true; E.confirm.hidden = true; E.pacts.hidden = false; attr(E.cancel, 'disabled', true); text(E.cancel, '취소');
-    rq.hadPw = !!body.password;
+    rq.hadPw = !!body.password || !!body.reuse_password;
     pane('prog', rq.user + '@' + rq.host + ' · 포트 ' + rq.port); steps([['active', '서버에 연결하는 중…'], P, P, P, P]); E.prog.focus({ preventScroll: true });
     let r; try { r = await api('api/servers', body); } catch { r = { status: 0 }; }
     body.password = '';
@@ -3670,8 +3794,30 @@ window.AddServer = (() => {
   async function confirmKey(accept) {
     if (!running() || !job.id) return;
     E.fpYes.disabled = E.fpNo.disabled = true;
-    try { await api('api/servers/job/confirm', { id: job.id, accept: !!accept }); } catch { }
+    try { await api('api/servers/job/confirm', { id: job.id, action: 'hostkey', accept: !!accept }); } catch { }
     poll();
+  }
+  async function answerFix(choice) {
+    if (!running() || !job.id) return;
+    E.fixGo.disabled = E.fixSess.disabled = E.fixNo.disabled = true;
+    try { await api('api/servers/job/confirm', { id: job.id, action: 'fix', choice }); } catch { }
+    poll();
+  }
+  function paintFinds(ul, list) {
+    const fs = Array.isArray(list) ? list.filter(f => f && typeof f === 'object').slice(0, 12) : [];
+    ul.replaceChildren(...fs.map(f => { const lv = LV[f.level] ? f.level : 'info'; return h('li', { data: { lv } }, h('span.lv', LV[lv]), h('span', R.str(f.text, 400))); }));
+    ul.hidden = !fs.length; return fs.length;
+  }
+  function paintFix(j) {
+    const p = job, cmds = Array.isArray(j.fix_cmds) ? j.fix_cmds.map(x => R.str(x, 300)) : [], can = cmds.length > 0, sessOk = j.session_ok !== false;
+    text(E.fixT, can ? '키 로그인이 거절된 원인을 찾았습니다' : '서버 설정 때문에 키 로그인이 거절됩니다');
+    text(E.fixWhy, can ? '아래 문제는 이 계정으로 직접 고칠 수 있습니다. [권한 고치고 다시 시도]를 누르면 아래 명령만 서버에서 실행한 뒤, 비밀번호 없이 접속되는지 새 연결로 다시 확인합니다.'
+      : '이 계정으로는 고칠 수 없는 원인입니다. 아래 내용을 서버 관리자에게 전달하세요.' + (sessOk ? ' 그동안은 이 세션 동안만 비밀번호로 연결할 수 있습니다 (비밀번호를 다시 입력하지 않습니다).' : ''));
+    paintFinds(E.finds, j.findings);
+    E.fixCmdL.hidden = E.fixCmd.hidden = !can; text(E.fixCmd, cmds.join('\n'));
+    E.fixGo.hidden = !can; text(E.fixGo, j.fix_pw_again ? '권한 고치고 다시 시도 (비밀번호 한 번 더)' : '권한 고치고 다시 시도');
+    E.fixSess.hidden = !sessOk; cls(E.fixSess, 'primary', !can); text(E.fixNo, can ? '고치지 않기' : '연결하지 않고 끝내기');
+    if (!p.fixShown) { p.fixShown = true; E.fixGo.disabled = E.fixSess.disabled = E.fixNo.disabled = false; E.confirmAt = Date.now(); (can ? E.fixGo : sessOk ? E.fixSess : E.fixNo).focus(); }
   }
   async function poll() {
     clearTimeout(timer);
@@ -3700,7 +3846,7 @@ window.AddServer = (() => {
     list.forEach(([s, d], i) => { const li = E.steps.children[i], d_ = li.querySelector('.d'); attr(li, 'data-st', s); text(li.querySelector('b'), STEPS[i]); li.querySelector('use').setAttribute('href', '#' + GL[s]); cls(li.querySelector('svg'), 'pulse', s === 'active'); text(d_, d); li.hidden = i === 1 && !(job && job.sawConfirm); });
   }
   function paint(j) {
-    if (!['connecting', 'confirm_hostkey', 'installing_key', 'verifying'].includes(j.state)) flash('');   // a finished job leaves no stale 'in progress' line
+    if (!LIVE.includes(j.state)) flash('');   // a finished job leaves no stale 'in progress' line
     const p = job, s = j.state, sub = p.rq.user + '@' + p.rq.host + ' · 포트 ' + p.rq.port;
     if (s === 'done') {
       const key = String(j.key || '').replace(/\.pub$/, ''), sess = j.auth === 'password-session';
@@ -3708,7 +3854,7 @@ window.AddServer = (() => {
       const c = j.channel || {}, nm = String(c.name || p.rq.name || p.rq.host);
       R.U.lastUser = p.rq.user; R.save(); R.loadPresets();
       text(E.okTitle, '연결 완료'); text(E.okLine, sess ? nm + '에 이 세션 동안만 비밀번호로 연결합니다.' : nm + '에 키로 접속합니다. 비밀번호는 더 이상 필요 없습니다.');
-      text(E.okNote, sess ? '에겐 톡을 닫으면 비밀번호가 사라지고, 다시 열면 비밀번호를 한 번 더 물어봅니다.' : (key ? '키: ' + key + ' (이 PC만) · ' : '') + "서버의 ~/.ssh/authorized_keys 에서 '" + String(j.comment || 'agen-talk@PC이름') + "' 줄을 지우면 접속이 끊깁니다. " + (fix ? '이 채널은 곧 다시 연결됩니다.' : "채널 칩에 '" + nm + "'가 생겼습니다."));
+      text(E.okNote, (Array.isArray(j.fixed) && j.fixed.length ? '고친 내용: ' + j.fixed.map(x => R.str(x, 100)).join(', ') + ' · ' : '') + (sess ? '에겐 톡을 닫으면 비밀번호가 사라지고, 다시 열면 비밀번호를 한 번 더 물어봅니다.' : (key ? '키: ' + key + ' (이 PC만) · ' : '') + "서버의 ~/.ssh/authorized_keys 에서 '" + String(j.comment || 'agen-talk@PC이름') + "' 줄을 지우면 접속이 끊깁니다. " + (fix ? '이 채널은 곧 다시 연결됩니다.' : "채널 칩에 '" + nm + "'가 생겼습니다.")));
       E.open.onclick = () => { dlg.close(); R.openChannel(c.id || ''); };
       pane('done', sub); E.open.focus(); return;
     }
@@ -3716,13 +3862,17 @@ window.AddServer = (() => {
     if (!dlg.contains(document.activeElement) || document.activeElement === dlg) E.prog.focus({ preventScroll: true });   // the focused button was hidden with the form
     if (s === 'error') return paintErr(j);
     E.band.hidden = true;
-    const ask = s === 'confirm_hostkey';
-    E.confirm.hidden = !ask; E.pacts.hidden = ask;
+    const ask = s === 'confirm_hostkey', askFix = s === 'confirm_fix';
+    E.confirm.hidden = !ask; E.fixbox.hidden = !askFix; E.pacts.hidden = ask || askFix;
+    if (askFix) paintFix(j);
     if (ask) { text(E.fp, (j.keytype ? String(j.keytype) + ' · ' : '') + String(j.fingerprint || '')); E.fpYes.disabled = E.fpNo.disabled = false; if (!p.confirmShown) { p.confirmShown = true; E.confirmAt = Date.now(); E.fpYes.focus(); } }
     if (!/취소하는 중/.test(E.cancel.textContent)) { E.cancel.disabled = false; text(E.cancel, '취소'); }
     steps(s === 'confirm_hostkey' ? [['done', ''], ['user', '서버 지문을 확인하세요'], P, P, P]
       : s === 'installing_key' ? [['done', ''], ['done', '서버 지문 확인됨'], ['active', '이 PC 전용 키를 서버에 등록하는 중…'], P, P]
       : s === 'verifying' ? [['done', ''], ['done', '서버 지문 확인됨'], ['done', '키 등록됨'], ['active', '비밀번호 없이 접속되는지 확인하는 중…'], P]
+      : s === 'diagnosing' ? [['done', ''], ['done', '서버 지문 확인됨'], ['done', '키 등록됨'], ['active', '키 로그인이 거절되어 원인을 찾는 중…'], P]
+      : s === 'confirm_fix' ? [['done', ''], ['done', '서버 지문 확인됨'], ['done', '키 등록됨'], ['user', '키 로그인이 거절됐습니다 — 아래 내용을 확인하세요'], P]
+      : s === 'fixing' ? [['done', ''], ['done', '서버 지문 확인됨'], ['done', '키 등록됨'], ['active', j.fix_pw_again ? '권한을 고치는 중… (콘솔 창에 비밀번호를 한 번 더 입력하세요)' : '권한을 고치고 다시 확인하는 중…'], P]
       : [['active', '서버에 연결하는 중…'], P, P, P, P]);
   }
   function paintErr(j) {
@@ -3731,14 +3881,16 @@ window.AddServer = (() => {
     const late = k === 'cancelled' && (PH[j.phase || p.phase] || 0) >= PH.installing_key;
     const cm = String(j.comment || 'agen-talk@PC이름');
     text(E.band.querySelector('.t'), k === 'wrong_password' && !p.rq.hadPw ? '비밀번호를 입력하세요' : title);
-    text(E.band.querySelector('.why'), late ? "취소했지만 공개키는 이미 서버에 등록됐을 수 있습니다. 서버의 ~/.ssh/authorized_keys 에서 '" + cm + "' 줄을 지우면 접속이 끊깁니다." : j.kind === 'cancelled' && j.message ? j.message : why.replace("'agen-talk@PC이름'", "'" + cm + "'"));
+    const nf = paintFinds(E.bfinds, k === 'key_rejected' ? j.findings : null);
+    text(E.band.querySelector('.why'), late ? "취소했지만 공개키는 이미 서버에 등록됐을 수 있습니다. 서버의 ~/.ssh/authorized_keys 에서 '" + cm + "' 줄을 지우면 접속이 끊깁니다." : j.kind === 'cancelled' && j.message ? j.message : nf ? (j.session_ok === false ? '서버에서 찾은 원인은 아래와 같습니다. 이 내용을 서버 관리자에게 전달하세요.' : WHY_KR) : why.replace("'agen-talk@PC이름'", "'" + cm + "'"));
     text(E.band.querySelector('.msg'), k === 'cancelled' || !j.message ? '' : R.sshErr(j.message));
-    E.band.dataset.kind = k; E.band.hidden = false; E.confirm.hidden = true; E.pacts.hidden = true;
+    E.band.dataset.kind = k; E.band.hidden = false; E.confirm.hidden = true; E.fixbox.hidden = true; E.pacts.hidden = true;
     const kh = E.band.querySelector('.kh'); kh.hidden = k !== 'host_key_changed' || !j.known_hosts; text(kh, kh.hidden ? '' : 'known_hosts: ' + String(j.known_hosts).slice(0, 200));
     text(E.log, R.str(j.log || j.message || '허브가 로그를 보내지 않았습니다', 4000)); E.log.hidden = k !== 'other'; attr(E.logBtn, 'aria-expanded', E.log.hidden ? 'false' : 'true');
     const fn = { retry: () => back('pw'), user: () => back('user'), host: () => back('host'), py: () => { E.pyrow.hidden = false; back('py'); }, session: () => { E.sessrow.hidden = false; E.sess.checked = true; back('pw'); }, close: () => tryClose(), forget };
     const mk = ([l, t, f]) => h('button' + (t === 'l' ? '.btn.link' : t === 'p' ? '.btn.primary' : '.btn'), { type: 'button', on: { click: fn[f] } }, l);
-    E.acts.replaceChildren(...acts.filter(a => a[1] === 'l').map(mk), E.logBtn, ...acts.filter(a => a[1] !== 'l').map(mk));
+    const acts_ = acts.filter(a => !(a[2] === 'session' && j.session_ok === false));   // the OpenSSH fallback has no password-for-this-session mode
+    E.acts.replaceChildren(...acts_.filter(a => a[1] === 'l').map(mk), E.logBtn, ...acts_.filter(a => a[1] !== 'l').map(mk));
     const pr = E.acts.querySelector('.primary'); if (pr) pr.focus();
   }
   // back to the form with the same address; the password field is empty again (it was cleared at submit)
@@ -3784,12 +3936,12 @@ const Overview = (() => {
   const projOf = a => a && a.project ? a.project : null;
   function label(n) {
     const p = n.p, sv = R.chan(n.ch);
-    return n.name + ', ' + (TOOL[n.tool] || n.tool) + ', ' + ST[n.st] + (n.why ? ' (' + n.why + ')' : '') + ', 프로젝트 ' + (p ? p.name : ETC) + ', 서버 ' + (sv ? sv.name : n.ch) + (n.nKids ? ', 하위 ' + n.nKids + '개' : '');
+    return n.name + ', ' + (TOOL[n.tool] || n.tool) + ', ' + ST[n.st] + (n.why ? ' (' + n.why + ')' : '') + (n.ack ? ', 읽음' : '') + ', 프로젝트 ' + (p ? p.name : ETC) + ', 서버 ' + (sv ? sv.name : n.ch) + (n.nKids ? ', 하위 ' + n.nKids + '개' : '');
   }
   function showTip(n, el) {
     const p = n.p, sv = R.chan(n.ch), g = h('div.tr');
     const row = (k, v) => g.append(h('span', k), h('b', v));
-    row('상태', ST[n.st] + (n.why ? ' — ' + n.why : ''));
+    row('상태', ST[n.st] + (n.why ? ' — ' + n.why : '') + (n.ack ? ' · 읽음' : ''));
     row('프로젝트', p ? p.name + (p.branch ? ' · ' + p.branch : '') : ETC);
     row('서버', sv ? sv.name + (sv.kind === 'local' ? ' (내 PC)' : '') : n.ch);
     if (n.parentName) row('부모', n.parentName);
@@ -3849,8 +4001,9 @@ const Overview = (() => {
     if (!s) seen.set(a.key, s = { st: a.st, t: -1e9 });
     else if (s.st !== a.st) { s.st = a.st; s.t = now; }
     const kids = a.kids.map(k => M.agents.get(k)).filter(k => k && !R.isHidden(k));   // tidied subagents go too
+    // waiting = unread (red '!'); ack = a read wait (calm marker)
     return { key: a.key, id: a.key, ch: a.ch, aid: a.id, tool: a.tool, name: a.name, st: a.st, why: a.why, a, p: projOf(a), project: pid, server: a.ch, enteredPerf: s.t,
-      waiting: R.isWaiting(a), parentName, nKids: kids.length, kids: depth < 1 ? kids.map(k => node(k, pid, depth + 1, a.name)) : [],
+      waiting: R.needsMe(a), ack: R.isAcked(a), parentName, nKids: kids.length, kids: depth < 1 ? kids.map(k => node(k, pid, depth + 1, a.name)) : [],
       talk: a.msgs.some(m => m.kind === 'talk' && Date.now() - m.t < 1800e3) };
   }
   function build() {
@@ -4025,13 +4178,13 @@ const OvWire = (() => {
       } else {
         const n = byKey.get(b.n.key) || b.n; b.n = n;
         el.className = 'ovn' + (b.kind === 'kid' ? ' kid' : '');
-        R.stClass(el, n.st); el.dataset.st = n.st; el.dataset.w = n.waiting ? '1' : '';
+        R.stClass(el, n.st); el.dataset.st = n.st; el.dataset.w = n.waiting ? '1' : ''; el.dataset.ack = n.ack ? '1' : '';
         attr(el, 'aria-label', A.label(n));
         text(el.querySelector('.nm'), n.name);
         C.setGlyph(el.querySelector('.s .gl'), n.st);
         text(el.querySelector('.stl'), SHORT[n.st] || ST[n.st]);
         const sub = n.st === 'tool' && n.a.now ? n.a.now : n.why;
-        text(el.querySelector('.why'), (sub ? '· ' + sub : '') + (n.kids.length < n.nKids ? ' · 하위 ' + n.nKids : ''));
+        text(el.querySelector('.why'), (sub ? '· ' + sub : '') + (n.ack ? ' · 읽음' : '') + (n.kids.length < n.nKids ? ' · 하위 ' + n.nKids : ''));
       }
     }
     edges(D);
@@ -4178,6 +4331,8 @@ const OvOffice = (() => {
   const { h, text } = R;
   let AP = null;
   const RM = () => !!(AP && AP.reduced());
+  // state cue above a desk: the red '!' only for an unread wait; a wait I already opened (n.ack) gets a calm grey '…'
+  const cueOf = n => ({ user: n.ack ? 'read' : 'bang', stall: n.ack ? 'read' : 'dots', tool: 'gear', child: 'tree', done: 'check', stopped: 'stop', dead: 'plug' })[n.st] || null;
   const TH = () => { const t = AP ? AP.theme() : 'claude'; return t === 'chatgpt' ? 'codex' : t; };
   const DK = () => !!(AP && AP.dark());
   const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
@@ -5642,7 +5797,7 @@ const Office = {
       case 'work': { g.drawImage(this.codeTex, 0, RM() ? 0 : Math.floor(q / 160 + s2.ph * 64) % 52, sw, sh, sx, sy, sw, sh); if (fr % 2) F(g, cxs, sy + sh - 2, 2, 1, P.code[0]); return 'on'; }
       case 'tool': { F(g, sx, sy, sw, sh, 0x050806); const lines = Math.max(2, (sh - 2) >> 1); for (let i = 0; i < lines; i++) { const w = 2 + ((i * 7 + fr) % Math.max(2, sw - 4)); F(g, sx + 1, sy + 1 + i * 2, 1, 1, P.acc[2]); F(g, sx + 3, sy + 1 + i * 2, Math.min(w, sw - 4), 1, i === lines - 1 ? P.code[0] : mixc(P.code[1], 0, .35)); } F(g, sx + 1, sy + sh - 1, sw - 2, 1, 0x1E2A24); F(g, sx + 1, sy + sh - 1, Math.max(1, ((RM() ? .6 : (q / 2200 + s2.ph) % 1) * (sw - 2)) | 0), 1, P.acc[2]); return 'on'; }
       case 'child': { F(g, sx, sy, sw, sh, P.scr); F(g, cxs - 1, sy + 1, 3, 2, P.code[0]); F(g, cxs, sy + 3, 1, 1, P.code[1]); F(g, sx + 1, sy + 4, sw - 2, 1, P.code[1]); for (let i = 0; i < 3; i++) F(g, sx + 1 + Math.round(i * (sw - 3) / 2), sy + 5, 2, 2, i === fr % 3 ? P.acc[3] : P.code[2]); return 'on'; }
-      case 'user': { F(g, sx, sy, sw, sh, P.scr); F(g, sx + 1, sy + 1, sw - 2, sh - 2, 0xF4F4F4); F(g, sx + 1, sy + 1, sw - 2, 1, 0xC8C8CC); if (sw > 8) { F(g, sx + 2, sy + 3, sw - 6, 1, 0x777780); F(g, sx + 2, sy + 5, sw - 8, 1, 0x777780); } F(g, sx + sw - 5, sy + sh - 3, 3, 2, fr % 2 ? 0xFF4A3A : 0xC02E24); return 'red'; }
+      case 'user': { F(g, sx, sy, sw, sh, P.scr); F(g, sx + 1, sy + 1, sw - 2, sh - 2, 0xF4F4F4); F(g, sx + 1, sy + 1, sw - 2, 1, 0xC8C8CC); if (sw > 8) { F(g, sx + 2, sy + 3, sw - 6, 1, 0x777780); F(g, sx + 2, sy + 5, sw - 8, 1, 0x777780); } if (n.ack) return 'dim'; F(g, sx + sw - 5, sy + sh - 3, 3, 2, fr % 2 ? 0xFF4A3A : 0xC02E24); return 'red'; }
       case 'stall': { g.drawImage(this.codeTex, 0, Math.floor(s2.ph * 50), sw, sh, sx, sy, sw, sh); dith(g, sx, sy, sw, sh, P.scr, .55); F(g, cxs - 1, cys - 2, 3, 1, 0xFFB040); F(g, cxs, cys - 1, 1, 2, 0xFFB040); F(g, cxs - 1, cys + 1, 3, 1, 0xFFB040); return 'amber'; }
       case 'idle': { F(g, sx, sy, sw, sh, mixc(P.scr, 0, .3)); const tt = q / 900 + s2.ph * 10; F(g, sx + Math.round((Math.sin(tt) * .5 + .5) * (sw - 2)), sy + Math.round((Math.cos(tt * 1.3) * .5 + .5) * (sh - 2)), small ? 1 : 2, small ? 1 : 2, P.acc[2]); return 'dim'; }
       case 'done': { F(g, sx, sy, sw, sh, mixc(P.scr, 0, .2)); const pts = small ? [[1, 3], [2, 4], [3, 3], [4, 2], [5, 1]] : [[3, 5], [4, 6], [5, 7], [6, 6], [7, 5], [8, 4], [9, 3]]; for (const [a, b] of pts) PX(g, sx + a, sy + b, 0x6FD39A); return 'dim'; }
@@ -5658,9 +5813,9 @@ const Office = {
     const L = new Lay(W + 2, H + 4), bg = red ? 0xE5342B : 0xFFFBF2, lite = red ? 0xFF7B70 : 0xFFFFFF, sh = red ? 0xB8281F : 0xE6DCCE;
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const corner = (x === 0 || x === W - 1) && (y === 0 || y === H - 1); if (corner) continue; L.set(x + 1, y + 1, y === 0 || x === 0 ? lite : y === H - 1 || x === W - 1 ? sh : bg); }
     L.set(3, H + 1, bg); L.set(4, H + 1, sh); L.set(3, H + 2, sh);
-    const ic = { bang: [ICONS.bang, 0xFFFFFF], dots: [ICONS.dots, 0xC27A12], gear: [frame % 2 ? ICONS.term1 : ICONS.term0, 0x3A4050], tree: [ICONS.hour, 0x6A5A40], check: [ICONS.check, 0x3E8A5A], stop: [ICONS.stop, 0x6A6A74], plug: [ICONS.plug, 0x6A6A74] }[kind];
+    const ic = { bang: [ICONS.bang, 0xFFFFFF], dots: [ICONS.dots, 0xC27A12], read: [ICONS.dots, 0x9A9AA4], gear: [frame % 2 ? ICONS.term1 : ICONS.term0, 0x3A4050], tree: [ICONS.hour, 0x6A5A40], check: [ICONS.check, 0x3E8A5A], stop: [ICONS.stop, 0x6A6A74], plug: [ICONS.plug, 0x6A6A74] }[kind];
     const rows = ic[0], ox = 1 + Math.floor((W - rows[0].length) / 2), oy = 1 + Math.floor((H - rows.length) / 2);
-    if (kind === 'dots') { for (let i = 0; i < Math.min(3, frame + 1); i++) { L.set(3 + i * 3, 6, 0xC27A12); L.set(4 + i * 3, 6, 0xC27A12); L.set(3 + i * 3, 7, 0xC27A12); L.set(4 + i * 3, 7, 0xA8650C); } }
+    if (kind === 'dots' || kind === 'read') { const c1 = kind === 'read' ? 0x9A9AA4 : 0xC27A12, c2 = kind === 'read' ? 0x7A7A84 : 0xA8650C; for (let i = 0; i < Math.min(3, frame + 1); i++) { L.set(3 + i * 3, 6, c1); L.set(4 + i * 3, 6, c1); L.set(3 + i * 3, 7, c1); L.set(4 + i * 3, 7, c2); } }   // read = a wait I already saw: calm grey '…'
     else for (let y = 0; y < rows.length; y++) for (let x = 0; x < rows[y].length; x++) if (rows[y][x] === '#') L.set(ox + x, oy + y, ic[1]);
     finish(L, red ? 0x4A0E0A : 0x4A3A30, null, 0, null);
     c = L.canvas(); this.bubbleCache.set(key, c); return c;
@@ -5823,7 +5978,7 @@ const Office = {
           lights.push([X + a.w / 2, Y + a.h / 2, 0xDDE8FF, a.w * .6, .3, 1]); }
       }
       if (room.filler) this.life(g, s, t, room, lights);
-      if (!room.filler && room.lampAt && this.stations.some(s2 => s2.room === room && s2.n.st === 'user')) { const [lx, ly] = room.lampAt, on = R || Math.floor(t / 600) % 2 === 0; F(g, lx, ly, 3, 3, on ? 0xFF3B2E : 0x9A2018); PX(g, lx, ly, on ? 0xFFB0A8 : 0xC03028); if (on) { lights.push([lx + 1, ly + 1, 0xFF4A3A, 12, .5, 1]); cores.push([lx + 1, ly + 1, 0xFF4A3A, 4, .9]); } }
+      if (!room.filler && room.lampAt && this.stations.some(s2 => s2.room === room && s2.n.st === 'user' && !s2.n.ack)) { const [lx, ly] = room.lampAt, on = R || Math.floor(t / 600) % 2 === 0; F(g, lx, ly, 3, 3, on ? 0xFF3B2E : 0x9A2018); PX(g, lx, ly, on ? 0xFFB0A8 : 0xC03028); if (on) { lights.push([lx + 1, ly + 1, 0xFF4A3A, 12, .5, 1]); cores.push([lx + 1, ly + 1, 0xFF4A3A, 4, .9]); } }
     }
     // stations: screen + machine (lit layer) / character, steam, note (sprite layer)
     this.walkTick(t, R); this.drawWalks(s, t);   // the back aisle: seated agents and the desk fronts of the row in front stay in front
@@ -5871,10 +6026,9 @@ const Office = {
     // state cues (crisp, unlit)
     for (const s2 of this.order) {
       const n = s2.n, small = s2.kind === 'kid', o = s2.o, cx = small ? G.icx : G.cx;
-      let kind = null, fr = 0;
-      switch (n.st) { case 'user': kind = 'bang'; break; case 'stall': kind = 'dots'; fr = R ? 2 : Math.min(2, Math.floor(t / 600) % 4); break; case 'tool': kind = 'gear'; fr = R ? 0 : Math.floor(t / 420) % 2; break; case 'child': kind = 'tree'; break; case 'done': kind = 'check'; break; case 'stopped': kind = 'stop'; break; case 'dead': kind = 'plug'; break; }
+      const kind = cueOf(n), fr = kind === 'dots' ? (R ? 2 : Math.min(2, Math.floor(t / 600) % 4)) : kind === 'read' ? 2 : kind === 'gear' ? (R ? 0 : Math.floor(t / 420) % 2) : 0;
       if (kind) {
-        const img = this.bubble(kind, fr), bob = n.st === 'user' && !R ? Math.round(Math.sin(t / 220) * 1) : 0;
+        const img = this.bubble(kind, fr), bob = kind === 'bang' && !R ? Math.round(Math.sin(t / 220) * 1) : 0;
         let bx = kind === 'bang' ? s2.x + cx - (small ? 16 : 24) : s2.x + cx + (small ? 6 : 9), by = s2.y + o.oy - (small ? 4 : 5) + bob;
         if (kind === 'check') { bx = s2.x + o.mon[0] + (small ? -2 : 1); by = s2.y + o.top - 16; }
         s.drawImage(img, bx, by);
@@ -5944,7 +6098,7 @@ const Office = {
     for (const s2 of this.stations) {
       const b = this.hit.get(s2.n.key); if (!b) continue;
       const n = s2.n;
-      b.className = 'hit' + (s2.kind === 'kid' ? ' kid' : ''); R.stClass(b, n.st); b.dataset.st = n.st; b.dataset.w = n.waiting ? '1' : ''; b.setAttribute('aria-label', AP.label(n));
+      b.className = 'hit' + (s2.kind === 'kid' ? ' kid' : ''); R.stClass(b, n.st); b.dataset.st = n.st; b.dataset.w = n.waiting ? '1' : ''; b.dataset.ack = n.ack ? '1' : ''; b.setAttribute('aria-label', AP.label(n));
       const np = b.querySelector('.np'); np.firstChild.className = 'st-' + n.st; text(np.lastChild, n.name);
     }
   },
@@ -5966,6 +6120,7 @@ const Office = {
     available: () => Chars.load(),
     chars: () => (Chars.load() ? Chars : null),   // selftest hook (variant rotation, looks)
     walkNow() { Office.force = Office.forced = true; },
+    cue(key) { const s2 = Office.stations.find(q => q.n.key === key); return s2 ? cueOf(s2.n) : undefined; },   // selftest hook: the bubble a desk shows ('bang' = red '!')
     /* selftest hooks: the scene's room archetypes / filler kinds / desk variants, the pure pickers, a relayout */
     scene: () => ({ rooms: Office.rooms.map(r => r.filler ? { si: r.si, filler: r.kind, spots: (r.spots || []).length } : { si: r.si, id: r.p.id, arch: r.arch }), desks: Office.stations.map(s2 => ({ id: s2.n.id, kind: s2.kind, v: s2.dv.k, scr: s2.o.scr.join(',') })) }),
     archOf: id => archOf(id), fillKind: (seed, w) => fillKind(seed, w, Object.keys(FILL_MIN), []), deskOf: (id, kind) => deskOf(id, kind).k, archs: () => ARCHS.slice(),

@@ -51,6 +51,7 @@ window.States = (() => {
       text(p.err.querySelector('.t'), bpm ? R.BADPERM.title : c.state === 'ok' ? '수집이 중단되었습니다' : ssh ? 'SSH 연결이 끊겼습니다' : '연결 오류');
       text(p.err.querySelector('.sub'), (c.t ? '마지막 수집 ' + R.fmtHM(c.t) : '아직 받은 데이터가 없습니다') + ' · 허브가 자동으로 다시 연결합니다 (최대 1분 간격)');
       const fx = R.sshFix(c); p.fixBtn.hidden = !fx; cls(p.again2, 'primary', !fx); cls(p.again2, 'link', fx);
+      text(p.fixBtn, c.auth === 'password-session' ? '비밀번호로 다시 연결 (또는 키 로그인 다시 설정)' : '이 서버에 키 등록하기');   // the dialog offers both
       p.tunnel.hidden = !ssh; p.sep1.hidden = true;   // the hint is long: it wraps, a leading dot would dangle
       if (ssh) text(p.tunnel, R.sshHint(c.error) + ' (' + R.sshErr(c.error) + ')');
       text(p.log, c.error || '허브가 오류 내용을 보내지 않았습니다');

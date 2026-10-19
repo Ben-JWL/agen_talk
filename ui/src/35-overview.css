@@ -111,3 +111,8 @@ html.dark .ovo-vig { background: radial-gradient(ellipse 85% 80% at 50% 45%, tra
 .ov { position: relative; }
 @media (prefers-reduced-motion: reduce) { .ov * { transition: none !important; animation: none !important; } }
 .ovo .sgn { position: absolute; pointer-events: none; font-weight: 700; white-space: nowrap; letter-spacing: 0; }   /* non-ASCII project names on the room sign (see Office.sign) */
+/* 읽음: a wait I already opened is calm on the map and in the office (the red alert is for unread waits only) */
+button.ovn.st-user[data-ack="1"], button.ovn.st-stall[data-ack="1"] { border-color: var(--ov-line); background: var(--ov-surface); box-shadow: inset 3px 0 0 var(--ov-line-strong); }
+button.ovn.st-user[data-ack="1"] .stl, button.ovn.st-stall[data-ack="1"] .stl { color: var(--ov-ink-2); }
+.ovo .hit.st-user[data-ack="1"] .np { background: var(--ov-surface); color: var(--ov-ink); font-weight: 600; }
+.ovo .hit.st-user[data-ack="1"] .np i { background: var(--ov-ink-2); }

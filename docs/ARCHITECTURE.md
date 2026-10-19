@@ -38,6 +38,19 @@ the user's `~/.ssh/known_hosts`. Both keys carry the comment `agen-talk@<PC name
 
 Every path is under `/<secret>/` (random per launch); other paths return 404. POSTs need a per-launch token and a matching `Host`; an `Origin` header, if sent, must match, and the talk endpoints require it. Responses carry `X-Frame-Options` and a restrictive CSP.
 
+## Agent states
+
+Each node has `st` (work, tool, child, user, stall, idle, done, stopped, dead) and a Korean `why`. A turn that ended with a plain
+answer is `done` ("답변 완료"); it is `user` ("질문함 · 답변 기다림") only when the final assistant text asks something (ends with `?`,
+or an ask cue such as 할까요 / 진행할까요 / should I / would you like in its last sentences; code blocks and quotes are ignored).
+Approvals, questions to answer, usage limits, interrupts and orphaned turns stay `user`. An answered main session older than six hours
+reads as `idle`. Older collectors still send `user` + "답변 끝남"; the UI reads that as `done`.
+
+In the UI, "나를 기다림" counts waits the user has not read: opening a waiting room, or "모두 읽음", records the episode (its state,
+reason and start time) in `room.ui` and drops it from the badges, notifications and the office '!'; a new episode alerts again.
+"작업 완료" / "작업 완료 · 방 나가기" in a waiting room makes the view treat that episode as done (and hides the room for the latter);
+nothing is sent to the agent, and the mark clears itself when the session works or waits again.
+
 ## Talk
 
 UI -> `POST api/talk` (secret path, token, and a required `Origin`) -> hub. For an ssh channel the hub writes one JSON request line on the same

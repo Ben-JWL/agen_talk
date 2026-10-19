@@ -76,3 +76,8 @@ html[data-motion=reduce] .typing .dots { display: none; } html[data-motion=reduc
 .sleft .rel.warn { color: var(--warn); font-weight: 600; }
 .sright { display: flex; gap: 8px; flex: none; }
 @media (max-width: 760px) { #sbar { flex-wrap: wrap; } .swhy { display: none; } }
+/* 작업 완료 / 작업 완료 · 방 나가기 (waiting rooms) + the approval confirm row */
+.donebtn, .leavebtn { white-space: nowrap; }
+.donecf { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 8px; padding: 8px 12px; border: 1px solid var(--line); border-radius: var(--r-card); background: var(--canvas); font-size: 12.5px; line-height: 18px; }
+.donecf[hidden] { display: none; }
+.donecf span { flex: 1 1 200px; min-width: 0; }

@@ -8,6 +8,8 @@ const OvOffice = (() => {
   const { h, text } = R;
   let AP = null;
   const RM = () => !!(AP && AP.reduced());
+  // state cue above a desk: the red '!' only for an unread wait; a wait I already opened (n.ack) gets a calm grey '…'
+  const cueOf = n => ({ user: n.ack ? 'read' : 'bang', stall: n.ack ? 'read' : 'dots', tool: 'gear', child: 'tree', done: 'check', stopped: 'stop', dead: 'plug' })[n.st] || null;
   const TH = () => { const t = AP ? AP.theme() : 'claude'; return t === 'chatgpt' ? 'codex' : t; };
   const DK = () => !!(AP && AP.dark());
   const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
@@ -1472,7 +1474,7 @@ const Office = {
       case 'work': { g.drawImage(this.codeTex, 0, RM() ? 0 : Math.floor(q / 160 + s2.ph * 64) % 52, sw, sh, sx, sy, sw, sh); if (fr % 2) F(g, cxs, sy + sh - 2, 2, 1, P.code[0]); return 'on'; }
       case 'tool': { F(g, sx, sy, sw, sh, 0x050806); const lines = Math.max(2, (sh - 2) >> 1); for (let i = 0; i < lines; i++) { const w = 2 + ((i * 7 + fr) % Math.max(2, sw - 4)); F(g, sx + 1, sy + 1 + i * 2, 1, 1, P.acc[2]); F(g, sx + 3, sy + 1 + i * 2, Math.min(w, sw - 4), 1, i === lines - 1 ? P.code[0] : mixc(P.code[1], 0, .35)); } F(g, sx + 1, sy + sh - 1, sw - 2, 1, 0x1E2A24); F(g, sx + 1, sy + sh - 1, Math.max(1, ((RM() ? .6 : (q / 2200 + s2.ph) % 1) * (sw - 2)) | 0), 1, P.acc[2]); return 'on'; }
       case 'child': { F(g, sx, sy, sw, sh, P.scr); F(g, cxs - 1, sy + 1, 3, 2, P.code[0]); F(g, cxs, sy + 3, 1, 1, P.code[1]); F(g, sx + 1, sy + 4, sw - 2, 1, P.code[1]); for (let i = 0; i < 3; i++) F(g, sx + 1 + Math.round(i * (sw - 3) / 2), sy + 5, 2, 2, i === fr % 3 ? P.acc[3] : P.code[2]); return 'on'; }
-      case 'user': { F(g, sx, sy, sw, sh, P.scr); F(g, sx + 1, sy + 1, sw - 2, sh - 2, 0xF4F4F4); F(g, sx + 1, sy + 1, sw - 2, 1, 0xC8C8CC); if (sw > 8) { F(g, sx + 2, sy + 3, sw - 6, 1, 0x777780); F(g, sx + 2, sy + 5, sw - 8, 1, 0x777780); } F(g, sx + sw - 5, sy + sh - 3, 3, 2, fr % 2 ? 0xFF4A3A : 0xC02E24); return 'red'; }
+      case 'user': { F(g, sx, sy, sw, sh, P.scr); F(g, sx + 1, sy + 1, sw - 2, sh - 2, 0xF4F4F4); F(g, sx + 1, sy + 1, sw - 2, 1, 0xC8C8CC); if (sw > 8) { F(g, sx + 2, sy + 3, sw - 6, 1, 0x777780); F(g, sx + 2, sy + 5, sw - 8, 1, 0x777780); } if (n.ack) return 'dim'; F(g, sx + sw - 5, sy + sh - 3, 3, 2, fr % 2 ? 0xFF4A3A : 0xC02E24); return 'red'; }
       case 'stall': { g.drawImage(this.codeTex, 0, Math.floor(s2.ph * 50), sw, sh, sx, sy, sw, sh); dith(g, sx, sy, sw, sh, P.scr, .55); F(g, cxs - 1, cys - 2, 3, 1, 0xFFB040); F(g, cxs, cys - 1, 1, 2, 0xFFB040); F(g, cxs - 1, cys + 1, 3, 1, 0xFFB040); return 'amber'; }
       case 'idle': { F(g, sx, sy, sw, sh, mixc(P.scr, 0, .3)); const tt = q / 900 + s2.ph * 10; F(g, sx + Math.round((Math.sin(tt) * .5 + .5) * (sw - 2)), sy + Math.round((Math.cos(tt * 1.3) * .5 + .5) * (sh - 2)), small ? 1 : 2, small ? 1 : 2, P.acc[2]); return 'dim'; }
       case 'done': { F(g, sx, sy, sw, sh, mixc(P.scr, 0, .2)); const pts = small ? [[1, 3], [2, 4], [3, 3], [4, 2], [5, 1]] : [[3, 5], [4, 6], [5, 7], [6, 6], [7, 5], [8, 4], [9, 3]]; for (const [a, b] of pts) PX(g, sx + a, sy + b, 0x6FD39A); return 'dim'; }
@@ -1488,9 +1490,9 @@ const Office = {
     const L = new Lay(W + 2, H + 4), bg = red ? 0xE5342B : 0xFFFBF2, lite = red ? 0xFF7B70 : 0xFFFFFF, sh = red ? 0xB8281F : 0xE6DCCE;
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const corner = (x === 0 || x === W - 1) && (y === 0 || y === H - 1); if (corner) continue; L.set(x + 1, y + 1, y === 0 || x === 0 ? lite : y === H - 1 || x === W - 1 ? sh : bg); }
     L.set(3, H + 1, bg); L.set(4, H + 1, sh); L.set(3, H + 2, sh);
-    const ic = { bang: [ICONS.bang, 0xFFFFFF], dots: [ICONS.dots, 0xC27A12], gear: [frame % 2 ? ICONS.term1 : ICONS.term0, 0x3A4050], tree: [ICONS.hour, 0x6A5A40], check: [ICONS.check, 0x3E8A5A], stop: [ICONS.stop, 0x6A6A74], plug: [ICONS.plug, 0x6A6A74] }[kind];
+    const ic = { bang: [ICONS.bang, 0xFFFFFF], dots: [ICONS.dots, 0xC27A12], read: [ICONS.dots, 0x9A9AA4], gear: [frame % 2 ? ICONS.term1 : ICONS.term0, 0x3A4050], tree: [ICONS.hour, 0x6A5A40], check: [ICONS.check, 0x3E8A5A], stop: [ICONS.stop, 0x6A6A74], plug: [ICONS.plug, 0x6A6A74] }[kind];
     const rows = ic[0], ox = 1 + Math.floor((W - rows[0].length) / 2), oy = 1 + Math.floor((H - rows.length) / 2);
-    if (kind === 'dots') { for (let i = 0; i < Math.min(3, frame + 1); i++) { L.set(3 + i * 3, 6, 0xC27A12); L.set(4 + i * 3, 6, 0xC27A12); L.set(3 + i * 3, 7, 0xC27A12); L.set(4 + i * 3, 7, 0xA8650C); } }
+    if (kind === 'dots' || kind === 'read') { const c1 = kind === 'read' ? 0x9A9AA4 : 0xC27A12, c2 = kind === 'read' ? 0x7A7A84 : 0xA8650C; for (let i = 0; i < Math.min(3, frame + 1); i++) { L.set(3 + i * 3, 6, c1); L.set(4 + i * 3, 6, c1); L.set(3 + i * 3, 7, c1); L.set(4 + i * 3, 7, c2); } }   // read = a wait I already saw: calm grey '…'
     else for (let y = 0; y < rows.length; y++) for (let x = 0; x < rows[y].length; x++) if (rows[y][x] === '#') L.set(ox + x, oy + y, ic[1]);
     finish(L, red ? 0x4A0E0A : 0x4A3A30, null, 0, null);
     c = L.canvas(); this.bubbleCache.set(key, c); return c;
@@ -1653,7 +1655,7 @@ const Office = {
           lights.push([X + a.w / 2, Y + a.h / 2, 0xDDE8FF, a.w * .6, .3, 1]); }
       }
       if (room.filler) this.life(g, s, t, room, lights);
-      if (!room.filler && room.lampAt && this.stations.some(s2 => s2.room === room && s2.n.st === 'user')) { const [lx, ly] = room.lampAt, on = R || Math.floor(t / 600) % 2 === 0; F(g, lx, ly, 3, 3, on ? 0xFF3B2E : 0x9A2018); PX(g, lx, ly, on ? 0xFFB0A8 : 0xC03028); if (on) { lights.push([lx + 1, ly + 1, 0xFF4A3A, 12, .5, 1]); cores.push([lx + 1, ly + 1, 0xFF4A3A, 4, .9]); } }
+      if (!room.filler && room.lampAt && this.stations.some(s2 => s2.room === room && s2.n.st === 'user' && !s2.n.ack)) { const [lx, ly] = room.lampAt, on = R || Math.floor(t / 600) % 2 === 0; F(g, lx, ly, 3, 3, on ? 0xFF3B2E : 0x9A2018); PX(g, lx, ly, on ? 0xFFB0A8 : 0xC03028); if (on) { lights.push([lx + 1, ly + 1, 0xFF4A3A, 12, .5, 1]); cores.push([lx + 1, ly + 1, 0xFF4A3A, 4, .9]); } }
     }
     // stations: screen + machine (lit layer) / character, steam, note (sprite layer)
     this.walkTick(t, R); this.drawWalks(s, t);   // the back aisle: seated agents and the desk fronts of the row in front stay in front
@@ -1701,10 +1703,9 @@ const Office = {
     // state cues (crisp, unlit)
     for (const s2 of this.order) {
       const n = s2.n, small = s2.kind === 'kid', o = s2.o, cx = small ? G.icx : G.cx;
-      let kind = null, fr = 0;
-      switch (n.st) { case 'user': kind = 'bang'; break; case 'stall': kind = 'dots'; fr = R ? 2 : Math.min(2, Math.floor(t / 600) % 4); break; case 'tool': kind = 'gear'; fr = R ? 0 : Math.floor(t / 420) % 2; break; case 'child': kind = 'tree'; break; case 'done': kind = 'check'; break; case 'stopped': kind = 'stop'; break; case 'dead': kind = 'plug'; break; }
+      const kind = cueOf(n), fr = kind === 'dots' ? (R ? 2 : Math.min(2, Math.floor(t / 600) % 4)) : kind === 'read' ? 2 : kind === 'gear' ? (R ? 0 : Math.floor(t / 420) % 2) : 0;
       if (kind) {
-        const img = this.bubble(kind, fr), bob = n.st === 'user' && !R ? Math.round(Math.sin(t / 220) * 1) : 0;
+        const img = this.bubble(kind, fr), bob = kind === 'bang' && !R ? Math.round(Math.sin(t / 220) * 1) : 0;
         let bx = kind === 'bang' ? s2.x + cx - (small ? 16 : 24) : s2.x + cx + (small ? 6 : 9), by = s2.y + o.oy - (small ? 4 : 5) + bob;
         if (kind === 'check') { bx = s2.x + o.mon[0] + (small ? -2 : 1); by = s2.y + o.top - 16; }
         s.drawImage(img, bx, by);
@@ -1774,7 +1775,7 @@ const Office = {
     for (const s2 of this.stations) {
       const b = this.hit.get(s2.n.key); if (!b) continue;
       const n = s2.n;
-      b.className = 'hit' + (s2.kind === 'kid' ? ' kid' : ''); R.stClass(b, n.st); b.dataset.st = n.st; b.dataset.w = n.waiting ? '1' : ''; b.setAttribute('aria-label', AP.label(n));
+      b.className = 'hit' + (s2.kind === 'kid' ? ' kid' : ''); R.stClass(b, n.st); b.dataset.st = n.st; b.dataset.w = n.waiting ? '1' : ''; b.dataset.ack = n.ack ? '1' : ''; b.setAttribute('aria-label', AP.label(n));
       const np = b.querySelector('.np'); np.firstChild.className = 'st-' + n.st; text(np.lastChild, n.name);
     }
   },
@@ -1796,6 +1797,7 @@ const Office = {
     available: () => Chars.load(),
     chars: () => (Chars.load() ? Chars : null),   // selftest hook (variant rotation, looks)
     walkNow() { Office.force = Office.forced = true; },
+    cue(key) { const s2 = Office.stations.find(q => q.n.key === key); return s2 ? cueOf(s2.n) : undefined; },   // selftest hook: the bubble a desk shows ('bang' = red '!')
     /* selftest hooks: the scene's room archetypes / filler kinds / desk variants, the pure pickers, a relayout */
     scene: () => ({ rooms: Office.rooms.map(r => r.filler ? { si: r.si, filler: r.kind, spots: (r.spots || []).length } : { si: r.si, id: r.p.id, arch: r.arch }), desks: Office.stations.map(s2 => ({ id: s2.n.id, kind: s2.kind, v: s2.dv.k, scr: s2.o.scr.join(',') })) }),
     archOf: id => archOf(id), fillKind: (seed, w) => fillKind(seed, w, Object.keys(FILL_MIN), []), deskOf: (id, kind) => deskOf(id, kind).k, archs: () => ARCHS.slice(),

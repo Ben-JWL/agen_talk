@@ -5,7 +5,7 @@ const ChatList = (() => {
   const rooms = $('#rooms'), lscroll = $('#lscroll'), chips = $('#chips'), search = $('#search'), sumtxt = $('#sumtxt'), sortw = $('#sortw'), warnln = $('#warnln'), lnote = $('#lnote'), lempty = $('#lempty'), newpill = $('#newpill'), chat = $('#chat');
   const SORTS = [['recent', '최근 순'], ['long', '오래 도는 순'], ['name', '이름 순']];
   const QUIET_N = 5, GHOST_MS = 600000, BASE_MS = 600000;
-  let moreN = 0, q = '', fkey = null, firstFocus = true, lastScroll = 0, applyT = 0, pending = 0, visKeys = [], seenAgents = new Map(); const ghosts = new Map(), ordT = new Map(), waitAt = new Map(); let forceApply = false;
+  let waitKeys = [], moreN = 0, q = '', fkey = null, firstFocus = true, lastScroll = 0, applyT = 0, pending = 0, visKeys = [], seenAgents = new Map(); const ghosts = new Map(), ordT = new Map(), waitAt = new Map(); let forceApply = false;
   const lt = a => C.lastT(a) || 0;
   const enc = R.openRoom;
 
@@ -22,7 +22,7 @@ const ChatList = (() => {
   // ---------- which rooms, in which order ----------
   const match = a => { if (!q) return true; const s = [a.name, a.why, a.now, a.last, a.meta, R.chName(a.ch)].join('\n').toLowerCase(); return s.includes(q); };
   const inFilter = a => U.chFilter === 'all' || a.ch === U.chFilter;
-  const listed = a => !R.isHidden(a) && (!a.parent || R.isWaiting(a) || U.showKids);
+  const listed = a => !R.isHidden(a) && (!a.parent || R.needsMe(a) || U.showKids);
   const holding = () => !forceApply && (rooms.contains(document.activeElement) || Date.now() - lastScroll < 1200 || !document.hasFocus());
   const cmpBy = sort => sort === 'name' ? (x, y) => x.name.localeCompare(y.name, 'ko') || (x.key < y.key ? -1 : 1)
     : sort === 'long' ? (x, y) => (y.since == null ? -1 : y.since) - (x.since == null ? -1 : x.since) || lt(y) - lt(x) || (x.key < y.key ? -1 : 1)
@@ -36,7 +36,7 @@ const ChatList = (() => {
     const counts = { all: 0 }; for (const a of all) if (listed(a)) { counts.all++; counts[a.ch] = (counts[a.ch] || 0) + 1; }
     const keys = new Set(all.map(a => a.key)); for (const k of ordT.keys()) if (!keys.has(k)) ordT.delete(k);
     for (const k of waitAt.keys()) if (!keys.has(k)) waitAt.delete(k);
-    for (const a of all) { if (!gk.has(a.key) && R.isWaiting(a)) { if (!waitAt.has(a.key)) waitAt.set(a.key, ordT.has(a.key) ? now : Math.min(R.waitT(a) || now, now)); } else waitAt.delete(a.key); }
+    for (const a of all) { if (!gk.has(a.key) && R.needsMe(a)) { if (!waitAt.has(a.key)) waitAt.set(a.key, ordT.has(a.key) ? now : Math.min(R.waitT(a) || now, now)); } else waitAt.delete(a.key); }
     const hold = holding(); let moved = 0;
     for (const a of all) {   // 2.5 s tolerance: collector ages are whole seconds, so a quiet room's last-signal time jitters by up to 1 s
       const t = lt(a), o = ordT.get(a.key);
@@ -44,8 +44,9 @@ const ChatList = (() => {
     }
     pending = hold ? moved : 0;
     const pool = all.filter(a => inFilter(a) && listed(a) && match(a));
-    const wait = pool.filter(a => !gk.has(a.key) && R.isWaiting(a)).sort(R.waitCmp), rest = pool.filter(a => gk.has(a.key) || !R.isWaiting(a)), inRest = new Set(rest.map(a => a.key));
-    const cmp = cmpBy(U.sort), roots = rest.filter(a => !(a.parent && inRest.has(a.parent) && !R.isWaiting(M.agents.get(a.parent) || {}))).sort(cmp), seq = [];
+    // 나를 기다림 = waits for me and not read yet (R.needsMe); a read wait sits with the quiet rooms, newest first, marked 읽음
+    const wait = pool.filter(a => !gk.has(a.key) && R.needsMe(a)).sort(R.waitCmp), rest = pool.filter(a => gk.has(a.key) || !R.needsMe(a)), inRest = new Set(rest.map(a => a.key));
+    const cmp = cmpBy(U.sort), roots = rest.filter(a => !(a.parent && inRest.has(a.parent) && !R.needsMe(M.agents.get(a.parent)))).sort(cmp), seq = [];
     const sectionOf = a => gk.has(a.key) || !R.LIVE.has(a.st) ? 'quiet' : 'work';
     const dfs = (a, sec) => { seq.push({ a, sec }); if (U.showKids) for (const k of a.kids.map(x => M.agents.get(x)).filter(x => x && inRest.has(x.key)).sort(cmp)) dfs(k, sec); };
     for (const a of roots) dfs(a, sectionOf(a));
@@ -55,7 +56,8 @@ const ChatList = (() => {
   // ---------- keyed items ----------
   function mkItem(it) {
     if (it.room) { const el = C.roomRow(it.room); el.id = 'rm-' + (++uid); el.addEventListener('click', () => { fkey = el.dataset.key; R.openRoom(el._a.ch, el._a.id); }); return el; }
-    if (it.sec) return h('div.sec', { role: 'presentation', class: 's-' + it.sec }, h('span.stt'), h('span.sn'));
+    if (it.sec) return h('div.sec', { role: 'presentation', class: 's-' + it.sec }, h('span.stt'), h('span.sn'),
+      it.sec === 'wait' ? h('button.btn.link.ackall', { type: 'button', title: '지금 기다리는 방을 모두 읽음으로 표시합니다 — 새로 기다리기 시작하면 다시 알립니다', on: { click: e => { e.stopPropagation(); R.ack(waitKeys); } } }, '모두 읽음') : null);
     if (it.none) return h('div.secnone', { role: 'presentation' }, C.glyph('done'), h('span', '기다리는 것 없음'));
     return h('div');
   }
@@ -96,13 +98,14 @@ const ChatList = (() => {
   const unhideBtn = h('button.more.unhide.btn.link', { type: 'button', hidden: true, on: { click: () => R.unhideAll() } });
   lscroll.insertBefore(h('div.tidyrow', tidyBtn, unhideBtn), lempty);
   on('hidden', () => render());
+  on('marks', () => { if (!R.isPaused() && M.loaded) { forceApply = true; render(); forceApply = false; } });   // 읽음 / 작업 완료 move the row at once
   function patchItem(el, it) {
     if (it.room) {
-      const a = it.room, g = it.ghost, w = !g && R.isWaiting(a), k = U.room === a.key;
+      const a = it.room, g = it.ghost, w = !g && R.needsMe(a), k = U.room === a.key;
       el._a = a; cls(el, 'ghost', !!g);
       C.setRoomRow(el, a, { scoped: U.chFilter !== 'all', badge: g ? null : badgeOf(a, w), long: U.sort === 'long', ghost: g ? it.gat : 0 });
       attr(el, 'aria-selected', k ? 'true' : 'false'); cls(el, 'active', a.key === fkey);
-      attr(el, 'aria-label', a.name + ', ' + R.ST[a.st] + (el.querySelector('.bdg.on') ? ', ' + el.querySelector('.bdg').getAttribute('aria-label') : ''));
+      attr(el, 'aria-label', a.name + ', ' + R.ST[a.st] + (!g && R.isAcked(a) ? ', 읽음' : '') + (el.querySelector('.bdg.on') ? ', ' + el.querySelector('.bdg').getAttribute('aria-label') : ''));
     } else if (it.sec) {
       text(el.querySelector('.stt'), it.title); const n = el.querySelector('.sn'); text(n, it.n); cls(n, 'red', it.sec === 'wait'); attr(el, 'aria-label', it.title + ' ' + it.n);
     }
@@ -112,6 +115,7 @@ const ChatList = (() => {
   function render() {
     const P = plan(), items = []; moreN = 0;
     const wk = P.seq.filter(x => x.sec === 'work'), qt = P.seq.filter(x => x.sec === 'quiet');
+    waitKeys = P.wait.map(a => a.key);   // 모두 읽음: what the 나를 기다림 section shows (current filter + search)
     if (P.wait.length) { items.push({ k: 'sec:wait', sec: 'wait', title: '나를 기다림', n: P.wait.length }); for (const a of P.wait) items.push({ k: a.key, room: a }); }
     else if (P.total) items.push({ k: 'none:wait', none: true });
     if (U.sort === 'long') { for (const x of P.seq) items.push({ k: x.a.key, room: x.a, ghost: P.gk.has(x.a.key), gat: (ghosts.get(x.a.key) || {}).at }); }
@@ -212,7 +216,7 @@ const ChatList = (() => {
   rooms.addEventListener('focus', () => { if (fkey) render(); });
   on('arrow', e => { if (R.params().view !== 'chat') return; e.preventDefault(); rooms.focus(); });
   on('resort', () => { forceApply = true; render(); forceApply = false; });
-  function focusFirstWaiting() { const w = [...M.agents.values()].filter(a => R.isWaiting(a) && inFilter(a)).sort(R.waitCmp)[0]; if (w) { fkey = w.key; render(); } rooms.focus(); }
+  function focusFirstWaiting() { const w = [...M.agents.values()].filter(a => R.needsMe(a) && inFilter(a)).sort(R.waitCmp)[0]; if (w) { fkey = w.key; render(); } rooms.focus(); }
   function step(d) {   // j / k: next / previous room inside the current filter + sort
     if (!U.room) return; const i = visKeys.indexOf(U.room), t = visKeys[i + d]; if (i < 0 || !t) return;
     const a = M.agents.get(t) || (ghosts.get(t) || {}).a; if (a) { fkey = t; R.openRoom(a.ch, a.id); }

@@ -62,13 +62,12 @@ const C = (() => {
   }
   const lastT = a => { const x = lastAct(a); return x ? x.t : a.lastAt != null ? a.lastAt : a.t0; };
   const isCmd = s => /^\$ /.test(s || '');
-  const calm = a => a.st === 'user' && /^답변 끝남/.test(a.why || '');
   const WAIT_WORD = { stall: '조용함', stopped: '중단됨', dead: '끊김' };   // the row's '…째 X' must agree with the ask box below it
   // what a waiting room asks of me: {head, body, mono, warn, cmd}
   function waitInfo(a) {
     if (a.st === 'user') {
       const body = a.now || a.last || a.why || '', cmd = isCmd(body);
-      return { head: cmd || /승인/.test(a.why || '') ? '승인 요청' : calm(a) ? '입력 대기' : '질문', body, mono: cmd, cmd: cmd ? body.slice(2) : '' };
+      return { head: cmd || /승인/.test(a.why || '') ? '승인 요청' : '질문', body, mono: cmd, cmd: cmd ? body.slice(2) : '' };
     }
     if (a.st === 'stall') {
       const cpu = a.procs.length ? Math.max(...a.procs.map(p => p.cpu)) : null, q = a.age != null ? a.age : a.since;
@@ -135,14 +134,14 @@ const C = (() => {
     const ask = askBubble(true);
     const el = h('div.room', { role: kind === 'card' ? 'button' : 'option', tabindex: kind === 'card' ? '-1' : null, class: kind === 'card' ? 'card bcard' : '' },
       h('div.rrow', avatar(a), h('div.rmain', h('div.l1', h('span.rt'), h('span.pj', { hidden: true }), h('span.rtm')),
-        h('div.l2', h('span.rch'), h('span.pp'), timeEl(Date.now(), 'live', 'pt rel'), h('span.pe'), h('span.rb', timeEl(Date.now(), 'live', 'rlong rel'), h('span.bdg'))))), ask,
+        h('div.l2', h('span.rch'), h('span.pp'), timeEl(Date.now(), 'live', 'pt rel'), h('span.pe'), h('span.ackm', { hidden: true }), h('span.rb', timeEl(Date.now(), 'live', 'rlong rel'), h('span.bdg'))))), ask,
       kind === 'card' ? h('div.cfoot', h('button.btn.sm', { type: 'button', tabindex: '-1', 'aria-hidden': 'true' }, '방 열기')) : null);
     el._ask = ask; return el;
   }
   // o: {scoped (channel chip active → leave the channel out), badge {red,n}, long (오래 도는 순), ghost (사라진 시각 ms)}
   function setRoomRow(el, a, o = {}) {
-    const dead = R.isDead(a.ch), w = !o.ghost && R.isWaiting(a);
-    stClass(el, a.st); cls(el, 'waiting', w); cls(el, 'rest', R.REST.has(a.st) && !w); cls(el, 'stale', dead); cls(el, 'kidrow', !!a.parent);
+    const dead = R.isDead(a.ch), w = !o.ghost && R.needsMe(a), ack = !o.ghost && R.isAcked(a);   // 읽음: a waiting room I already opened reads like a quiet one
+    stClass(el, a.st); cls(el, 'waiting', w); cls(el, 'acked', ack); cls(el, 'rest', R.REST.has(a.st) && !w); cls(el, 'stale', dead); cls(el, 'kidrow', !!a.parent);
     setAvatar(el.querySelector('.av'), a);
     const t = el.querySelector('.rt'); text(t, prefix(a) + a.name); attr(t, 'title', a.name);
     setProj(el.querySelector('.pj'), a);
@@ -157,6 +156,7 @@ const C = (() => {
     else if (kid && !o.ghost) { text(pp, ST[a.st]); attr(pp, 'title', preview(a)); const tt = R.LIVE.has(a.st) ? (a.t0 != null ? a.t0 : a.lastAt) : a.lastAt; R.setTimeFor(pt, tt, R.LIVE.has(a.st) ? 'live' : 'ago', a.ch); pt.hidden = tt == null; text(pe, ''); }
     else { const pv = o.ghost ? '사라짐 · ' + R.fmtHM(o.ghost) : preview(a); text(pp, pv); attr(pp, 'title', pv); pt.hidden = true; text(pe, ''); }
     pe.hidden = !w;
+    const am = el.querySelector('.ackm'); am.hidden = !ack; text(am, ack ? (R.isApproval(a) ? '승인 대기 · 읽음' : '읽음') : ''); attr(am, 'title', ack ? (R.isApproval(a) ? '아직 승인을 기다립니다 — 터미널에서 승인하세요' : '읽은 대기 — 새로 기다리기 시작하면 다시 알립니다') : null);
     const rl = el.querySelector('.rlong'); rl.hidden = !(o.long && !w && a.t0 != null); if (!rl.hidden) R.setTimeFor(rl, a.t0, 'live', a.ch);
     const bd = el.querySelector('.bdg'); badge(bd, o.badge);
     cls(el, 'hasask', w); el._ask.hidden = !w;

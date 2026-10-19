@@ -68,3 +68,4 @@ body.room-composer #toasts { bottom: calc(var(--foot-h, 108px) + 16px); }
 .toast .tx .meta { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .toast .ta { display: flex; align-items: center; gap: 4px; }
 .toast .x { border: 0; background: none; color: var(--ink-2); font-size: 18px; line-height: 1; padding: 0 4px; }
+.toast.undo { grid-template-columns: minmax(0, 1fr) auto; }

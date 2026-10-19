@@ -139,12 +139,38 @@ def status(st, tool, age, sub):
         return "stall"
     if st == "user":
         return "done" if sub else "idle" if (age or 0) > FRESH else "user"
+    if st == "done" and not sub and (age or 0) > FRESH:
+        return "idle"   # an answered main session older than FRESH is just sitting there
     return st
+
+
+# a final answer that asks the user something (last 1-2 sentences, code blocks and quotes stripped)
+ASK_CUE = re.compile(r"할까요|하실래요|하시겠어요|원하시면|알려\s*주세요|어떻게\s*할까|선택해|확인해\s*주세요|진행할까요"
+                     r"|\bshould i\b|\bdo you want\b|\bwould you like\b|\blet me know\b|\bwhich (?:one|option)\b|\bplease confirm\b", re.I)
+
+
+def asks(text):
+    """True when the turn's final assistant text asks the user something (heuristic: '?' at the end, or an ask cue at the end)."""
+    s = re.sub(r"```.*?(?:```|$)", " ", str(text or ""), flags=re.S)
+    s = "\n".join(ln for ln in s.splitlines() if not ln.lstrip().startswith(">"))
+    s = re.sub(r"`[^`\n]*`", " ", s).strip()
+    if not s:
+        return False
+    if re.search(r"[?？][\s*_)\]」』\"']*$", s):
+        return True
+    parts = [x for x in re.split(r"(?<=[.!?。！？])\s+|\n+", s) if x.strip()]
+    return bool(ASK_CUE.search(" ".join(parts[-2:])))
+
+
+def answered(text):
+    """(st, why) of a main turn that ended with an answer: a question waits for the user, a plain answer is done."""
+    return ("user", "질문함 · 답변 기다림") if asks(text) else ("done", "답변 완료")
 
 
 def node(nid, tool, name, st, why, ts, sub=False, since=None, **kw):
     """ts = epoch of the last significant signal; since = epoch of the turn start or None.
-    Sources pass 'user' for 'turn ended'; node() turns it into done (sub) or idle (old)."""
+    Sources pass 'user' for 'waits for the user' (subs: 'turn ended') and 'done' for an answered main turn;
+    node() turns 'user' into done (sub) or idle (old), and an old main 'done' into idle."""
     a = NOW - ts if ts else None
     s = status(st, tool, a, sub)
     if s == "stall" and st == "work":
@@ -726,7 +752,9 @@ def codex_state(lines, held_pid, holder_started, tagged, source, is_sub, kids_op
             if not done and r in ("usage_limit_exceeded", "unauthorized"):
                 return "user", "사용량 한도/인증 필요", now, last, ts, None
             return "stopped", "오류: %s" % (r or "알 수 없음"), now, last, ts, None
-        return "user", "답변 끝남", now, last, ts, None
+        if done:
+            return "user", "답변 끝남", now, last, ts, None   # node() -> done
+        return answered(mp.get("last_agent_message")) + (now, last, ts, None)
     if m == "turn_aborted":
         return ("stopped", "중단됨", now, last, ts, None) if done else ("user", "사용자가 중단함 (Esc)", now, last, ts, None)
     if held_pid is None:
@@ -970,7 +998,10 @@ def selftest_codex():
     assert st(e("usage_limit_exceeded"), sub=True)[0] == "stopped" and st(e("server_overloaded"))[:2] == ("stopped", "오류: server_overloaded")
     # 2/3: clean end, esc
     r = st([ev(1, "task_complete", error=None, last_agent_message="끝\n둘째"), start])
-    assert r[0] == "user" and r[3] == "끝" and r[5] is None
+    assert r[:2] == ("done", "답변 완료") and r[3] == "끝" and r[5] is None
+    tc = lambda m, **k: st([ev(1, "task_complete", error=None, last_agent_message=m), start], **k)[:2]   # noqa: E731
+    assert tc("수정했어요. 다음으로 B도 진행할까요?") == ("user", "질문함 · 답변 기다림") and tc("Would you like me to push it.")[0] == "user"
+    assert tc("진행할까요?", sub=True) == ("user", "답변 끝남") and tc(None) == ("done", "답변 완료")   # a sub's question goes to its parent (node() -> done)
     assert st([ev(1, "turn_aborted", reason="interrupted"), start])[:2] == ("user", "사용자가 중단함 (Esc)")
     assert st([ev(1, "turn_aborted"), start], sub=True)[0] == "stopped"
     # Windows has no fd association: retain an interactive room after its turn completes while Codex stays alive.
@@ -1001,7 +1032,7 @@ def selftest_codex():
         live_row = ("thread", str(roll), None, None, None, "room", "first", "cli", int(NOW * 1000), str(HOME), 0)
         closed_row = ("closed", str(closed_roll), None, None, None, "old room", "first", "cli",
                       int((NOW - 3 * 3600) * 1000), str(HOME), 0)
-        for status, event, age, expected in (("completed", ev(1, "task_complete", error=None, last_agent_message="done"), 0, "user"),
+        for status, event, age, expected in (("completed", ev(1, "task_complete", error=None, last_agent_message="done"), 0, "done"),
                                              ("inProgress", ri(1, "reasoning"), 30, "work")):
             roll.write_text(json.dumps(event) + "\n", encoding="utf-8")
             tick[0] = status
@@ -1270,7 +1301,10 @@ def claude_state(lines, kind, sess, shells, notes, nid=None, t0=None):
             return fin("child", "하위 작업 대기", last=say)
         if main and s == "shell":
             return fin("child", "백그라운드 셸 %d개 대기" % len(shells) if shells else "백그라운드 작업 대기", last=say)
-        return fin("user", "답변 끝남 · 입력 기다림" if main else "답변 끝남", last=say)
+        if not main:
+            return fin("user", "답변 끝남", last=say)   # node() -> done
+        body = next((claude_body(d) for d in lines if d.get("type") == "assistant" and claude_body(d).strip()), "")
+        return fin(*answered(body), last=say)
     if ty == "user":                                                                       # 9
         return fin("work", "프롬프트 처리 중")
     return fin("work", "상태 불명")                                                           # 10
@@ -1546,7 +1580,7 @@ def claude_node(s, shells):
         if sstat == "waiting":
             st, why = "user", CL_WAIT.get(s.get("waitingFor"), "입력 필요")
         elif sstat != "busy":
-            st, why = ("child", "백그라운드 셸 대기") if sstat == "shell" else ("user", "답변 끝남 · 입력 기다림")
+            st, why = ("child", "백그라운드 셸 대기") if sstat == "shell" else ("done", "답변 완료")   # no transcript: no text to find a question in
         elif "--tools" in a and a[a.index("--tools") + 1:][:1] == [""] and bare:
             st, why = "work", "모델 응답 중 (SDK, 도구 없음)"
         else:
@@ -1680,7 +1714,15 @@ def selftest_claude():
         assert run(end, status="busy") == ("child", "하위 작업 대기")                                   # 5
         assert run(end, status="shell", shells=sh)[1] == "백그라운드 셸 1개 대기"
         st = claude_state(end, "main", {"status": "idle"}, sh, {})
-        assert st[0] == "user" and st[3] == "done" and st[6] == [dict(pid=77, cmd="sleep 99", age=90, cpu=0, state="S", bg=True)]
+        assert st[:2] == ("done", "답변 완료") and st[3] == "done" and st[6] == [dict(pid=77, cmd="sleep 99", age=90, cpu=0, state="S", bg=True)]
+        say = lambda t: [asst([{"type": "text", "text": t}], "end_turn")]   # noqa: E731
+        assert run(say("고쳤습니다. 테스트 통과.")) == ("done", "답변 완료") and run(end, "sub") == ("user", "답변 끝남")   # answer only -> done; sub: node() -> done
+        assert run(say("두 가지 방법이 있어요.\n어느 쪽으로 할까?")) == ("user", "질문함 · 답변 기다림")
+        assert run(say("준비됐습니다. 이대로 진행할까요")) == ("user", "질문함 · 답변 기다림")
+        assert run(say("Done. Should I also update the docs.")) == ("user", "질문함 · 답변 기다림")
+        assert run(say("Fixed it:\n```\nwhy?\n```\nAll green.")) == ("done", "답변 완료")      # a '?' inside code is not a question
+        assert run(say("> 왜 안 돼?\n원인은 캐시였습니다.")) == ("done", "답변 완료")                    # nor one inside a quote
+        assert run([{"type": "system", "subtype": "turn_duration", "timestamp": ts(1)}] + say("이 방식 괜찮으세요?")) == ("user", "질문함 · 답변 기다림")
         intr = [usr([{"type": "text", "text": "[Request interrupted by user for tool use]"}])] + bash
         assert run(intr)[0] == "user" and run(intr, "sub")[0] == "stopped"                            # 6
         so = [res("t9", toolUseResult={"success": True, "message": "Report delivered to your caller."})]
@@ -1730,7 +1772,7 @@ def selftest_claude():
                                     + [{"type": "attachment", "attachment": {"type": "x"}}]) + "\n", encoding="utf-8")
             ls = claude_lines(tr)
             assert [x["type"] for x in ls] == ["assistant", "user"], ls
-            assert claude_state(ls, "main", {"status": "idle"}, [], {})[:2] == ("user", "답변 끝남 · 입력 기다림")
+            assert claude_state(ls, "main", {"status": "idle"}, [], {})[:2] == ("done", "답변 완료")
     finally:
         proc_entry = real
     print("claude ok")
@@ -1836,9 +1878,10 @@ def agy_step(r):
             "cmd": a.get("CommandLine") if isinstance(a, dict) else None}
 
 
-def agy_state(row, steps, hosted, host_started, sub, kids_unfinished=0, undelivered=False):
+def agy_state(row, steps, hosted, host_started, sub, kids_unfinished=0, undelivered=False, say=None):
     """Pure classifier -> (st, why, now). row: {status, killed, nfi, raw, mx, count}; steps: agy_step() dicts, newest first,
-    non-terminal only; hosted: host pid or None; host_started: epoch of that host (unhosted: the newest agy start, None if no agy runs).
+    non-terminal only; hosted: host pid or None; host_started: epoch of that host (unhosted: the newest agy start, None if no agy runs);
+    say: the final answer text when known (a question keeps a main turn 'user'; else an answered main turn is 'done').
     # ponytail: unverified live (no agy process on the dev box), rules from liveness.json agy; fix here when a live run disagrees"""
     live = str(row["status"]).endswith(("RUNNING", "BUSY", "CANCELING"))
     if not hosted:
@@ -1879,15 +1922,16 @@ def agy_state(row, steps, hosted, host_started, sub, kids_unfinished=0, undelive
     if bg:
         return "child", "백그라운드 명령 대기 · " + bg, None
     t = pbv(row["raw"], 28)
+    end = ("user", "답변 끝남") if sub else answered(say)   # sub: node() -> done
     if t in (4, 8, 10):
-        return "user", "답변 끝남", None
+        return end + (None,)
     if t == 2:
         return "stopped", "사용자가 취소함", None
     if t == 1:
         return "stopped", "오류", None
     if t in (3, 6, 11):
         return "stopped", "한도 도달", None
-    return ("idle", "(대화 시작 전)", None) if not row["count"] else ("user", "답변 끝남", None)
+    return ("idle", "(대화 시작 전)", None) if not row["count"] else end + (None,)
 
 
 def agy_db(cid, name):
@@ -1978,7 +2022,7 @@ def agy_collect(roots):
             task = None
         wal = str(db) + "-wal"      # an empty -wal is only a reader's touch (other tools open the db read-only too), not activity
         ts = max(filter(None, [mtime(db), mtime(wal) if mtime(wal) and os.path.getsize(wal) else None]), default=None) or agy_t(r[4])
-        if not host and st == "user":
+        if not host and st in ("user", "done"):
             st = "idle"               # nobody is at the prompt: agy exited, the conversation just sits there
         n = node(cid, "agy", r[1] or task or line1(r[2]) or r[6], st, why, ts, sub,
                  since=agy_t(r[10]) if st in LIVE and not sub else None, now=now,
@@ -2034,7 +2078,7 @@ def selftest_agy():
     f = lambda row, steps=(), host=1, hs=NOW - 99, sub=False, ku=0, und=False: agy_state(row, list(steps), host, hs, sub, ku, und)[:2]   # noqa: E731
     assert f(R(**run), host=None)[0] == "dead"                                       # RUNNING but no host
     assert f(R(), host=None, hs=NOW - 99, steps=[S(5, 15, 8, tt=NOW)])[0] == "dead"  # live-looking step newer than the host start
-    assert f(R(), host=None, steps=[S(5, 15, 8)])[0] == "user"                       # idle + nobody hosts it: leftovers are history
+    assert f(R(), host=None, steps=[S(5, 15, 8)])[0] == "done"                       # idle + nobody hosts it: leftovers are history
     assert f(R(), [S(4, 132, 9, "write_to_file"), S(5, 132, 1)])[0] == "user"        # WAITING beats a newer PENDING
     assert f(R(), [S(5, 132, 1), S(4, 15, 8)])[0] == "work"                          # GENERATING beats PENDING
     assert f(R(), [S(5, 23, 2)]) == ("work", "컨텍스트 압축 중")
@@ -2042,11 +2086,13 @@ def selftest_agy():
     assert f(R(), [sch]) == ("child", "하위 작업 대기 60s")
     assert f(R(), [dict(sch, args='{"DurationSeconds": 60}')])[0] == "tool"
     assert f(R(), [S(5, 21, 2, "run_command", "sleep 99")]) == ("tool", "$ sleep 99")
-    assert f(R(mx=9), [S(5, 21, 2, "run_command", "sleep 99", tt=NOW - 500)], hs=NOW - 99)[0] == "user"   # stale: older than the host start
+    assert f(R(mx=9), [S(5, 21, 2, "run_command", "sleep 99", tt=NOW - 500)], hs=NOW - 99)[0] == "done"   # stale: older than the host start
     assert f(R(mx=9), [S(5, 21, 2, "run_command", "sleep 99", tt=NOW - 5)], hs=NOW - 99)[0] == "child"    # live background command
     assert f(R(**run))[0] == "work" and f(R(), ku=2) == ("child", "하위 에이전트 2개 대기") and f(R(), und=True)[0] == "child"
-    t = lambda n, **k: f(R(raw=bytes([0xE0, 0x01, n]) + b"", **k))[0]                # field 28 varint (28<<3 = 224 -> e0 01)
-    assert t(4) == "user" and t(2) == "stopped" and t(1) == "stopped" and t(3) == "stopped" and t(4, sub=True) == "user"
+    t = lambda n, **k: f(R(raw=bytes([0xE0, 0x01, n])), **k)[0]                # field 28 varint (28<<3 = 224 -> e0 01)
+    assert t(4) == "done" and t(2) == "stopped" and t(1) == "stopped" and t(3) == "stopped" and t(4, sub=True) == "user"
+    assert agy_state(R(raw=bytes([0xE0, 0x01, 4])), [], 1, NOW - 99, False, say="이렇게 할까요?")[:2] == ("user", "질문함 · 답변 기다림")
+    assert agy_state(R(raw=bytes([0xE0, 0x01, 4])), [], 1, NOW - 99, False, say="끝났습니다.")[:2] == ("done", "답변 완료")
     assert f(R(killed=1))[0] == "stopped" and f(R(count=0))[0] == "idle"
     assert pbv(bytes([0xB8, 0x01, 0x00]), 23) == 0 and pbv(bytes([0xB8, 0x01, 0x01, 0xA8, 0x01, 1]), 21) == 1   # explicit 0 reads as 0
     w = S(7, 132, 9, "run_command", tt=NOW - 120)
@@ -2898,22 +2944,23 @@ def kill_tree(p):
 
 def jset(j, **kw):
     if not j["cancel"]:   # a cancelled job stays cancelled
-        if kw.get("state") in ("keygen", "waiting_password", "verifying", "connecting", "confirm_hostkey", "installing_key"):
+        if kw.get("state") in ("keygen", "waiting_password", "verifying", "connecting", "confirm_hostkey", "installing_key", "diagnosing", "confirm_fix", "fixing"):
             j["phase"] = kw["state"]   # where an error happened: the UI polls too slowly to see every state
         j.update(kw)
 
 
-def srv_install(j, rq, tgt):
-    """Run `keyinstall` in its own console and wait for it; raises SrvErr."""
+def srv_install(j, rq, tgt, fix=None):
+    """Run `keyinstall` in its own console and wait for it (fix: the agreed fix ids instead of the install); returns keyinstall's result
+    (its "stdout" holds the diagnosis); raises SrvErr."""
     import subprocess, tempfile
     fd, rf = tempfile.mkstemp(prefix="agen-talk-", suffix=".json")
     os.close(fd)
     try:
         if j["cancel"]:
             raise SrvErr("cancelled", "")
-        jset(j, state="waiting_password")
+        jset(j, state="fixing" if fix else "waiting_password")
         me = [sys.executable] if getattr(sys, "frozen", False) else [sys.executable, "-I", str(bundle("agen_talk.py"))]   # the frozen app is its own keyinstall
-        p = j["proc"] = subprocess.Popen(me + ["keyinstall", rf, tgt, str(rq["port"]), rq["name"] or rq["host"]], **popen_kw(console=True))
+        p = j["proc"] = subprocess.Popen(me + ["keyinstall", rf, tgt, str(rq["port"]), rq["name"] or rq["host"]] + ([",".join(fix)] if fix else []), **popen_kw(console=True))
         if j["cancel"]:   # cancelled while the process was being started
             kill_tree(p)
         try:
@@ -2937,6 +2984,7 @@ def srv_install(j, rq, tgt):
         text = "\n".join(str(x) for x in res.get("stderr") or [])
         jset(j, log=CTRL.sub("", text)[-4000:])
         raise SrvErr(ssh_kind(text), last(text) or "ssh 종료 코드 %s" % res.get("code"))
+    return res
 
 
 def srv_job(j, rq, save):
@@ -2950,11 +2998,24 @@ def srv_job(j, rq, save):
         if kind in ("unreachable", "ssh_missing") or kind == "host_key_changed" and "CHANGED" in err:   # first contact only says 'verification failed'
             raise SrvErr(kind, last(err))
         if kind not in ("ok", "no_python3"):
-            srv_install(j, rq, tgt)
+            res = srv_install(j, rq, tgt)
             jset(j, state="verifying")
             kind, err = srv_verify(tgt, rq)
-            if kind == "wrong_password":
-                raise SrvErr("other", "키는 등록됐지만 로그인되지 않습니다 — 서버의 ~/.ssh 권한(700/600)과 홈 디렉터리 권한을 확인하세요")
+            if kind == "wrong_password":   # the key went in, sshd ignores it: keyinstall's session also ran the diagnosis
+                jset(j, state="diagnosing")
+                dg = diag_report(res.get("stdout", ""))
+                diag_log("%s:%s" % (tgt, rq["port"]), dg)
+                jset(j, findings=dg["findings"], fix_cmds=[FIX_SHOW[i] for i in dg["fixes"]], session_ok=False, fix_pw_again=True)
+                if not dg["fixes"] or ask_fix(j) != "fix":
+                    raise SrvErr("key_rejected", KEY_REJ)
+                res = srv_install(j, rq, tgt, dg["fixes"])   # a second console: the password is asked once more
+                jset(j, state="verifying")
+                kind, err = srv_verify(tgt, rq)
+                if kind == "wrong_password":
+                    dg = diag_report(res.get("stdout", ""))
+                    diag_log("%s:%s after fix" % (tgt, rq["port"]), dg)
+                    jset(j, findings=dg["findings"], fix_cmds=None)
+                    raise SrvErr("key_rejected", "권한을 고쳤지만 키 로그인이 여전히 거절됩니다 — 아래 내용을 서버 관리자에게 보여 주세요")
         if kind != "ok":
             jset(j, log=CTRL.sub("", err)[-4000:])
             raise SrvErr(kind, last(err) or kind)
@@ -2979,9 +3040,295 @@ def install_cmd(pub):
 AUTH_OPTS = "no-port-forwarding,no-agent-forwarding,no-X11-forwarding,no-pty"   # not `restrict`: OpenSSH < 7.2 would refuse the whole line
 
 
-def keyinstall(res, tgt, port, name=""):
-    """Subcommand, runs in its own console: ssh asks for the password right here (stdin/stdout inherited) and appends our public key."""
-    import signal, subprocess
+# ---- key_rejected: find out why sshd ignores the installed key (read-only), and the few repairs the user may make themselves.
+# Both commands are `sh -c '<script>'`: the script has no single quote, no `!`, no backslash and no newline, so bash, fish, csh and tcsh
+# login shells all pass it to sh untouched. The only interpolated value is the public key, which matches PUBKEY (no quote, $, ` or \).
+SSHD_KEYS = ("Include", "StrictModes", "PubkeyAuthentication", "AuthorizedKeysFile", "AuthorizedKeysCommand", "AllowUsers", "AllowGroups",
+             "DenyUsers", "DenyGroups", "Match", "PubkeyAcceptedKeyTypes", "PubkeyAcceptedAlgorithms", "AuthenticationMethods")
+FIX_SH = {   # fix id -> the exact sh fragment; nothing else is ever run by a fix
+    "key": None,   # built from the public key in fix_cmd (the same steps as install_cmd)
+    "home_w": 'chmod go-w "$HOME"',
+    "ssh_mode": 'chmod 700 "$HOME/.ssh"',
+    "ak_mode": 'chmod 600 "$HOME/.ssh/authorized_keys"',
+    "selinux": 'restorecon -R "$HOME/.ssh"',
+}
+FIX_SHOW = {"key": "공개키 한 줄을 ~/.ssh/authorized_keys 에 다시 추가 (mkdir -p ~/.ssh; chmod 700 ~/.ssh; chmod 600 ~/.ssh/authorized_keys)",
+            "home_w": "chmod go-w ~", "ssh_mode": "chmod 700 ~/.ssh", "ak_mode": "chmod 600 ~/.ssh/authorized_keys", "selinux": "restorecon -R ~/.ssh"}
+KEY_REJ = "키는 등록됐지만 키 로그인이 거절됐습니다 — 서버가 키 로그인을 막았거나 ~/.ssh 와 홈 디렉터리 권한(700/600)이 맞지 않습니다"
+
+
+def _sh1(script):
+    assert not re.search(r"['!\\\n\r`]", script), script   # see the block comment above
+    return "sh -c '%s'" % script
+
+
+def diag_cmd(pub):
+    """Read-only report of what sshd looks at for this account: who, $HOME, modes/owners of ~, its parent, ~/.ssh, authorized_keys,
+    whether our key line is there, the relevant sshd_config lines (when readable), SELinux / ecryptfs. Every line starts with 'AT-D '."""
+    if not re.fullmatch(PUBKEY, pub):
+        raise ValueError("pub")
+    kt, kb = pub.split()[:2]
+    st = ('st() { if [ -e "$2" ]; then echo "AT-D st $1 $(stat -L -c "%a %U %G" "$2" 2>/dev/null || ls -ldL "$2" 2>/dev/null)"; '
+          'else echo "AT-D st $1 missing"; fi; }')
+    return _sh1("; ".join((
+        'H="$HOME"', 'echo "AT-D user $(id -un 2>/dev/null || whoami)"', 'echo "AT-D groups $(id -Gn 2>/dev/null)"', 'echo "AT-D home $H"', st,
+        'st home "$H"', 'st parent "$(dirname "$H")"', 'st ssh "$H/.ssh"', 'st ak "$H/.ssh/authorized_keys"',
+        'if grep -qF "%s %s" "$H/.ssh/authorized_keys" 2>/dev/null; then echo "AT-D key yes"; else echo "AT-D key no"; fi' % (kt, kb),
+        'for f in /etc/ssh/sshd_config /etc/ssh/sshd_config.d/*.conf; do if [ -r "$f" ]; then echo "AT-D file $f"; '
+        'grep -iE "^[[:space:]]*(%s)([[:space:]]|=)" "$f" 2>/dev/null | head -n 200 | sed "s/^/AT-D cfg /"; '
+        'elif [ -e "$f" ]; then echo "AT-D nofile $f"; fi; done' % "|".join(SSHD_KEYS),
+        'if command -v getenforce >/dev/null 2>&1; then echo "AT-D se $(getenforce 2>/dev/null)"; fi',
+        'if command -v restorecon >/dev/null 2>&1; then echo "AT-D restorecon yes"; fi',
+        'if [ -d "$H/.ecryptfs" ] || [ -d "$H/.Private" ]; then echo "AT-D ecryptfs yes"; fi',
+        'echo "AT-D end"')))
+
+
+def fix_cmd(ids, pub):
+    """The repair command for the fix ids the user agreed to (only FIX_SH entries, in a fixed order); each step reports a failure as
+    'AT-F fail <id>' and the run ends with 'AT-F done'."""
+    if not re.fullmatch(PUBKEY, pub):
+        raise ValueError("pub")
+    ids = list(ids)
+    if not ids or any(i not in FIX_SH for i in ids):
+        raise ValueError("fix")
+    kt, kb = pub.split()[:2]
+    steps = []
+    for i in FIX_SH:
+        if i not in ids:
+            continue
+        if i == "key":
+            ak = '"$HOME/.ssh/authorized_keys"'
+            sh = ('umask 077; mkdir -p "$HOME/.ssh" && chmod 700 "$HOME/.ssh" && touch %s && chmod 600 %s && '
+                  '(grep -qF "%s %s" %s || (echo; echo "%s %s") >> %s)' % (ak, ak, kt, kb, ak, AUTH_OPTS, pub, ak))
+            steps.append("(%s) || echo \"AT-F fail key\"" % sh)
+        else:
+            steps.append('%s || echo "AT-F fail %s"' % (FIX_SH[i], i))
+    return _sh1("; ".join(steps + ['echo "AT-F done"']))
+
+
+def _mode_of(tok):
+    """'775' -> 0o775; 'drwxrwxr-x' (ls -l) -> 0o775; else None."""
+    if re.fullmatch(r"[0-7]{3,4}", tok):
+        return int(tok, 8)
+    m = re.fullmatch(r"[-dlbcps]([r-][w-][xsS-])([r-][w-][xsS-])([r-][w-][xtT-])[.+@]?", tok)
+    if not m:
+        return None
+    v = 0
+    for part in m.groups():
+        v = v * 8 + (4 if part[0] == "r" else 0) + (2 if part[1] == "w" else 0) + (1 if part[2] in "xst" else 0)
+    return v
+
+
+def diag_read(out):
+    """Parse diag_cmd's stdout (untrusted: anything that is not a well-formed AT-D line is ignored)."""
+    d = {"user": "", "groups": [], "home": "", "st": {}, "key": None, "cfg": [], "nofile": [], "se": "", "restorecon": False, "ecryptfs": False, "end": False}
+    cur = None
+    for ln in str(out or "").splitlines()[:2000]:
+        ln = CTRL.sub("", ln).strip()[:400]
+        if not ln.startswith("AT-D "):
+            continue
+        tag, _, rest = ln[5:].partition(" ")
+        rest = rest.strip()
+        if tag == "user":
+            d["user"] = rest[:64]
+        elif tag == "groups":
+            d["groups"] = rest.split()[:64]
+        elif tag == "home":
+            d["home"] = rest[:300]
+        elif tag == "st":
+            name, _, v = rest.partition(" ")
+            t = v.split()
+            if name not in ("home", "parent", "ssh", "ak") or not t:
+                continue
+            if t[0] == "missing":
+                d["st"][name] = None
+            elif _mode_of(t[0]) is not None:
+                ls = not re.fullmatch(r"[0-7]{3,4}", t[0])   # ls -ld: mode links owner group …
+                own, grp = ((t[2:4] if ls else t[1:3]) + ["", ""])[:2]
+                d["st"][name] = {"mode": _mode_of(t[0]), "owner": own[:64], "group": grp[:64]}
+        elif tag == "key":
+            d["key"] = rest == "yes"
+        elif tag == "file":
+            cur = rest[:200]
+        elif tag == "nofile":
+            d["nofile"].append(rest[:200])
+        elif tag == "cfg" and cur:
+            d["cfg"].append((cur, rest[:300]))
+        elif tag == "se":
+            d["se"] = rest[:20]
+        elif tag == "restorecon":
+            d["restorecon"] = True
+        elif tag == "ecryptfs":
+            d["ecryptfs"] = True
+        elif tag == "end":
+            d["end"] = True
+    return d
+
+
+def _pat_hit(pats, word):
+    """sshd pattern list (comma or space separated, '!' negates): True / False."""
+    import fnmatch
+    hit = False
+    for p in re.split(r"[,\s]+", pats.strip()):
+        neg, p = p.startswith("!"), p.lstrip("!")
+        p = p.split("@")[0]   # user@host: only the user part can be checked here
+        if p and fnmatch.fnmatchcase(word, p):
+            if neg:
+                return False
+            hit = True
+    return hit
+
+
+def _match_applies(crit, user, groups):
+    """A Match line's criteria for this account: True, False, or None (depends on the address / host / port: not known here)."""
+    t = crit.split()
+    if t and t[0].lower() == "all":
+        return True
+    res = True
+    for i in range(0, len(t), 2):
+        k, v = t[i].lower(), t[i + 1] if i + 1 < len(t) else ""
+        r = _pat_hit(v, user) if k == "user" else (any(_pat_hit(v, g) for g in groups) if groups else None) if k == "group" else None
+        if r is False:
+            return False
+        if r is None:
+            res = None
+    return res
+
+
+def sshd_eff(d):
+    """The sshd_config lines that matter, in the order sshd reads them (sshd_config.d first when the main file includes it):
+    {key: (value, file)} for the global section (first one wins) and [(applies, criteria, key, value)] for Match blocks."""
+    main = [(f, l) for f, l in d["cfg"] if f == "/etc/ssh/sshd_config"]
+    inc = any(re.match(r"include\b", l, re.I) for _, l in main)
+    rest = [(f, l) for f, l in d["cfg"] if f != "/etc/ssh/sshd_config"] if inc else []
+    glob, match = {}, []
+    for blk in (rest, main) if inc else (main,):
+        crit = None
+        last_f = None
+        for f, l in blk:
+            if f != last_f:   # a Match block ends with its file
+                crit, last_f = None, f
+            m = re.match(r"([A-Za-z]+)(?:\s*=\s*|\s+)(.*)", l.strip())   # `Key value`, `Key=value`, tabs
+            if not m:
+                continue
+            k, v = m.group(1).lower(), m.group(2).strip()
+            if k == "include":
+                continue
+            if k == "match":
+                crit = v
+                continue
+            if crit is None:
+                glob.setdefault(k, (v, f))
+            else:
+                match.append((_match_applies(crit, d["user"], d["groups"]), crit, k, v))
+    return glob, match
+
+
+def diag_report(out):
+    """diag_cmd output -> {"findings": [{"id", "level": fix|admin|info, "text", "fix"}], "fixes": [fix ids], "summary": one log line}."""
+    d = diag_read(out)
+    F = []
+    add = lambda i, lvl, txt, fx=None: F.append({"id": i, "level": lvl, "text": txt, "fix": fx})
+    me = d["user"]
+    glob, match = sshd_eff(d)
+
+    def opt(k, default):   # effective value, and whether a Match block may change it for this account
+        v = glob.get(k, (default, ""))[0]
+        m = [(a, c, mv) for a, c, mk, mv in match if mk == k and a is not False]
+        return v, m
+    strict = opt("strictmodes", "yes")[0].lower() not in ("no", "false")
+    ad = "서버 관리자에게 요청하세요"
+    for name, label in (("home", "홈 디렉터리(~)"), ("parent", "홈의 상위 폴더"), ("ssh", "~/.ssh 폴더"), ("ak", "~/.ssh/authorized_keys")):
+        s = d["st"].get(name)
+        if not s:
+            continue
+        own = s["owner"]
+        mine = own == me and me != ""
+        if own and me and own not in (me, "root"):
+            add("owner_" + name, "admin", "%s 의 소유자가 %s 가 아니라 %s 입니다 — sshd 는 다른 사람 소유면 키를 무시합니다. 소유자를 %s 로 바꿔 달라고 %s (chown)" % (label, me, own, me, ad))
+            continue
+        if strict and s["mode"] & 0o022:
+            cur = "%03o" % (s["mode"] & 0o777)
+            if name == "parent":
+                add("parent_w", "admin", "%s(%s)를 다른 사용자가 쓸 수 있어서 sshd(StrictModes)가 키를 무시합니다 (현재 %s) — %s" % (label, os.path.dirname(d["home"]) or "/", cur, ad))
+            elif not mine:
+                add(name + "_w", "admin", "%s 를 그룹/다른 사용자가 쓸 수 있는데 root 소유라 이 계정으로는 고칠 수 없습니다 (현재 %s) — %s" % (label, cur, ad))
+            elif name == "home":
+                add("home_w", "fix", "홈 디렉터리(~)를 그룹/다른 사용자가 쓸 수 있어서 sshd(StrictModes)가 키를 무시합니다 (현재 %s)" % cur, "home_w")
+            elif name == "ssh":
+                add("ssh_mode", "fix", "~/.ssh 폴더를 그룹/다른 사용자가 쓸 수 있어서 sshd 가 키를 무시합니다 (현재 %s, 700 이어야 합니다)" % cur, "ssh_mode")
+            else:
+                add("ak_mode", "fix", "~/.ssh/authorized_keys 를 그룹/다른 사용자가 쓸 수 있어서 sshd 가 키를 무시합니다 (현재 %s, 600 이어야 합니다)" % cur, "ak_mode")
+    if "ssh" in d["st"] and d["st"]["ssh"] is None or "ak" in d["st"] and d["st"]["ak"] is None or d["key"] is False:
+        add("key_missing", "fix", "공개키 줄이 ~/.ssh/authorized_keys 에 없습니다 — 등록이 저장되지 않았습니다. 다시 추가합니다", "key")
+    pk, pkm = opt("pubkeyauthentication", "yes")
+    if pk.lower() in ("no", "false"):
+        add("pubkey_off", "admin", "서버 설정(sshd_config)에서 키 로그인이 꺼져 있습니다 (PubkeyAuthentication no) — 켜 달라고 %s" % ad)
+    for a, c, v in pkm:
+        if v.lower() in ("no", "false"):
+            add("pubkey_off_match", "admin", "서버 설정의 Match %s 블록에서 키 로그인이 꺼져 있습니다 (PubkeyAuthentication no)%s — %s" % (c[:60], "" if a else " (접속 위치에 따라 적용)", ad))
+    ok_ak = lambda v: any(x in (".ssh/authorized_keys", "%h/.ssh/authorized_keys", "~/.ssh/authorized_keys") for x in v.split())
+    akf, akm = opt("authorizedkeysfile", ".ssh/authorized_keys .ssh/authorized_keys2")
+    for a, where, v in [(True, "", akf)] + [(a, " (Match %s)" % c[:60], v) for a, c, v in akm]:
+        if not ok_ak(v):
+            add("akfile", "admin", "서버는 키를 ~/.ssh/authorized_keys 가 아닌 곳(%s)에서 읽습니다%s — 이 PC의 공개키를 그곳에 등록해 달라고 %s" % (v[:100], where, ad))
+    alg = opt("pubkeyacceptedalgorithms", "")[0] or opt("pubkeyacceptedkeytypes", "")[0]
+    if alg and (alg.startswith("-") and "ed25519" in alg or not alg[:1] in "+-^" and "ed25519" not in alg and "*" not in alg):
+        add("alg", "admin", "서버가 ed25519 키를 받지 않습니다 (PubkeyAcceptedAlgorithms %s) — ssh-ed25519 를 허용해 달라고 %s" % (alg[:80], ad))
+    am = opt("authenticationmethods", "")[0]
+    if am and am.lower() != "any" and not any(x == "publickey" for x in am.split()):
+        add("authmethods", "admin", "서버가 키만으로는 로그인을 허용하지 않습니다 (AuthenticationMethods %s) — %s" % (am[:80], ad))
+    au = opt("allowusers", "")[0]
+    if au and me and not _pat_hit(au, me):
+        add("allowusers", "admin", "서버의 AllowUsers 목록에 %s 가 없습니다 — %s" % (me, ad))
+    du = opt("denyusers", "")[0]
+    if du and me and _pat_hit(du, me):
+        add("denyusers", "admin", "서버의 DenyUsers 가 %s 를 막고 있습니다 — %s" % (me, ad))
+    if d["se"].lower() == "enforcing":
+        if d["restorecon"]:
+            add("selinux", "fix", "SELinux 가 켜져 있어 ~/.ssh 의 보안 레이블이 틀리면 sshd 가 키를 읽지 못합니다 — restorecon 으로 기본 레이블을 되돌립니다", "selinux")
+        else:
+            add("selinux", "admin", "SELinux 가 켜져 있어 ~/.ssh 의 보안 레이블이 틀렸을 수 있습니다 — restorecon -R ~/.ssh 를 %s" % ad)
+    if d["ecryptfs"]:
+        add("ecryptfs", "admin", "홈 디렉터리가 암호화(ecryptfs)되어 있어 로그인 전에는 sshd 가 authorized_keys 를 읽을 수 없습니다 — 키 파일을 홈 밖에 두도록(AuthorizedKeysFile) %s" % ad)
+    if d["nofile"]:
+        add("nocfg", "info", "sshd 설정 파일을 읽을 수 없어 서버 설정은 확인하지 못했습니다")
+    elif not d["cfg"] and d["end"]:
+        add("nocfg", "info", "sshd 설정 파일을 찾지 못했습니다 — 서버 설정은 확인하지 못했습니다")
+    if not d["end"]:
+        add("partial", "info", "진단 명령이 끝까지 실행되지 않았습니다 — 결과가 일부만 있습니다")
+    if not any(f["level"] in ("fix", "admin") for f in F):
+        add("unknown", "admin", "권한과 설정에서 원인을 찾지 못했습니다 — 서버 관리자에게 sshd 로그(journalctl -u ssh)에서 이 계정의 'Authentication refused' 줄을 확인해 달라고 요청하세요")
+    fixes = [i for i in FIX_SH if any(f["fix"] == i for f in F)]
+    modes = ",".join("%s=%s" % (k, "-" if v is None else "%03o" % (v["mode"] & 0o777)) for k, v in d["st"].items())
+    summary = "user=%s %s key=%s fix=%s admin=%s" % (me or "?", modes, {True: "yes", False: "no", None: "?"}[d["key"]], ",".join(fixes) or "-",
+                                                    ",".join(f["id"] for f in F if f["level"] == "admin") or "-")
+    return {"findings": F, "fixes": fixes, "summary": summary}
+
+
+def ask_fix(j):
+    """Wait for the user's answer to a key_rejected diagnosis (POST /api/servers/job/confirm with action 'fix'): 'fix' | 'session' |
+    'none' | 'timeout'. Raises SrvErr cancelled."""
+    j["ev"].clear()
+    j["accept"] = None
+    jset(j, state="confirm_fix")
+    got = j["ev"].wait(KEYINSTALL_TIMEOUT)
+    if j["cancel"]:
+        raise SrvErr("cancelled", "")
+    if not got:
+        return "timeout"
+    return j["accept"] if j["accept"] in ("fix", "session") else "none"
+
+
+def diag_log(where, dg):
+    import logging
+    logging.getLogger("agen-talk").info("key_rejected %s: %s", where, dg["summary"][:300])
+
+
+def keyinstall(res, tgt, port, name="", fix=""):
+    """Subcommand, runs in its own console: ssh asks for the password right here (stdin inherited) and appends our public key (fix: the
+    comma-separated FIX_SH ids the user agreed to, run instead). The same session runs diag_cmd; its stdout goes to the result file."""
+    import signal, subprocess, threading
     if WIN:
         import ctypes
         k32 = ctypes.windll.kernel32
@@ -2994,12 +3341,17 @@ def keyinstall(res, tgt, port, name=""):
     print("에겐 톡 — %s 에 이 PC의 전용 키를 등록합니다.\n처음 보는 서버라면 먼저 표시되는 지문이 서버 관리자가 알려 준 값과 같은지 확인하세요.\n"
           "확인한 뒤 서버 비밀번호를 아래에 입력하고 Enter 를 누르세요 (입력 중에는 글자가 보이지 않습니다).\n"
           "비밀번호는 저장되지 않습니다. 취소하려면 이 창을 닫으세요.\n" % tgt, flush=True)
-    buf, rc, kid = b"", 255, []
+    if fix:
+        print("키 로그인이 거절된 원인을 고칩니다 — 서버에서 이 계정으로 실행할 명령:\n  " + "\n  ".join(FIX_SHOW.get(i, i) for i in fix.split(",")) + "\n", flush=True)
+    buf, rc, kid, out = b"", 255, [], []
     signal.signal(signal.SIGTERM, lambda *a: ([k.kill() for k in kid], os._exit(1)))   # the hub cancels us this way (Windows: taskkill /T)
     try:
-        rem = install_cmd(key_pub())
-        p = subprocess.Popen(keyinstall_argv(ssh_bin("ssh"), tgt, port, rem), **popen_kw(inherit=True, stderr=subprocess.PIPE))   # inherit: ssh must use keyinstall's own console
+        pub = key_pub()
+        rem = (fix_cmd(fix.split(","), pub) if fix else install_cmd(pub)) + " ; " + diag_cmd(pub)
+        p = subprocess.Popen(keyinstall_argv(ssh_bin("ssh"), tgt, port, rem), **popen_kw(inherit=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE))   # inherit: ssh must use keyinstall's own console
         kid.append(p)
+        rd = threading.Thread(target=lambda: out.append(p.stdout.read(1 << 16)), daemon=True)   # the remote commands' stdout (prompts use the console)
+        rd.start()
         while True:   # relay raw chunks: a prompt without a newline must still show
             c = os.read(p.stderr.fileno(), 4096)
             if not c:
@@ -3008,9 +3360,11 @@ def keyinstall(res, tgt, port, name=""):
             sys.stderr.buffer.flush()
             buf = (buf + c)[-8192:]
         rc = p.wait()
-    except (OSError, SrvErr, TypeError) as e:   # TypeError: ssh_bin() is None
+        rd.join(5)
+    except (OSError, SrvErr, TypeError, ValueError) as e:   # TypeError: ssh_bin() is None; ValueError: a bad fix id
         buf = str(e).encode()
-    Path(res).write_text(json.dumps({"code": rc, "stderr": buf.decode("utf-8", "replace").splitlines()[-5:]}, ensure_ascii=False), encoding="utf-8")
+    Path(res).write_text(json.dumps({"code": rc, "stderr": buf.decode("utf-8", "replace").splitlines()[-5:],
+                                     "stdout": b"".join(out).decode("utf-8", "replace")}, ensure_ascii=False), encoding="utf-8")
     if rc == 0:
         print("\n등록 완료", flush=True)
         time.sleep(1.5)
@@ -3370,6 +3724,75 @@ def srv_job_pm(j, rq, save):
             raise SrvErr("cancelled", "3분 동안 확인이 없어 취소했습니다")
         jset(j, state="connecting")
         return j["accept"] is True
+
+    def key_conn():   # a NEW connection with the key only: proves the install worked. None when sshd refuses the key
+        chk()
+        jset(j, state="verifying")
+        tk = pm_open(host, port, None, reg)
+        chk()
+        try:
+            pm_auth(tk, user, key, None)
+            return tk
+        except SrvErr as e:
+            tk.close()
+            if e.args[0] != "wrong_password":
+                raise
+            return None
+
+    def pw_conn(tp):   # the password session, opened again when sshd dropped it while the user read the card
+        if tp is not None and tp.is_active():
+            return tp
+        if tp is not None:
+            tp.close()
+        tp = pm_open(host, port, None, reg)
+        chk()
+        pm_auth(tp, user, None, pw)
+        chk()
+        return tp
+
+    def diagnose(tp, where):
+        jset(j, state="diagnosing")
+        tp = pw_conn(tp)
+        try:
+            out = pm_exec(tp, diag_cmd(pub))[1]
+        except Exception as e:   # paramiko / socket / time-out: the report then says it is partial
+            out = ""
+            j["log"] = "진단 명령 실패: %s" % (last(e) or type(e).__name__)
+        chk()
+        dg = diag_report(out)
+        diag_log(where, dg)
+        return tp, dg
+
+    def rejected(tp):
+        """sshd ignores the key it just got: diagnose over the password session (tp), let the user choose. Returns the transport to go on
+        with (a key one after an agreed fix; the password one after 'session', with rq auth switched); raises SrvErr key_rejected."""
+        where = "%s@%s:%s" % (user, host, port)
+        tp, dg = diagnose(tp, where)
+        jset(j, findings=dg["findings"], fix_cmds=[FIX_SHOW[i] for i in dg["fixes"]], session_ok=True)
+        a = ask_fix(j)
+        chk()
+        if a == "session":
+            rq["auth"] = "password-session"
+            jset(j, state="verifying")
+            return pw_conn(tp)
+        if a == "fix" and dg["fixes"]:
+            jset(j, state="fixing")
+            chk()
+            tp = pw_conn(tp)
+            out = pm_exec(tp, fix_cmd(dg["fixes"], pub))[1]
+            bad = re.findall(r"^AT-F fail (\w+)", out, re.M)
+            import logging
+            logging.getLogger("agen-talk").info("key_rejected %s: fix %s ran%s", where, ",".join(dg["fixes"]), " (failed: %s)" % ",".join(bad[:5]) if bad else "")
+            tk = key_conn()
+            if tk is not None:
+                jset(j, fixed=[FIX_SHOW[i] for i in dg["fixes"]])
+                return tk
+            tp, dg = diagnose(tp, where + " after fix")
+            jset(j, findings=dg["findings"], fix_cmds=None)
+            raise SrvErr("key_rejected", "권한을 고쳤지만 키 로그인이 여전히 거절됩니다 — 아래 내용을 서버 관리자에게 보여 주세요")
+        if a == "timeout":
+            raise SrvErr("key_rejected", "3분 동안 선택이 없어 고치지 않았습니다 — " + KEY_REJ)
+        raise SrvErr("key_rejected", KEY_REJ)
     t = None
     try:
         key, pub = app_key()
@@ -3395,24 +3818,26 @@ def srv_job_pm(j, rq, save):
                 rc, _, err = pm_exec(t, install_cmd(pub))
                 if rc:
                     raise SrvErr("other", last(err) or "authorized_keys 에 쓰지 못했습니다 (종료 코드 %s)" % rc)
-                t.close()
                 chk()
-                jset(j, state="verifying")
-                t = pm_open(host, port, None, reg)   # a NEW connection with the key only: proves the install worked
-                chk()
-                try:
-                    pm_auth(t, user, key, None)
-                except SrvErr:
-                    raise SrvErr("key_rejected", "키는 등록됐지만 키 로그인이 거절됐습니다 — 서버가 키 로그인을 막았거나 ~/.ssh 와 홈 디렉터리 권한(700/600)이 맞지 않습니다")
+                tk = key_conn() or rejected(t)   # the password session stays open until the key works: it runs the diagnosis
+                if tk is not t:
+                    t.close()
+                    t = tk
             else:
                 jset(j, state="verifying")
             kind, err = pm_pycheck(t, rq["python"])
             if kind != "ok":
                 raise SrvErr(kind, last(err) or kind)
+            if rq["auth"] == "password-session":   # chosen on the key_rejected card: the password typed for this job, kept for this run
+                chk()
+                SESSION_PW[(user, host, port)] = pw
+                jset(j, auth="password-session")
         chk()
         jset(j, state="verifying")
         ch = save(rq)   # None when cancelled meanwhile
         if ch:
+            if rq["auth"] == "appkey":   # the key works now: the channel no longer needs a password from this run
+                SESSION_PW.pop((user, host, port), None)
             jset(j, state="done", channel=ch)
     except SrvErr as e:
         jset(j, state="error", kind=e.args[0], message=(e.args[1] or "").replace(pw, "***") if pw else e.args[1])
@@ -3462,6 +3887,15 @@ class PmProc:
         return None if self.t.is_active() else 0
 
 
+def chan_key(c):
+    """(user, host, port) of an ssh channel entry: the SESSION_PW key. None when the entry has no usable port."""
+    user, _, host = str(c.get("ssh", "")).rpartition("@")
+    try:
+        return user, host, int(chan_port(c))
+    except ValueError:
+        return None
+
+
 def pm_channel(ch):
     """Open the collector transport of an ssh channel entry; raises RuntimeError(message) (hub_chan shows the message)."""
     user, _, host = str(ch["ssh"]).rpartition("@")
@@ -3470,7 +3904,7 @@ def pm_channel(ch):
     try:
         pw = SESSION_PW.get((user, host, port)) if ch.get("auth") == "password-session" else None
         if ch.get("auth") == "password-session" and pw is None:   # before connecting: a handshake per backoff would only fill the server's sshd log
-            raise SrvErr("wrong_password", "Permission denied: 이 서버는 이번 실행에서 비밀번호로 연결해야 합니다 — 다시 연결하세요")
+            raise SrvErr("wrong_password", "Permission denied: 이 서버는 이번 실행에서 비밀번호로 연결해야 합니다 — 비밀번호로 다시 연결하거나, 설정 › 채널의 '키 로그인 다시 설정'으로 비밀번호 없이 접속되게 하세요")
         t = pm_open(host, port, None)   # channels never prompt: unknown / changed keys are errors, fixed through the dialog
         paramiko = pm_mod()
         if ch.get("auth") == "password-session":
@@ -3961,6 +4395,7 @@ def hub_start(cfg=None, port=None, secret="", on_show=None, token=None, fallback
             if path == "/api/channels":
                 return self.send(200, [{"id": c["id"], "name": c.get("name", c["id"]), "kind": c["kind"],
                                         "ssh": c.get("ssh"), "ssh_args": c.get("ssh_args", []), "port": c.get("port"), "auth": c.get("auth"),
+                                        "session_pw": c.get("auth") == "password-session" and chan_key(c) in SESSION_PW,   # the hub holds this run's password (never the value)
                                         "state": slots[c["id"]]["state"], "error": slots[c["id"]]["error"],
                                         "t": slots[c["id"]]["t"]} for c in chans])
             if path == "/api/state":
@@ -4054,6 +4489,8 @@ def hub_start(cfg=None, port=None, secret="", on_show=None, token=None, fallback
                         return self.send(400, {"error": "이 서버는 channels.json 의 ssh_args (%s) 로 연결합니다 — 앱의 서버 추가로는 다시 등록할 수 없으니 channels.json 에서 고치세요" % xarg[:60]})
                     pmod = pm_mod() is not None
                     rq["pm"] = pmod
+                    if pmod and isinstance(d, dict) and d.get("reuse_password") is True and rq["password"] is None:   # 키 로그인 다시 설정: this run's password
+                        rq["password"] = SESSION_PW.get((rq["user"], rq["host"], rq["port"]))
                     if not pmod:
                         rq["password"] = None   # the OpenSSH fallback asks in its own console; this process never keeps a password
                     with lock:
@@ -4068,14 +4505,21 @@ def hub_start(cfg=None, port=None, secret="", on_show=None, token=None, fallback
                         j["thread"] = threading.Thread(target=srv_job_pm if pmod else srv_job, args=(j, rq, lambda rq: save(rq, j)), daemon=True)
                         j["thread"].start()
                     return self.send(202, {"job": j["id"]})
-                if path == "/api/servers/job/confirm":   # the user's answer to an unknown server's fingerprint (token-protected like every POST)
-                    with lock:
+                if path == "/api/servers/job/confirm":   # the user's answer: an unknown server's fingerprint (action "hostkey", accept) or
+                    with lock:                            # a key_rejected diagnosis (action "fix", choice fix | session | none); token-protected like every POST
                         j = jobs[0]
                         if not j or not isinstance(d, dict) or j["id"] != d.get("id"):
                             return self.send(404, {"error": "알 수 없는 작업"})
-                        if j["state"] != "confirm_hostkey":
-                            return self.send(409, {"error": "확인할 서버 지문이 없습니다"})
-                        j["accept"] = d.get("accept") is True
+                        act = d.get("action", "hostkey")
+                        if {"confirm_hostkey": "hostkey", "confirm_fix": "fix"}.get(j["state"]) != act:
+                            return self.send(409, {"error": "확인할 서버 지문이 없습니다" if act == "hostkey" else "고칠 내용이 없습니다"})
+                        if act == "fix":
+                            ch_ = d.get("choice")
+                            if not (ch_ == "none" or ch_ == "fix" and j.get("fix_cmds") or ch_ == "session" and j.get("session_ok")):
+                                return self.send(400, {"error": "입력이 올바르지 않습니다", "field": "choice"})
+                            j["accept"] = ch_
+                        else:
+                            j["accept"] = d.get("accept") is True
                         j["ev"].set()
                     return self.send(200, {"ok": True})
                 if path == "/api/servers/job/cancel":
@@ -4283,6 +4727,189 @@ def selftest_srv():
     c3 = {"channels": [{"id": "Bad ID", "kind": "ssh", "ssh": "u@h"}, {"id": "x", "kind": "ssh", "ssh": "u@h", "ssh_args": "-p 22"}]}
     assert chan_upsert(c3, r1, set())["id"] == "x" and len(c3["channels"]) == 2 and chan_args("-p 22", 22)[:1] == ["-i"]   # skipped-at-start entries are never patched
     assert srv_check({"host": "h", "user": "u", "name": "a\ud800b"}, {})["name"] == "ab"
+    selftest_keyfix()
+
+
+def selftest_keyfix():
+    """key_rejected: the read-only diagnosis, its parser, the fix command builder and the job's confirm_fix flow (fake transport)."""
+    import subprocess, tempfile, threading
+    pub = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIabc+/= agen-talk@PC-1"
+    dc, fc = diag_cmd(pub), fix_cmd(["home_w", "key"], pub)
+    for c in (dc, fc):   # one single-quoted sh -c argument: nothing a bash / fish / csh login shell would touch
+        assert c.startswith("sh -c '") and c.endswith("'") and "'" not in c[7:-1] and not re.search(r"[!\\\n`]", c), c
+    assert 'grep -qF "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIabc+/=" "$H/.ssh/authorized_keys"' in dc and dc.count("AT-D end") == 1
+    assert fc.index("mkdir -p") < fc.index('chmod go-w "$HOME"') and '"%s %s"' % (AUTH_OPTS, pub) in fc and fc.endswith('echo "AT-F done"\'')
+    assert fix_cmd(["selinux", "ak_mode", "ssh_mode"], pub) == "sh -c '%s'" % "; ".join(
+        ['chmod 700 "$HOME/.ssh" || echo "AT-F fail ssh_mode"', 'chmod 600 "$HOME/.ssh/authorized_keys" || echo "AT-F fail ak_mode"',
+         'restorecon -R "$HOME/.ssh" || echo "AT-F fail selinux"', 'echo "AT-F done"']), "fixed order, fixed strings"
+    for bad in ((["rm"], pub), ([], pub), (["home_w"], pub + "'"), (["home_w"], "ssh-ed25519 AA$(x)")):
+        try:
+            fix_cmd(*bad)
+        except ValueError:
+            continue
+        raise AssertionError(bad)
+    for bad in (pub + "'; rm -rf ~", "ssh-rsa AAAA"):
+        try:
+            diag_cmd(bad)
+        except ValueError:
+            continue
+        raise AssertionError(bad)
+    base = ["AT-D user alice", "AT-D groups alice lab", "AT-D home /data/alice", "AT-D st home 750 alice alice", "AT-D st parent 755 root root",
+            "AT-D st ssh 700 alice alice", "AT-D st ak 600 alice alice", "AT-D key yes", "AT-D file /etc/ssh/sshd_config",
+            "AT-D cfg Include /etc/ssh/sshd_config.d/*.conf", "AT-D cfg PasswordAuthentication yes", "AT-D end"]
+    rep = lambda *edit, drop=(): diag_report("\n".join([x for x in base if not any(x.startswith(d) for d in drop)] + list(edit)))
+    ids = lambda r, lvl=None: [f["id"] for f in r["findings"] if lvl is None or f["level"] == lvl]
+    r = rep("AT-D st home 775 alice alice", drop=("AT-D st home",))   # the user's case: a group-writable home on a shared box
+    assert r["fixes"] == ["home_w"] and ids(r, "admin") == [] and "(현재 775)" in r["findings"][0]["text"] and "StrictModes" in r["findings"][0]["text"], r
+    assert "home=775" in r["summary"] and "fix=home_w" in r["summary"]
+    r = rep("AT-D cfg PubkeyAuthentication no")   # 700/600 fine, the server turned keys off: nothing to fix here, ask the admin
+    assert r["fixes"] == [] and ids(r, "admin") == ["pubkey_off"] and "관리자" in r["findings"][0]["text"], r
+    r = rep("AT-D key no", drop=("AT-D key",))
+    assert r["fixes"] == ["key"] and ids(r) == ["key_missing"], r
+    assert rep("AT-D st ak missing", drop=("AT-D st ak",))["fixes"] == ["key"]
+    r = rep("AT-D st home drwxrwxr-x. 5 alice alice 4096 Oct 1 /data/alice", "AT-D st ssh drwxrwxrwx 2 alice alice", drop=("AT-D st home", "AT-D st ssh"))   # ls -ld fallback
+    assert r["fixes"] == ["home_w", "ssh_mode"], r
+    assert rep("AT-D st home 775 alice alice", "AT-D cfg StrictModes no", drop=("AT-D st home",))["fixes"] == [], "StrictModes off: modes are not the cause"
+    r = rep("AT-D st ssh 700 bob bob", drop=("AT-D st ssh",))
+    assert r["fixes"] == [] and ids(r, "admin") == ["owner_ssh"] and "chown" in r["findings"][0]["text"], r
+    assert ids(rep("AT-D st parent 777 root root", drop=("AT-D st parent",)), "admin") == ["parent_w"]
+    assert ids(rep("AT-D st home 775 root root", drop=("AT-D st home",)), "admin") == ["home_w"], "root-owned: not ours to chmod"
+    r = rep("AT-D cfg Match User alice,carol", "AT-D cfg     PubkeyAuthentication no")
+    assert ids(r, "admin") == ["pubkey_off_match"], r
+    assert ids(rep("AT-D cfg Match User bob", "AT-D cfg  PubkeyAuthentication no"), "admin") == ["unknown"], "a Match for someone else does not apply"
+    assert ids(rep("AT-D cfg Match Group lab", "AT-D cfg  PubkeyAuthentication no"), "admin") == ["pubkey_off_match"]
+    assert "접속 위치" in rep("AT-D cfg Match Address 203.0.113.0/24", "AT-D cfg  PubkeyAuthentication=no")["findings"][0]["text"]
+    dd = ["AT-D file /etc/ssh/sshd_config.d/50-lab.conf", "AT-D cfg PubkeyAuthentication no"]
+    assert ids(rep(*dd), "admin") == ["pubkey_off"], "sshd_config.d is read first when included"
+    assert ids(rep(*dd, drop=("AT-D cfg Include",)), "admin") == ["unknown"], "not included: not read"
+    assert ids(rep(*["AT-D file /etc/ssh/sshd_config.d/50-lab.conf", "AT-D cfg PubkeyAuthentication yes"], "AT-D file /etc/ssh/sshd_config", "AT-D cfg PubkeyAuthentication no"), "admin") == ["unknown"], "first value wins"
+    assert ids(rep("AT-D cfg AuthorizedKeysFile /etc/ssh/keys/%u"), "admin") == ["akfile"] and ids(rep("AT-D cfg AuthorizedKeysFile\t/etc/keys/%u"), "admin") == ["akfile"]
+    assert ids(rep("AT-D cfg AuthorizedKeysFile .ssh/authorized_keys .ssh/authorized_keys2"), "admin") == ["unknown"]
+    assert ids(rep("AT-D cfg PubkeyAcceptedAlgorithms rsa-sha2-512,ecdsa-sha2-nistp256"), "admin") == ["alg"] and ids(rep("AT-D cfg PubkeyAcceptedAlgorithms +ssh-rsa"), "admin") == ["unknown"]
+    assert ids(rep("AT-D cfg AuthenticationMethods publickey,password"), "admin") == ["authmethods"]
+    assert ids(rep("AT-D cfg AllowUsers bob carol@10.*"), "admin") == ["allowusers"] and ids(rep("AT-D cfg AllowUsers al*"), "admin") == ["unknown"]
+    assert rep("AT-D se Enforcing", "AT-D restorecon yes")["fixes"] == ["selinux"] and ids(rep("AT-D ecryptfs yes"), "admin") == ["ecryptfs"]
+    r = diag_report("Welcome\nAT-D st home 777\x1b[2J alice alice\nAT-D st ../../x 777 a a\nAT-D bogus\n" + "x" * 5000)   # hostile / cut-off output
+    assert ids(r) == ["partial", "unknown"] and r["fixes"] == [] and "\x1b" not in json.dumps(r), r
+    assert diag_report("")["fixes"] == [] and ids(diag_report(""), "admin") == ["unknown"]
+    assert chan_key({"ssh": "u@h", "port": 2222}) == ("u", "h", 2222) and chan_key({"ssh": "u@h", "ssh_args": ["-p", "x"]}) is None and chan_key({"ssh": "u@h"}) == ("u", "h", 22)
+    if not WIN and shutil.which("sh"):   # the real commands, in a scratch $HOME: the report parses, the fix fixes
+        with tempfile.TemporaryDirectory() as t:
+            h = Path(t) / "home"
+            (h / ".ssh").mkdir(parents=True)
+            (h / ".ssh" / "authorized_keys").write_text("ssh-ed25519 AAAAother x\n", encoding="utf-8")
+            os.chmod(h, 0o775)
+            env = dict(os.environ, HOME=str(h))
+            run = lambda c: subprocess.run(["sh", "-c", c[len("sh -c '"):-1]], **popen_kw(env=env, capture_output=True, text=True, timeout=30))
+            r = diag_report(run(dc).stdout)
+            assert {"home_w", "key"} <= set(r["fixes"]) and "home=775" in r["summary"], r
+            out = run(fix_cmd(["key", "home_w"], pub)).stdout
+            assert "AT-F done" in out and "AT-F fail" not in out, out
+            assert h.stat().st_mode & 0o777 == 0o755 and pub in (h / ".ssh" / "authorized_keys").read_text(encoding="utf-8")
+            assert not {"home_w", "key"} & set(diag_report(run(dc).stdout)["fixes"])
+
+    # the job: install -> key refused -> diagnosis over the password session -> confirm_fix -> fix -> NEW key-only login -> saved as appkey
+    import logging
+    g = globals()
+    saved = {k: g[k] for k in ("app_key", "pm_open", "pm_auth", "pm_exec", "pm_pycheck")}
+    srv = {"fixed": False, "cmds": [], "diag": "\n".join(base).replace("st home 750", "st home 775"), "opened": 0}
+
+    class T:
+        def __init__(self):
+            self.open, srv["opened"] = True, srv["opened"] + 1
+        def is_active(self): return self.open
+        def close(self): self.open = False
+
+    def fauth(t, user, key=None, password=None):
+        if key is not None and srv["fixed"]:
+            return "key"
+        if password is None:
+            raise SrvErr("wrong_password", "Permission denied (publickey)")
+        assert password == "pw-1", "the job's own password"
+        return "password"
+
+    def fexec(t, cmd, timeout=30, cap=1 << 16):
+        assert t.open
+        srv["cmds"].append(cmd)
+        if cmd == fix_cmd(["home_w"], pub):
+            srv["fixed"] = True
+            return 0, 'AT-F done\n', ""
+        return 0, srv["diag"] if cmd == diag_cmd(pub) else "", ""
+    lines = []
+
+    class H(logging.Handler):
+        def emit(self, rec): lines.append(rec.getMessage())
+    lg, hd = logging.getLogger("agen-talk"), H()
+    lg.addHandler(hd)
+    old_level = lg.level
+    lg.setLevel(logging.INFO)
+
+    def job(choice, diag=None):
+        srv.update(fixed=False, cmds=[], opened=0)
+        if diag:
+            srv["diag"] = diag
+        j = {"cancel": False, "ev": threading.Event(), "accept": None, "state": "connecting", "log": ""}
+        rq = {"host": "example.com", "port": 22, "user": "alice", "auth": "appkey", "password": "pw-1", "python": None}
+        got = []
+        th = threading.Thread(target=srv_job_pm, args=(j, rq, lambda rq_: got.append(dict(rq_)) or {"id": "h", "name": "h"}), daemon=True)
+        th.start()
+        end = time.time() + 5
+        while j.get("state") != "confirm_fix" and th.is_alive() and time.time() < end:
+            time.sleep(0.01)
+        assert j["state"] == "confirm_fix" and j["phase"] == "confirm_fix", j
+        seen = dict(j)
+        if choice == "cancel":
+            j.update(cancel=True, state="error", kind="cancelled")
+        else:
+            j["accept"] = choice
+        j["ev"].set()
+        th.join(5)
+        assert not th.is_alive() and rq["password"] is None
+        return j, seen, got
+    try:
+        g.update(app_key=lambda path=None: ("KEY", pub), pm_open=lambda *a, **k: T(), pm_auth=fauth, pm_exec=fexec, pm_pycheck=lambda t, py: ("ok", ""))
+        SESSION_PW[("alice", "example.com", 22)] = "old"
+        j, seen, got = job("fix")
+        assert seen["fix_cmds"] == ["chmod go-w ~"] and seen["session_ok"] is True and any(f["id"] == "home_w" for f in seen["findings"])
+        assert j["state"] == "done" and got and got[0]["auth"] == "appkey" and j.get("fixed") == ["chmod go-w ~"], j
+        assert srv["cmds"] == [install_cmd(pub), diag_cmd(pub), fix_cmd(["home_w"], pub)] and srv["opened"] == 3, srv["cmds"]   # pw session, refused key, key after fix
+        assert ("alice", "example.com", 22) not in SESSION_PW, "the key works: this run's password is dropped"
+        j, seen, got = job("session", "\n".join(base + ["AT-D cfg PubkeyAuthentication no"]))
+        assert seen.get("fix_cmds") == [] and j["state"] == "done" and got[0]["auth"] == "password-session" and SESSION_PW.pop(("alice", "example.com", 22)) == "pw-1"
+        j, seen, got = job("none")
+        assert j["state"] == "error" and j["kind"] == "key_rejected" and not got and j["findings"], j
+        j, seen, got = job("cancel")
+        assert j["kind"] == "cancelled" and not got
+        # a fix that does not help: key_rejected again, with a fresh diagnosis and no second fix offer
+        g["pm_exec"] = lambda t, cmd, **k: (0, srv["diag"], "") if cmd == diag_cmd(pub) else (0, "", "")
+        j, seen, got = job("fix", "\n".join(base).replace("st home 750", "st home 775"))
+        assert j["state"] == "error" and j["kind"] == "key_rejected" and "여전히" in j["message"] and j.get("fix_cmds") is None and not got, j
+        assert any("key_rejected alice@example.com:22: user=alice" in x for x in lines) and not any("pw-1" in x for x in lines), lines
+        # the OpenSSH fallback: keyinstall's session carried the diagnosis; a fix runs in a second keyinstall console (password asked again)
+        calls, verdicts = [], ["wrong_password", "wrong_password", "ok"]   # before install (normal), after install (refused), after the fix
+        saved2 = {k: g[k] for k in ("ssh_bin", "key_ensure", "srv_install", "srv_verify")}
+        g.update(ssh_bin=lambda n: "ssh", key_ensure=lambda: pub, srv_verify=lambda tgt, rq: (verdicts.pop(0), "Permission denied"),
+                 srv_install=lambda j, rq, tgt, fix=None: calls.append(fix) or {"code": 0, "stdout": "\n".join(base).replace("st home 750", "st home 775")})
+        try:
+            j = {"cancel": False, "ev": threading.Event(), "accept": None, "state": "keygen", "log": ""}
+            got = []
+            th = threading.Thread(target=srv_job, args=(j, {"host": "example.com", "port": 22, "user": "alice", "python": None, "name": ""}, lambda rq_: got.append(1) or {"id": "x", "name": "x"}), daemon=True)
+            th.start()
+            end = time.time() + 5
+            while j.get("state") != "confirm_fix" and time.time() < end:
+                time.sleep(0.01)
+            assert j["state"] == "confirm_fix" and j["session_ok"] is False and j["fix_pw_again"] is True and j["fix_cmds"] == ["chmod go-w ~"], j
+            j["accept"] = "fix"
+            j["ev"].set()
+            th.join(5)
+            assert j["state"] == "done" and calls == [None, ["home_w"]] and got, (j, calls)
+        finally:
+            g.update(saved2)
+    finally:
+        g.update(saved)
+        lg.removeHandler(hd)
+        lg.setLevel(old_level)
+        SESSION_PW.pop(("alice", "example.com", 22), None)
 
 
 def selftest_pack():
@@ -5200,6 +5827,8 @@ def selftest():
     assert node("x", "codex", "x", "user", "u", NOW)["st"] == "user"
     assert node("x", "codex", "x", "user", "u", NOW - FRESH - 1)["st"] == "idle"
     assert node("x", "codex", "x", "user", "u", NOW, True)["st"] == "done"
+    assert node("x", "codex", "x", "done", "d", NOW)["st"] == "done" and node("x", "codex", "x", "done", "d", NOW - FRESH - 1)["st"] == "idle"   # answered main: done, old -> idle
+    assert asks("어떻게 할까요") and asks("Which option do you prefer") and asks("**확인 부탁드려요?**") and not asks("완료했습니다.") and not asks("") and not asks("```\nx?\n```")
     assert fmt(90000) == "1d" and fmt(3900) == "1h05m"
     b = agy_t("2026-10-14 02:16:34+00:00")
     assert b and all(abs(agy_t(x) - b - d) < 1e-3 for x, d in (("2026-10-14 02:16:34.5+00:00", .5), ("2026-10-14 02:16:34.22273+00:00", .22273),

@@ -93,7 +93,7 @@ const Flow = (() => {
     C.setAvatar(r.querySelector('.av'), a || { tool: 'claude', st: 'done', parent: null }); text(r.querySelector('.dt-nm'), nm); attr(r, 'title', nm);
     text(r.querySelector('.cnt'), it.nk ? '· ' + it.nk : ''); r.querySelector('.xp').hidden = !(a && !root && Detail.isCross(a));
     const gl = r.querySelector('.fst .gl'), fsl = r.querySelector('.fsl'), tm = r.querySelector('.el');
-    if (a) { gl.style.display = ''; C.setGlyph(gl, a.st); text(fsl, ST[a.st]); const [t, m] = Detail.when(a); R.setTimeFor(tm, t, m, a.ch); tm.hidden = t == null; C.badge(r.querySelector('.bdg'), ChatList.badgeOf(a, R.isWaiting(a))); }
+    if (a) { gl.style.display = ''; C.setGlyph(gl, a.st); text(fsl, ST[a.st]); const [t, m] = Detail.when(a); R.setTimeFor(tm, t, m, a.ch); tm.hidden = t == null; C.badge(r.querySelector('.bdg'), ChatList.badgeOf(a, R.needsMe(a))); }
     else { gl.style.display = 'none'; text(fsl, '(끝남)'); tm.hidden = true; C.badge(r.querySelector('.bdg'), null); }
     setLines(r.querySelector('.ft'), linesOf(a ? a.key : ms2.ck, root));
   }
