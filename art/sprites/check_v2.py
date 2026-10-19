@@ -2,7 +2,8 @@
 
 Rebuilds the v1 expansion from the sources (every exposure as row strings) and compares it frame-for-frame and
 pixel-for-pixel with what the generated file decodes to under node (its own window.atDecode2, no eval).
-Also checks: fps/loop/key/next, palettes, walker + variants, the 150 KB budget, `node --check`, LF line endings,
+Also checks: fps/loop/key/next, palettes, motion variants + vars rotation sets (seams on the shared raster),
+walker + variants, the 260 KB budget, `node --check`, LF line endings,
 and that the file on disk is exactly what build.py would write now (stale-file guard).
 Usage (repo root): python art/sprites/check_v2.py      Requires: Python 3.12 (stdlib), node on PATH.
 """
@@ -42,8 +43,22 @@ function cmpAnim(tag, a, b) {
 }
 for (const k of ['lead', 'intern']) if (JSON.stringify(S[k]) !== JSON.stringify(exp[k])) errors.push(k + ' dims');
 if (JSON.stringify(S.palettes) !== JSON.stringify(exp.palettes)) errors.push('palettes');
-for (const fam of Object.keys(exp.anims)) for (const size of Object.keys(exp.anims[fam])) for (const st of Object.keys(exp.anims[fam][size]))
-  cmpAnim(fam + '/' + size + '/' + st, S.anims[fam][size][st], exp.anims[fam][size][st]);
+checked.variants = 0;
+for (const fam of Object.keys(exp.anims)) for (const size of Object.keys(exp.anims[fam])) {
+  const E = exp.anims[fam][size], G = S.anims[fam][size];
+  for (const st of Object.keys(E)) {
+    if (st === 'vars') { if (JSON.stringify(G.vars) !== JSON.stringify(E.vars)) errors.push(fam + '/' + size + ' vars'); continue; }
+    cmpAnim(fam + '/' + size + '/' + st, G[st], E[st]);
+    if (st.includes('~')) checked.variants++;
+  }
+  // every rotation set: listed keys decode, same length as the base, first/last exposure is the base frame-0 raster
+  for (const [st, keys] of Object.entries(G.vars || {})) for (const k of keys) {
+    const v = G[k], b = G[st];
+    if (!v || !b) { errors.push(fam + '/' + size + ' vars ' + k + ' missing'); continue; }
+    if (v.frames.length !== b.frames.length || v.frames[0] !== b.frames[0] || (k !== st && v.frames[v.frames.length - 1] !== b.frames[0])) errors.push(fam + '/' + size + '/' + k + ' variant seam');
+  }
+}
+if (!checked.variants) errors.push('no motion variants decoded');
 const W = S.walker, EW = exp.walker;
 for (const k of ['w', 'h', 'anchorX', 'anchorY']) if (W[k] !== EW[k]) errors.push('walker ' + k);
 if (JSON.stringify(W.palettes) !== JSON.stringify(EW.palettes)) errors.push('walker palettes');
@@ -68,7 +83,7 @@ def expected(S):
         return d
     W = S['walker']
     return dict(lead=S['lead'], intern=S['intern'], palettes=S['palettes'],
-                anims={f: {z: {st: a(x) for st, x in sts.items()} for z, sts in zz.items()} for f, zz in S['anims'].items()},
+                anims={f: {z: {st: (x if st == 'vars' else a(x)) for st, x in sts.items()} for z, sts in zz.items()} for f, zz in S['anims'].items()},
                 walker=dict(w=W['w'], h=W['h'], anchorX=W['anchorX'], anchorY=W['anchorY'], palettes=W['palettes'],
                             anims={n: a(x) for n, x in W['anims'].items()},
                             variants=[dict(name=v['name'], palettes=v['palettes'], anims={n: a(x) for n, x in v['anims'].items()})

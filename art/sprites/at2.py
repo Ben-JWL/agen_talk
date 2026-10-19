@@ -5,6 +5,7 @@ pool record  = <ref>!<skip><pixels><skip><pixels>...
   skip    base-26 in A-Z: pixels (row-major) kept from the reference (no letters = 0)
   pixels  literal palette chars ('.' transparent, 1-9 a-z = base-36 index) written from there on
 records are joined with ','. Animations keep fps/loop/key/next and store seq = [raster, hold, raster, hold, ...].
+anims[fam][size].vars (variant rotation sets, lists of state keys) is copied as is.
 Deterministic: rasters are numbered by first appearance, ties between equally good references go to the lower id.
 """
 import json
@@ -102,7 +103,8 @@ def pack(S):
         return d
     V = dict(version=2, lead=S['lead'], intern=S['intern'], palettes=S['palettes'], anims={})
     for fam, sizes in S['anims'].items():
-        V['anims'][fam] = {size: {st: anim(a, pools[size]) for st, a in sts.items()} for size, sts in sizes.items()}
+        V['anims'][fam] = {size: {st: (a if st == 'vars' else anim(a, pools[size])) for st, a in sts.items()}
+                           for size, sts in sizes.items()}
     W = S['walker']
     V['walker'] = dict(w=W['w'], h=W['h'], anchorX=W['anchorX'], anchorY=W['anchorY'], palettes=W['palettes'],
                        anims={nm: anim(a, pools['walker']) for nm, a in W['anims'].items()},

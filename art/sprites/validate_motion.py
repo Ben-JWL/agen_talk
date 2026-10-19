@@ -27,6 +27,7 @@ def check(S):
         for size,states in sizes.items():
             durations[fam][size]={}
             for state,a in states.items():
+                if state=='vars': continue
                 label=f'{fam}/{size}/{state}'
                 durations[fam][size][state]=round(len(a['frames'])/a['fps'],3)
                 if not 0<=a['key']<len(a['frames']): errors.append(label+' invalid key')
@@ -36,6 +37,17 @@ def check(S):
                     # No cut head/hand on any of the four image edges.
                     if any(r[0]!='.' or r[-1]!='.' for r in fr): errors.append(label+f' horizontal clip {i}')
                     if fr[-1].strip('.'): errors.append(label+f' bottom clip {i}')
+            # variants: same length as the base, land exactly on the base frame 0 at both ends, close the
+            # 60-frame secondary wave (agy) and never end mid ahoge/cable rebound
+            for st,keys in states['vars'].items():
+                b=states[st]
+                for vk in keys[1:]:
+                    v=states[vk]; n=len(v['frames'])
+                    if n!=len(b['frames']) or v['fps']!=b['fps']: errors.append(f'{fam}/{size}/{vk} length/fps differs from base')
+                    if v['frames'][0]!=b['frames'][0]: errors.append(f'{fam}/{size}/{vk} start seam')
+                    if v['frames'][-1]!=b['frames'][0]: errors.append(f'{fam}/{size}/{vk} end seam')
+                    if n%60: errors.append(f'{fam}/{size}/{vk} secondary wave not closed ({n} % 60)')
+                    if not 0<=v['key']<n: errors.append(f'{fam}/{size}/{vk} invalid key')
             if size=='lead':
                 a=states['tool']
                 if a['frames'][a['key']][38][42] not in '2345': errors.append(f'{fam}: tool lost fixed (42,38) contact')
@@ -58,7 +70,7 @@ def check(S):
             if len(set(world))!=1: errors.append(f'walker {name}: stance foot slides')
     report=dict(errors=sorted(set(errors)),durations_seconds=durations,walker_steps_px=travel,
                 checks=['dimensions/palettes/headroom','all edges unclipped','60 state timelines',
-                        'intro to loop exact landing','fixed tool contact (42,38)',
+                        'intro to loop exact landing','variant seams on the base frame 0','fixed tool contact (42,38)',
                         'theme identity and monotonic ramps','page-equivalent walker travel and planted-foot lock'])
     print(json.dumps(report['errors'],ensure_ascii=True))
     print('Timeline seconds:',json.dumps(durations['claude']))

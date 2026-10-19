@@ -1,6 +1,7 @@
 /* atDecode2 (art/sprites/at2_decode.js, copied verbatim into ui/src/72-sprites.js by build.py). */
 /* AT_SPRITES v2 -> the v1 runtime shape (frames = arrays of row strings), decoded once at load.
-   Identical exposures share one row array (tagged with _rid) so callers can cache per raster. v1 passes through. */
+   Identical exposures share one row array (tagged with _rid) so callers can cache per raster. v1 passes through.
+   Variant keys (`work~1` ...) decode like any state; anims[f][s].vars (rotation sets) is copied unchanged. */
 window.atDecode2 = function atDecode2(V) {
   if (!V || V.version !== 2 || !V.pools) return V;
   const pools = {};
@@ -39,7 +40,7 @@ window.atDecode2 = function atDecode2(V) {
     S.anims[fam] = {};
     for (const size of Object.keys(V.anims[fam])) {
       const A = V.anims[fam][size], o = {};
-      for (const st of Object.keys(A)) o[st] = expand(A[st], pools[size]);
+      for (const st of Object.keys(A)) o[st] = A[st].seq ? expand(A[st], pools[size]) : A[st];   // `vars` (rotation sets) passes through
       S.anims[fam][size] = o;
     }
   }

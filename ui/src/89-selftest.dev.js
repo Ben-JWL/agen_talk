@@ -50,6 +50,21 @@
     const wi = C.waitInfo({ st: 'stall', age: 1500, procs: [{ cpu: 0 }], why: '' }); A(wi.head === '응답 없음' && wi.warn === 'CPU 0 %' && wi.zero, 'stall evidence');
     // model: HTML in agent text never becomes markup
     A(!document.querySelector('#views script, #views img'), 'no injected elements');
+    // pixel office: motion variants rotate per agent, switching only at loop boundaries onto the shared frame-0 raster
+    const CH = typeof OvOffice !== 'undefined' && OvOffice.chars();
+    if (CH) {
+      const VS = CH.vars('claude', 'lead', 'work'), wb = CH.anim('claude', 'lead', 'work');
+      A(VS && VS.length >= 3 && VS[0] === 'work' && VS.every(k => CH.anim('claude', 'lead', k).n === wb.n) && CH.vars('agy', 'intern', 'idle').length >= 3, 'sprite motion variants exist (same length as the base loop)');
+      const ms = 1000 / wb.fps, seen = new Set(), seen2 = new Set(); let prev = null, seams = true;
+      for (let f = 0; f < wb.n * 40; f++) {
+        const p = CH.pick('claude', 'lead', 'work', 0, f * ms + 1, .37, false); seen.add(p.state); seen2.add(CH.pick('claude', 'lead', 'work', 0, f * ms + 1, .81, false).state);
+        if (prev && p.seg !== prev.seg && (p.i !== 0 || (prev.state !== 'work' && prev.a.frames[prev.i] !== p.a.frames[0]))) seams = false;
+        if (prev && p.seg === prev.seg && p.state !== prev.state) seams = false;
+        prev = p;
+      }
+      A(seen.size > 1 && seen2.size > 1 && seams, 'pick rotates work variants only at loop boundaries (' + [...seen].join(',') + ')');
+      A(CH.pick('claude', 'lead', 'work', 0, 12345, .37, true).state === 'work' && CH.pick('claude', 'lead', 'user', 1e6, 1e6, .37, false).state.startsWith('user_loop'), 'reduced motion = base key; intros hand over to the loop rotation');
+    }
     A(R.isWaiting({ st: 'dead', age: 10 }) && !R.isWaiting({ st: 'dead', age: 9999 }) && R.isWaiting({ st: 'stall', age: 9999 }), 'isWaiting');
     // talk (TALK-UX §10): previews, msgs normalisation, spawn/down merge, done/up dedupe, fan-out, my talk matched by msg_id, 5-minute hold expiry
     A(C.actText({ k: 'mdown', x: 'DATA' }) === '부모 지시: DATA' && C.actText({ k: 'mdown', x: '', enc: true }) === '부모 지시: 🔒 암호화됨' && C.actText({ k: 'mup', x: '끝' }) === '보고: 끝' && C.actText({ k: 'mtalk', x: '안녕' }) === '나 (에겐 톡): 안녕' && C.actText({ k: 'mpeer', x: 'hi' }) === '다른 세션: hi', 'actText talk cases');

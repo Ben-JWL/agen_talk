@@ -1,7 +1,7 @@
 """Build the pixel-office characters: `python art/sprites/build.py` writes ui/src/72-sprites.js (and nothing else).
 
 Stdlib only. The output is deterministic (same sources -> byte-identical file, LF line endings) and must stay
-within the 150 KB budget. Checks: `python art/sprites/check_v2.py`, `python art/sprites/validate_motion.py`.
+within the 260 KB budget. Checks: `python art/sprites/check_v2.py`, `python art/sprites/validate_motion.py`.
 """
 import json
 import os
@@ -21,13 +21,13 @@ import walker as WK
 from rig import lead_frame, intern_frame
 
 OUT = os.path.normpath(os.path.join(HERE, '..', '..', 'ui', 'src', '72-sprites.js'))
-BUDGET = 150 * 1024
+BUDGET = 260 * 1024
 IDX = '0123456789abcdefghijklmnopqrstuvwxyz'
 STATES = ['work', 'tool', 'child', 'user', 'user_loop', 'stall', 'idle', 'done', 'done_loop', 'stopped']
 
 
 def merged(FAM, fam, state, f):
-    base = state.replace('_loop', '')
+    base = state.split('~')[0].replace('_loop', '')
     t = FAM.get(fam, {}).get(base, {})
     p = dict(f)
     for k, v in t.items():
@@ -54,6 +54,18 @@ def anims_for(fam, size):
         if a.get('next'):
             d['next'] = a['next']
         out[st] = d
+    # Motion variants `<state>~N` (same fps/length as the base loop) and the rotation sets the page picks from.
+    for st, keys in motion.var_keys(size).items():
+        for vk in keys[1:]:
+            a = motion.animation(fam, size, vk)
+            frames = []
+            for f in a['frames']:
+                p = merged(M.FAM, fam, vk, f)
+                k = repr(sorted(p.items()))
+                if k not in cache: cache[k] = fn(fam, p)
+                frames.append(cache[k])
+            out[vk] = dict(fps=a['fps'], loop=True, key=a['key'], frames=frames, review=a['review'])
+    out['vars'] = motion.var_keys(size)
     # Identical landing drawings: no face, hand or hair pop when the adapter follows next.
     for st in ('user','done'):
         out[st]['frames'][-3:]=[out[st+'_loop']['frames'][0]]*3
@@ -119,6 +131,35 @@ def validate(S):
                         for c in used:
                             if c not in IDX or not P[IDX.index(c)]:
                                 errs.append(f'palette {th}/{fam} lacks {c!r}')
+            # variants listed in vars: same size/clip/palette checks, same fps and length as the base,
+            # first and last exposure = the base frame-0 drawing (switching at a loop boundary never pops)
+            A = S['anims'][fam][size]
+            for st, keys in A.get('vars', {}).items():
+                b = A.get(st)
+                if not b or keys[0] != st:
+                    errs.append(f'vars {fam}/{size}/{st}: base missing or not first')
+                    continue
+                for vk in keys[1:]:
+                    v = A.get(vk)
+                    if not v or not v['frames']:
+                        errs.append(f'missing variant {fam}/{size}/{vk}')
+                        continue
+                    if not v['loop'] or v['fps'] != b['fps'] or len(v['frames']) != len(b['frames']):
+                        errs.append(f'variant {fam}/{size}/{vk}: loop/fps/length differ from the base')
+                    if v['frames'][0] != b['frames'][0] or v['frames'][-1] != b['frames'][0]:
+                        errs.append(f'variant seam {fam}/{size}/{vk}: must start and end on the base frame 0')
+                    for i, fr in enumerate(v['frames']):
+                        if len(fr) != d['h'] or any(len(r) != d['w'] for r in fr):
+                            errs.append(f'size {fam}/{size}/{vk}/{i}')
+                        top = next((y for y, r in enumerate(fr) if r.strip('.')), 99)
+                        if top < 2:
+                            errs.append(f'clip: {fam}/{size}/{vk}/{i} filled at y={top} (<2)')
+                        used = set(''.join(fr)) - {'.'}
+                        for th in pal.THEMES:
+                            P = S['palettes'][th][fam]
+                            for c in used:
+                                if c not in IDX or not P[IDX.index(c)]:
+                                    errs.append(f'palette {th}/{fam} lacks {c!r}')
     wsets = [(S['walker']['anims'], S['walker']['palettes'])] + [(v['anims'], v['palettes']) for v in S['walker'].get('variants', [])]
     for anims_, pals_ in wsets:
       for nm, a in anims_.items():
@@ -157,7 +198,7 @@ def main():
         return 1
     with open(OUT, 'wb') as f:  # bytes: LF only on every OS
         f.write(data)
-    n = sum(len(a['frames']) for f in S['anims'].values() for s in f.values() for a in s.values())
+    n = sum(len(a['frames']) for f in S['anims'].values() for s in f.values() for k, a in s.items() if k != 'vars')
     print('exposures', n, '->', os.path.relpath(OUT, os.path.join(HERE, '..', '..')).replace(os.sep, '/'), len(data), 'bytes')
     return 0
 

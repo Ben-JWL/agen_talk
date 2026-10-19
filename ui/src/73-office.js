@@ -266,7 +266,7 @@ const Chars = {
     if (!a || !a.frames || !a.frames.length) return null;
     return { fps: a.fps || 8, n: a.frames.length, loop: a.loop !== false, next: a.next && A[a.next] ? a.next : null, key: a.key != null ? a.key : 0, frames: a.frames };
   },
-  /* intros play once from the state change, then `next`; loops are phase-shifted per agent */
+  /* intros play once from the state change, then `next`; loops are phase-shifted per agent. Reduced motion: base key frame */
   pick(fam, size, st, since, t, ph, reduce) {
     const a = this.anim(fam, size, st), state = st;
     if (!a) return null;
@@ -275,10 +275,32 @@ const Chars = {
     if (!a.loop) {
       const i = Math.floor(since / ms);
       if (i < a.n) return { a, state, i };
-      if (a.next) { const b = this.anim(fam, size, a.next); return { a: b, state: a.next, i: Math.floor((since - a.n * ms) / (1000 / b.fps)) % b.n }; }
+      if (a.next) return this.loopPick(fam, size, a.next, since - a.n * ms, 0, ph);
       return { a, state, i: a.n - 1 };
     }
-    return { a, state, i: Math.floor(t / ms + ph * a.n) % a.n };
+    return this.loopPick(fam, size, st, t, ph * a.n, ph);
+  },
+  /* motion variants (AT_SPRITES anims[f][s].vars[st] = [st, 'st~1', ...], same length as the base, all start and end on
+     the base frame 0): time is cut into segments of one base loop; each segment plays one variant, picked per agent from
+     a hash of (phase, segment). Each draw weighs base .5, the rest share .5, and excludes the previous segment's variant
+     (chained inside blocks of 8 segments, seeded from the previous block): the base plays ~40 % of segments in a 3-4 set,
+     half in a pair, back-to-back repeats are rare. Per-frame cost: at most 16 integer hashes */
+  vars(fam, size, st) { const A = ((this.src.anims[fam] || {})[size]) || {}, v = A.vars && A.vars[st]; return v && v.length > 1 && A[st] ? v.filter(k => A[k] && A[k].frames) : null; },
+  mix(a, b) { let h = Math.imul(a ^ 0x9E3779B9, 0x85EBCA6B) ^ Math.imul((b + 0x7F4A7C15) | 0, 0xC2B2AE35); h ^= h >>> 15; h = Math.imul(h, 0x2C1B3C6D); h ^= h >>> 12; return h >>> 0; },
+  varIdx(n, seed, seg) {
+    const w = k => (k ? .5 / (n - 1) : .5), draw = (s, ex) => {
+      let u = (this.mix(seed, s) % 10000) / 10000 * (1 - (ex < 0 ? 0 : w(ex))), last = 0;
+      for (let k = 0; k < n; k++) { if (k === ex) continue; last = k; if ((u -= w(k)) < 0) return k; }
+      return last;
+    };
+    const run = (b, to, ex) => { let c = draw(b, ex); for (let s = b + 1; s <= to; s++) c = draw(s, c); return c; }, b = seg - (((seg % 8) + 8) % 8);
+    return run(b, seg, run(b - 8, b - 1, -1));
+  },
+  loopPick(fam, size, st, t, off, ph) {
+    const a = this.anim(fam, size, st), g = Math.floor(t / (1000 / a.fps) + off), seg = Math.floor(g / a.n), i = g - seg * a.n, keys = this.vars(fam, size, st);
+    if (!keys) return { a, state: st, i, seg };
+    const v = keys[this.varIdx(keys.length, Math.floor(ph * 0x7FFFFFFF) | 0, seg)], b = v === st ? a : this.anim(fam, size, v);
+    return { a: b, state: v, i: Math.min(i, b.n - 1), seg };
   },
   /* one frame -> canvas (night tint + short rim from the scene); identical exposures share a raster id (v2 _rid) */
   frame(fam, size, st, pick, v, blink, ctx) {
@@ -1116,6 +1138,7 @@ const Office = {
   }
   return {
     available: () => Chars.load(),
+    chars: () => (Chars.load() ? Chars : null),   // selftest hook (variant rotation)
     update(host, D, api, force) {
       AP = api; Office.D = D;
       if (!Chars.load()) return;
