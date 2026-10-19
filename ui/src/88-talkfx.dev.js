@@ -44,6 +44,10 @@
   const D = [dis('cl-nosock', 'claude', '구버전 세션', 'no-socket'), dis('cl-print', 'claude', 'claude -p 배치', 'not-interactive'), dis('cl-self', 'claude', '에겐 톡을 띄운 세션', 'self'), dis('cl-ended', 'claude', '끝난 세션', 'ended', 'done')];
   const AG = dis('agy-main', 'agy', '문서 요약 (agy)', 'unsupported', 'idle', { acts: [], last: '초록 12편 중 9편을 요약했습니다.' });
   AG.kids = [nd('agy-sub', 'agy', 'literature_scan', 'done', '완료', 200, null, { meta: '6 steps', msgs: [M_('down', 'agy', 'agy-main', 'agy-sub', '문서 요약 (agy)', 900, '최근 2년 관련 논문 12편의 초록을 읽고 핵심 주장을 한 줄씩 정리해 줘.'), M_('up', 'agy', 'agy-sub', 'agy-main', '문서 요약 (agy)', 400, '12편 중 9편을 정리했습니다. 3편은 초록이 없어 건너뛰었습니다.')] })];
+  // 6b. look variety in the pixel office: a second AGY lead next to the first, a Codex lead with two Codex interns
+  const AG2 = dis('agy-notes', 'agy', '용어집 정리 (agy)', 'unsupported', 'idle', { acts: [], last: '용어 40개를 정리했습니다.' });
+  AG2.kids = [nd('agy-gloss', 'agy', 'glossary_check', 'work', '응답 생성 중', 3, 120, { meta: '4 steps' }), nd('agy-terms', 'agy', 'term_links', 'idle', '완료', 300, null, { meta: '3 steps' })];
+  CD.kids = [nd('cx-chart', 'codex', 'chart_draw', 'work', '모델 응답 중', 5, 200, { meta: 'gpt-5.1 · worker' }), nd('cx-table', 'codex', 'table_fmt', 'idle', '답변 끝남', 400, null, { meta: 'gpt-5.1 · worker' })];
   // 7. 20+ node tree
   const B = nd('cl-big', 'claude', '릴리스 전 일괄 점검', 'child', '하위 에이전트 12개 대기', 20, 3400, { meta: 'pid 52000 · ~/work/release · claude-opus-4', talk: TOK, hidden: 0 });
   const ws = [['done', 5], ['done', 4], ['done', 3], ['done', 5], ['done', 6], ['work', 2], ['work', 1], ['user', 3]];
@@ -70,13 +74,15 @@
   P.project = PDATA; MM.project = PDATA; P.kids[1].project = PJ('stats-lib', '@1a2b3c4', 'github.com/example/stats-lib', '~/work/stats-lib');
   BY.project = PAG; B.project = { ...PAG, branch: 'release/0.2' }; WN.project = { ...PAG, branch: 'main', root: 'C:\Users\me\agen_talk' };
   WA.project = PJ('ops-scripts', null, 'local:~/work/logs', '~/work/logs'); CD.project = PJ('report-tools', 'main', 'github.com/example/report-tools', '~/work/aff'); CN.project = CD.project;
-  AG.project = PJ('문서-사이트', 'main', 'local:~/work/문서-사이트', '~/work/문서-사이트'); CL.project = PJ('<b>lab</b>', 'x', 'local:~/work/x', '~/work/x');   // the markup-looking name lives on the last server so screenshots stay clean
+  AG.project = PJ('문서-사이트', 'main', 'local:~/work/문서-사이트', '~/work/문서-사이트'); AG2.project = AG.project; CL.project = PJ('<b>lab</b>', 'x', 'local:~/work/x', '~/work/x');   // the markup-looking name lives on the last server so screenshots stay clean
   D[1].project = PJ('infra-scripts', 'ops/cron', 'github.com/example/infra-scripts', '~/infra');
-  const ROOTS = { s01: [P, MM, BY, WA, CD, CN, ...D, AG, B], pc: [WN], cloud: [CL] };
+  const ROOTS = { s01: [P, MM, BY, WA, CD, CN, ...D, AG, AG2, B], pc: [WN], cloud: [CL] };
   const chans = () => [{ id: 's01', name: 'gpu-01', kind: 'ssh', state: 'ok', error: null, t: Date.now() / 1000, ssh: 'gpu.example.com', ssh_args: [] }, { id: 'pc', name: '내 PC', kind: 'local', state: 'ok', error: null, t: Date.now() / 1000 },
     { id: 'cloud', name: 'cloud-a', kind: 'ssh', state: 'error', error: 'ssh: connect to host cloud.example.com port 22: Connection timed out', t: Date.now() / 1000 - 120, ssh: 'cloud.example.com', ssh_args: [] }];
   const aged = (list, dt) => list.map(n => ({ ...n, age: n.age == null ? null : n.age + dt, since: n.since == null ? null : n.since + dt, kids: aged(n.kids, dt) }));
   const find = (id, list = Object.values(ROOTS).flat()) => { for (const n of list) { if (n.id === id) return n; const r = find(id, n.kids); if (r) return r; } return null; };
+  // ?walk=1 (screenshots): the pixel office starts an idle walk as soon as an idle agent is on screen, with a long stay
+  if (new URLSearchParams(location.search).has('walk')) setTimeout(() => { if (typeof OvOffice !== 'undefined') OvOffice.walkNow(); }, 300);
   const fx = window.__fx = { down: false, nodes: ROOTS, talkOn: true, posts: [], find,
     deliver(key) { const [ch, id] = [key.slice(0, key.indexOf(':')), key.slice(key.indexOf(':') + 1)], n = find(id), e = (R.A.talks[key] || []).slice().reverse().find(x => x.mid); if (!n || !e) return false; n.msgs = [...n.msgs, M_('down', 'talk', 'agen-talk:alice@PC', id, '에겐 톡', 1, e.text, { msg_id: e.mid, by: 'alice@PC' })]; return true; } };
   const j = (code, body, wait = 0) => new Promise(r => setTimeout(() => r(new Response(JSON.stringify(body), { status: code, headers: { 'Content-Type': 'application/json' } })), wait));

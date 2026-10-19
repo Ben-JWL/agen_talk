@@ -2,6 +2,26 @@ from core import Part, Canvas
 import lead as L
 
 AXIS = 21
+# Per raster: head-box origin, drawn head angle, body offset and the pixels drawn in front of the head (arms, hands,
+# props, sweat; plus their outline). build.py turns this into AT_SPRITES pools[*].hd / .oc so the page can place
+# accessory overlays on the head (following bobs and turns) and keep a hand or a mug in front of them.
+META = {}
+VIEWS = {'L': 'A', 'LF': 'B', 'F': 'C', 'FR': 'D', 'R': 'E'}
+
+
+def note(cv, rows, hx, hy, ang, bx, by, head_end):
+    front = set()
+    for y in range(cv.h):
+        for x in range(cv.w):
+            if cv.lay[y][x] > head_end:
+                front.add((x, y))
+    for (x, y) in list(front):
+        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            X, Y = x + dx, y + dy
+            if 0 <= X < cv.w and 0 <= Y < cv.h and cv.lay[Y][X] == -1 and cv.px[Y][X] != '.':
+                front.add((X, Y))
+    META[tuple(rows)] = dict(hx=hx, hy=hy, v=VIEWS[ang], bx=bx, by=by, front=frozenset(front))
+    return rows
 
 
 def stamp(cv, rows, x, y):
@@ -113,6 +133,7 @@ def lead_frame(fam, p):
         cv.put(L.AG_FLOAT[p.get('fl', ph) % 3], hx + 5 + (2 if ang == 'R' else 1 if ang == 'F' else 0), hy + 3)
         gp, gdx, gdy = hd['gog']
         cv.put(gp, hx + gdx, hy + gdy)
+    head_end = cv.n
     # ---- arms (+ hand sprites)
     for side in 'LR':
         a = p.get('arm' + side)
@@ -133,7 +154,7 @@ def lead_frame(fam, p):
         c = cv.px[y][x]
         if c != '.' and cv.lay[y][x] == -1 and (y + 1 >= cv.h or cv.px[y + 1][x] == '.'):
             cv.px[y][x] = '.'
-    return cv.rows()
+    return note(cv, cv.rows(), hx, hy, ang, bx, by, head_end)
 
 
 import intern as I
@@ -204,6 +225,7 @@ def intern_frame(fam, p):
     if fam == 'agy':
         cv.put(I2.AG_FRONT[ang], hx, hy)
         cv.put(I2.AG_GOG[ang], hx, hy + 3)
+    head_end = cv.n
     if p.get('sw') is not None:
         sx = fx + (11 if ang != 'L' else 0)
         cv.put(I.SWEAT[p['sw'] % 6], sx, fy + 1 + min(p['sw'], 2))
@@ -222,7 +244,7 @@ def intern_frame(fam, p):
         c = cv.px[y][x]
         if c != '.' and cv.lay[y][x] == -1 and (y + 1 >= cv.h or cv.px[y + 1][x] == '.'):
             cv.px[y][x] = '.'
-    return cv.rows()
+    return note(cv, cv.rows(), hx, hy, ang, bx, by, head_end)
 
 
 def put_ihands(cv, arm, side, bx, by):

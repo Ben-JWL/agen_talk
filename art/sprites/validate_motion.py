@@ -60,6 +60,18 @@ def check(S):
             for ramp in ('fghij','klmn','opq'):
                 light=[pal.to_oklch(p[build.IDX.index(c)])[0] for c in ramp]
                 if any(a>=b for a,b in zip(light,light[1:])): errors.append(f'{theme}/{fam}: unordered {ramp}')
+    # v2.1 looks: every look's outfit ramps stay ordered; skin/hair alternatives are ordered dark -> light too
+    L=S['looks']; n=len(L['idx'])
+    for theme in pal.THEMES:
+        for fam in pal.FAMS:
+            for k,s in enumerate(L['pal'][theme][fam][1:],1):
+                cols={c:'#'+s[6*i:6*i+6] for i,c in enumerate(L['idx'])}
+                for ramp in ('abcde','fghij','klmn'):
+                    light=[pal.to_oklch(cols[c])[0] for c in ramp]
+                    if any(a>=b for a,b in zip(light,light[1:])): errors.append(f'{theme}/{fam} look {k}: unordered {ramp}')
+    for k,s in enumerate(L['skin'][1:],1):
+        light=[pal.to_oklch('#'+s[6*i:6*i+6])[0] for i in range(4)]
+        if any(a>=b for a,b in zip(light,light[1:])): errors.append(f'skin {k}: unordered')
     walker=S['walker']; travel={}
     for name,anims in [('a',walker['anims'])]+[(v['name'],v['anims']) for v in walker['variants']]:
         a=anims['walk']; d=steps(a['frames']); travel[name]=d
@@ -69,9 +81,9 @@ def check(S):
             world=[sum(d[:i])+11-i%6 for i in range(start,start+6)]
             if len(set(world))!=1: errors.append(f'walker {name}: stance foot slides')
     report=dict(errors=sorted(set(errors)),durations_seconds=durations,walker_steps_px=travel,
-                checks=['dimensions/palettes/headroom','all edges unclipped','60 state timelines',
+                checks=['dimensions/palettes/headroom','accessory overlays inside every raster they can sit on','look ramps ordered','all edges unclipped','60 state timelines',
                         'intro to loop exact landing','variant seams on the base frame 0','fixed tool contact (42,38)',
-                        'theme identity and monotonic ramps','page-equivalent walker travel and planted-foot lock'])
+                        'theme identity and monotonic ramps','page-equivalent walker travel and planted-foot lock (all %d walkers)'%(1+len(walker['variants']))])
     print(json.dumps(report['errors'],ensure_ascii=True))
     print('Timeline seconds:',json.dumps(durations['claude']))
     print('Walker:',travel)

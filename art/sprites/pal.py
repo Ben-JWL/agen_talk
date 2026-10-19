@@ -133,20 +133,68 @@ THEME_RAMP = {
 }
 
 
-def palette(theme, fam):
-    o = OUTFIT[theme][fam]
+# ---- per-agent looks (v2.1): the page picks a look per agent id; look 0 is the family's base palette above.
+# A look swaps the hair ramp and the outfit (cloth + second cloth) ramps; skin comes from a separate small set.
+# The accent ramp (o p q: Claude's clip / intern beanie, Codex's headphones, AGY's goggles and ribbon), eyes and the
+# silhouettes never change, so the family stays recognisable at a glance.
+NLOOKS = 5
+LOOK_IDX = '1abcdefghijklmnstwz'   # palette slots a look overrides (outline + hair + outfit + its decor/rim)
+SKIN_IDX = '23456'
+# hair mids per family: base first (its hand-picked ramp above), then 4 alternatives that keep the family's mood
+HAIR_LOOK = {
+    'claude': [None, '#6e4434', '#3f3238', '#c46a3c', '#c9a476'],     # dark brown, near-black, copper, ash blonde
+    'codex':  [None, '#2c2a30', '#6e4c3a', '#9ca2ae', '#3c6a70'],     # black, chestnut, silver, deep teal
+    'agy':    [None, '#e6a2bc', '#9fd4c4', '#a6b8ea', '#ece0cc'],     # pink, mint, sky, platinum
+}
+# skin: 0 = the family's own ramp, then a shared fair / tan / deep set (deep step, shade, base, light, blush)
+SKIN_LOOK = [None,
+             ['#a06a66', '#d8a292', '#f8d8c6', '#fff2e6', '#f2b2a6'],
+             ['#6e4234', '#a46c50', '#cf9870', '#ecc49a', '#d08470'],
+             ['#3e2622', '#6a4032', '#956048', '#bb8664', '#a65a4c']]
+# outfit candidates per theme (cloth mid, second cloth mid): every look stays inside the theme's colour mood
+THEME_CLOTH = {
+    'claude':  [('#3e5a7a', '#efe0c6'), ('#7d9a6a', '#f2e4c8'), ('#8a4a6a', '#f6e6d6'), ('#d8a548', '#5e4a3c'),
+                ('#2f6f6a', '#f0e2c8'), ('#c8643f', '#f2e4c8'), ('#5e4a3c', '#efe0c6'), ('#d0a874', '#fbf3e4')],
+    'chatgpt': [('#3a4a5a', '#e4e8e6'), ('#8fd6bc', '#202328'), ('#e2e6e4', '#202328'), ('#5a6470', '#10a37f'),
+                ('#0c7a60', '#f2f4f3'), ('#e4e8e6', '#10a37f'), ('#202328', '#f2f4f3'), ('#14a57f', '#f6f8f7')],
+    'gemini':  [('#9b72cb', '#f4f2ff'), ('#d47ec8', '#2e3488'), ('#3fa7b8', '#ece6ff'), ('#e6ecfc', '#4a68f0'),
+                ('#5a4ab8', '#f0c8f0'), ('#7586e6', '#ece6ff'), ('#2e3488', '#c8d4ff'), ('#4a68f0', '#f4f2ff')],
+    'grok':    [('#6a6a6e', '#f2f2f2'), ('#a8a8ac', '#1a1a1a'), ('#3a3e48', '#dcdcdc'), ('#dedede', '#3a3a3a'),
+                ('#4e4e52', '#c8c8c8'), ('#e2e2e2', '#1a1a1a'), ('#1c1c1e', '#f4f4f4'), ('#2a2a2c', '#f6f6f6')],
+    'muse':    [('#4f78c8', '#fbeef4'), ('#ffd166', '#4c2a80'), ('#2ec4b6', '#fff3fb'), ('#f06aa8', '#2f3a8a'),
+                ('#8a5ad0', '#ffe6a8'), ('#c85a9c', '#fbeef4'), ('#4c2a80', '#ff9ccf'), ('#b357e6', '#fff3fb')],
+}
+FAM_OFF = {'claude': 0, 'codex': 1, 'agy': 2}
+
+
+def look_outfit(theme, fam, look):
+    """(cloth, second) mids for look >= 1: the theme's candidates minus every family's base cloth (a Codex agent
+    never borrows Claude's signature jacket), rotated per family."""
+    bases = {OUTFIT[theme][f]['C'].lower() for f in FAMS}
+    cand = [c for c in THEME_CLOTH[theme] if c[0].lower() not in bases]
+    return cand[(FAM_OFF[fam] + look - 1) % len(cand)]
+
+
+def palette(theme, fam, look=0, skin=0):
+    o = dict(OUTFIT[theme][fam])
+    hair = HAIR[fam]
+    if look:
+        o['C'], o['D'] = look_outfit(theme, fam, look)
+        o['line'] = 'look' if o['line'] else None
+        hm = HAIR_LOOK[fam][look]
+        hair = ramp(hm, 5, lo=0.22, hi=max(0.04, min(0.2, (0.97 - to_oklch(hm)[0]) * 0.9)), shift=0.16, cdark=0.9)
     tr = THEME_RAMP[theme]
     P = ['#000000'] * 36
 
     def put(chars, cols):
         for ch, col in zip(chars, cols):
             P['0123456789abcdefghijklmnopqrstuvwxyz'.index(ch)] = col
-    sk = SKIN[fam]
+    sk = SKIN_LOOK[skin] if skin else SKIN[fam]
     put('23456', sk)
     put('7', [EYE[fam][0]])
     put('8', [EYE[fam][1]])
     put('9', [MOUTH[fam]])
-    put('abcde', HAIR[fam])
+    put('abcde', hair)
     cl = o['C']
     # very light / very dark cloth need asymmetric ramps
     L = to_oklch(cl)[0]
@@ -169,7 +217,9 @@ def palette(theme, fam):
     alo, ahi = (0.34, 0.04) if La > 0.86 else (0.12, 0.24) if La < 0.3 else (0.26, 0.12)
     put('opq', ramp(acc, 3, lo=min(alo, 0.24), hi=ahi, shift=0.12, cdark=0.78))
     put('r', [o['r']])
-    if o['line']:
+    if o['line'] == 'look':
+        put('st', [cloth[3], cloth[1]])
+    elif o['line']:
         put('st', list(o['line']))
     else:
         put('st', [cloth[2], cloth[1]])
@@ -182,7 +232,7 @@ def palette(theme, fam):
     # outline: deep hue-shifted mix of cloth dark and an indigo-plum
     # outer outline: a desaturated, hue-shifted dark taken from this figure's own cloth + hair darks
     # (never black, never violet): carries the silhouette on light wood/wallpaper and on night scenes.
-    Lc, Cc, Hc = to_oklch(mix(cloth[0], HAIR[fam][0], 0.35))
+    Lc, Cc, Hc = to_oklch(mix(cloth[0], hair[0], 0.35))
     put('1', [from_oklch(max(0.17, min(0.24, Lc - 0.14)), min(Cc * 0.7, 0.055), Hc)])
     # skin deep step a touch darker so hands/jaw hold their edge on the desk wood
     P[2] = mix(sk[0], '#5a3030', 0.35)

@@ -3,7 +3,7 @@
 Rebuilds the v1 expansion from the sources (every exposure as row strings) and compares it frame-for-frame and
 pixel-for-pixel with what the generated file decodes to under node (its own window.atDecode2, no eval).
 Also checks: fps/loop/key/next, palettes, motion variants + vars rotation sets (seams on the shared raster),
-walker + variants, the 260 KB budget, `node --check`, LF line endings,
+walker + variants (generic and family walkers), v2.1 looks, per-raster head anchors (_hd) and occlusion sets (_oc), the 260 KB budget, `node --check`, LF line endings,
 and that the file on disk is exactly what build.py would write now (stale-file guard).
 Usage (repo root): python art/sprites/check_v2.py      Requires: Python 3.12 (stdlib), node on PATH.
 """
@@ -39,8 +39,11 @@ function cmpAnim(tag, a, b) {
     checked.exposures++;
     if (A.length !== B.length) { errors.push(tag + ' f' + i + ' rows'); continue; }
     for (let y = 0; y < A.length; y++) { checked.pixels += A[y].length; if (A[y] !== B[y]) { errors.push(tag + ' f' + i + ' row ' + y); break; } }
+    if (b.hd) { checked.anchors++; if (JSON.stringify(A._hd) !== JSON.stringify(b.hd[i])) errors.push(tag + ' f' + i + ' head anchor ' + JSON.stringify(A._hd) + ' != ' + JSON.stringify(b.hd[i])); }
+    if (b.oc) { const got = A._oc ? [...A._oc].sort((p, q) => p - q) : []; if (JSON.stringify(got) !== JSON.stringify(b.oc[i])) errors.push(tag + ' f' + i + ' occlusion'); }
   }
 }
+checked.anchors = 0;
 for (const k of ['lead', 'intern']) if (JSON.stringify(S[k]) !== JSON.stringify(exp[k])) errors.push(k + ' dims');
 if (JSON.stringify(S.palettes) !== JSON.stringify(exp.palettes)) errors.push('palettes');
 checked.variants = 0;
@@ -66,8 +69,11 @@ for (const nm of Object.keys(EW.anims)) cmpAnim('walker/' + nm, W.anims[nm], EW.
 EW.variants.forEach((v, j) => {
   if (!W.variants[j] || W.variants[j].name !== v.name) { errors.push('walker variant ' + v.name); return; }
   if (JSON.stringify(W.variants[j].palettes) !== JSON.stringify(v.palettes)) errors.push('walker.' + v.name + ' palettes');
+  if (W.variants[j].fam !== v.fam || W.variants[j].size !== v.size) errors.push('walker.' + v.name + ' fam/size');
   for (const nm of Object.keys(v.anims)) cmpAnim('walker.' + v.name + '/' + nm, W.variants[j].anims[nm], v.anims[nm]);
 });
+if (JSON.stringify(S.looks) !== JSON.stringify(exp.looks)) errors.push('looks');
+if (!checked.anchors) errors.push('no head anchors decoded');
 checked.rasters = S.rasters;
 console.log(JSON.stringify({ errorCount: errors.length, errors: errors.slice(0, 20), checked }));
 process.exit(errors.length ? 1 : 0);
@@ -75,19 +81,32 @@ process.exit(errors.length ? 1 : 0);
 
 
 def expected(S):
-    def a(x):
+    def a(x, pool):
         d = {k: x[k] for k in ('fps', 'loop', 'key') if k in x}
         if x.get('next'):
             d['next'] = x['next']
         d['frames'] = x['frames']
+        hd, oc = [], []
+        for fr in x['frames']:
+            m = build.meta_of(fr)
+            hd.append([m['v'], m['hx'], m['hy'], m['bx'], m['by']])
+            oc.append(build.occ_of(pool, fr))
+        d['hd'], d['oc'] = hd, oc
         return d
     W = S['walker']
-    return dict(lead=S['lead'], intern=S['intern'], palettes=S['palettes'],
-                anims={f: {z: {st: (x if st == 'vars' else a(x)) for st, x in sts.items()} for z, sts in zz.items()} for f, zz in S['anims'].items()},
+
+    def var(v):
+        d = dict(name=v['name'], anims={n: a(x, 'walker') for n, x in v['anims'].items()})
+        if v.get('palettes'):
+            d['palettes'] = v['palettes']
+        if v.get('fam'):
+            d.update(fam=v['fam'], size=v['size'])
+        return d
+    return dict(lead=S['lead'], intern=S['intern'], palettes=S['palettes'], looks=S['looks'],
+                anims={f: {z: {st: (x if st == 'vars' else a(x, z)) for st, x in sts.items()} for z, sts in zz.items()} for f, zz in S['anims'].items()},
                 walker=dict(w=W['w'], h=W['h'], anchorX=W['anchorX'], anchorY=W['anchorY'], palettes=W['palettes'],
-                            anims={n: a(x) for n, x in W['anims'].items()},
-                            variants=[dict(name=v['name'], palettes=v['palettes'], anims={n: a(x) for n, x in v['anims'].items()})
-                                      for v in W.get('variants', [])]))
+                            anims={n: a(x, 'walker') for n, x in W['anims'].items()},
+                            variants=[var(v) for v in W.get('variants', [])]))
 
 
 def main():

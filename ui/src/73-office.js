@@ -302,21 +302,64 @@ const Chars = {
     const v = keys[this.varIdx(keys.length, Math.floor(ph * 0x7FFFFFFF) | 0, seg)], b = v === st ? a : this.anim(fam, size, v);
     return { a: b, state: v, i: Math.min(i, b.n - 1), seg };
   },
-  /* one frame -> canvas (night tint + short rim from the scene); identical exposures share a raster id (v2 _rid) */
-  frame(fam, size, st, pick, v, blink, ctx) {
-    const rows = pick.a.frames[pick.i], key = rows._rid != null ? fam + '#' + rows._rid : fam + size + pick.state + pick.i;
-    let c = this.cache.get(key);
+  /* per-agent looks (AT_SPRITES.looks, v2.1): a look swaps the hair + outfit ramps (look 0 = the family palette), skin comes
+     from a small shared set, and 0–1 accessory overlay (glasses, cap, scarf, ...) from the family/size's own list. All of it
+     is a pure function of the agent id; an intern never wears its lead's look (when they share the family) */
+  lookOf(id, fam, size, leadId) {
+    const L = this.src && this.src.looks, h = hsh(id);
+    if (!L) return { look: 0, skin: 0, acc: null, k: '' };
+    const n = L.n, look = leadId != null ? (hsh(leadId) % n + 1 + h % (n - 1)) % n : h % n, skin = (h >>> 8) % L.skin.length;
+    const allow = ((L.acc.allow[fam] || {})[size]) || [], acc = allow.length && (h >>> 16) % 100 >= 50 ? allow[(h >>> 20) % allow.length] : null;
+    return { look, skin, acc, k: '/' + look + '.' + skin + '.' + (acc || '') };
+  },
+  /* palette of one family in one theme with a look applied (ints, -1 = none); a family walker uses the same mapping */
+  pal(theme, fam, lk) {
+    const key = theme + fam + (lk ? lk.k : ''), P = this.pals || (this.pals = new Map());
+    let c = P.get(key); if (c) return c;
+    const base = ((this.src.palettes[THEME_KEY[theme]] || this.src.palettes.claude || {})[fam]) || [], L = this.src.looks;
+    c = base.map(x => x ? hx(x) : -1);
+    const put = (idx, str) => { for (let i = 0; i < idx.length; i++) c[parseInt(idx[i], 36)] = parseInt(str.substr(6 * i, 6), 16); };
+    if (L && lk) {
+      const lp = ((L.pal[THEME_KEY[theme]] || L.pal.claude || {})[fam] || [])[lk.look];
+      if (lp) put(L.idx, lp);
+      if (L.skin[lk.skin]) put(L.sidx, L.skin[lk.skin]);
+    }
+    P.set(key, c); return c;
+  },
+  /* accessory overlay of one raster: anchored on the raster's own head (rows._hd = [view, hx, hy, bx, by]) or body; pixels where
+     a hand / arm / prop is in front of the head (rows._oc) stay the raster's */
+  overlay(Ly, rows, pool, name, cols) {
+    const L = this.src.looks, A = L && L.acc[pool] && L.acc[pool][name], hd = rows._hd;
+    if (!A || !hd) return;
+    const e = A.v[hd[0]] || A.v['*']; if (!e) return;
+    const R2 = e._r || (e._r = e[2].split('|')), ax = (A.a === 'b' ? hd[3] : hd[1]) + e[0], ay = (A.a === 'b' ? hd[4] : hd[2]) + e[1], w = rows[0].length, oc = rows._oc;
+    for (let y = 0; y < R2.length; y++) for (let x = 0; x < R2[y].length; x++) {
+      const ch = R2[y][x], X = ax + x, Y = ay + y; if (ch === '.') continue;
+      if (oc && oc.has(Y * w + X)) continue;
+      const ci = parseInt(ch, 36); if (ci > 0 && cols[ci] >= 0) Ly.set(X, Y, cols[ci]);
+    }
+  },
+  /* bounded cache (Map insertion order = LRU): one canvas per raster x look */
+  cget(key) { const c = this.cache.get(key); if (c) { this.cache.delete(key); this.cache.set(key, c); } return c; },
+  cput(key, c) { this.cache.set(key, c); if (this.cache.size > 2400) this.cache.delete(this.cache.keys().next().value); return c; },
+  /* one frame -> canvas (look palette + accessory, night tint + short rim from the scene); identical exposures share a raster
+     id (v2 _rid), so the cache key is (family, raster, look) */
+  frame(fam, size, st, pick, v, blink, ctx, lk) {
+    const rows = pick.a.frames[pick.i], key = (rows._rid != null ? fam + '#' + rows._rid : fam + size + pick.state + pick.i) + (lk ? lk.k : '') + ctx.theme;
+    let c = this.cget(key);
     if (c) return c;
-    const pal = ((this.src.palettes[THEME_KEY[ctx.theme]] || this.src.palettes.claude || {})[fam]) || [];
-    const L = new Lay(rows[0].length, rows.length), cols = pal.map(x => x ? hx(x) : -1);
+    const cols = this.pal(ctx.theme, fam, lk), L = new Lay(rows[0].length, rows.length);
     for (let y = 0; y < rows.length; y++) for (let x = 0; x < rows[y].length; x++) { const ch = rows[y][x]; if (ch === '.') continue; const ci = parseInt(ch, 36); if (ci > 0 && cols[ci] >= 0) L.set(x, y, cols[ci]); }
+    if (lk && lk.acc) this.overlay(L, rows, size, lk.acc, cols);
     tintLay(L, ctx.tint); rimOnly(L, ctx.rim, ctx.rimA * .8);
-    c = L.canvas(); this.cache.set(key, c);
-    return c;
+    return this.cput(key, L.canvas());
   },
   /* the walker (walk + stand, faces right). Walk speed is measured from the frames: the planted foot's backward shift
-     on the bottom row per frame = how far the body advances, so feet never slide. */
+     on the bottom row per frame = how far the body advances, so feet never slide (every variant shares the leg keys). */
   walker() { const W = this.src && this.src.walker; return W && W.anims && W.anims.walk && W.anims.stand ? { w: W.w, h: W.h, anchorX: W.anchorX, anchorY: W.anchorY, walk: W.anims.walk, stand: W.anims.stand } : null; },
+  /* colleagues: the base walker + variants with their own palettes; family walkers (fam/size, no palettes) wear agents' looks */
+  colleagues() { const W = this.src.walker; return this._col || (this._col = [W].concat((W.variants || []).filter(v => v.palettes && v.anims && v.anims.walk && v.anims.stand))); },
+  famWalker(fam, size) { const W = this.src && this.src.walker; return W && (W.variants || []).find(v => v.fam === fam && v.size === size && v.anims && v.anims.walk && v.anims.stand) || null; },
   steps() {
     if (this._steps) return this._steps;
     const fr = this.src.walker.anims.walk.frames, n = fr.length, foot = f => { const r = f[f.length - 1], set = new Set(); for (let x = 0; x < r.length; x++) if (r[x] !== '.') set.add(x); return set; };
@@ -326,14 +369,18 @@ const Chars = {
   },
   advance(k) { const st = this.steps(); let x = 0; for (let i = 0; i < k; i++) x += st[i % st.length]; return x; },
   framesFor(dist) { let k = 0; while (this.advance(k) < dist && k < 400) k++; return k; },
-  walkerFrame(mode, i, left, ctx) {
-    const W = this.src.walker, a = W.anims[mode], idx = RM() ? (a.key || 0) : i % a.frames.length, key = 'W' + mode + idx + (left ? 'l' : 'r');
-    let c = this.cache.get(key);
+  /* who = a colleague (base walker / generic variant) or { v: family walker, fam, lk } for an agent away from its desk */
+  walkerFrame(mode, i, left, ctx, who) {
+    const W = this.src.walker, fw = who && who.fam ? who : null, V = fw ? fw.v : who || W, a = V.anims[mode], idx = RM() ? (a.key || 0) : i % a.frames.length;
+    const key = 'W' + (V.name || '') + (fw ? fw.lk.k : '') + mode + idx + (left ? 'l' : 'r') + ctx.theme;
+    let c = this.cget(key);
     if (c) return c;
-    const pal = (W.palettes[THEME_KEY[ctx.theme]] || W.palettes.claude || []).map(x => x ? hx(x) : -1), rows = a.frames[idx], L = new Lay(rows[0].length, rows.length);
-    for (let y = 0; y < rows.length; y++) for (let x = 0; x < rows[y].length; x++) { const ch = rows[y][left ? rows[y].length - 1 - x : x]; if (ch === '.') continue; const ci = parseInt(ch, 36); if (ci > 0 && pal[ci] >= 0) L.set(x, y, pal[ci]); }
+    const pal = fw ? this.pal(ctx.theme, fw.fam, fw.lk) : (V.palettes[THEME_KEY[ctx.theme]] || V.palettes.claude || []).map(x => x ? hx(x) : -1), rows = a.frames[idx], L = new Lay(rows[0].length, rows.length);
+    for (let y = 0; y < rows.length; y++) for (let x = 0; x < rows[y].length; x++) { const ch = rows[y][x]; if (ch === '.') continue; const ci = parseInt(ch, 36); if (ci > 0 && pal[ci] >= 0) L.set(x, y, pal[ci]); }
+    if (fw && fw.lk.acc) this.overlay(L, rows, 'walker', fw.lk.acc, pal);
+    if (left) { const d = L.d, w = L.w; for (let y = 0; y < L.h; y++) for (let x = 0; x < w >> 1; x++) { const p = y * w + x, q = y * w + w - 1 - x, t = d[p]; d[p] = d[q]; d[q] = t; } }
     tintLay(L, ctx.tint);
-    c = L.canvas(); this.cache.set(key, c); return c;
+    return this.cput(key, L.canvas());
   }
 };
 function rimOnly(L, rim, a) {
@@ -435,8 +482,10 @@ abbbbbbbbbba
 const COATS = [[0x5A2E14, 0xD07A34, 0xF2A860], [0x2E2E36, 0x7A7A86, 0xB4B4C0], [0x111114, 0x2E2E34, 0x5A5A64], [0x6A5A4A, 0xEDE4D6, 0xFFFFFF]];
 
 const nightc = (P, c) => P.night ? mulc(c, P.amb) : c;
+const famOf = n => n.tool === 'agy' ? 'agy' : n.tool === 'codex' ? 'codex' : 'claude';
+const IDLE_ST = { idle: 1, done: 1, done_loop: 1 };   // states in which an agent may get up for a short walk
 const Office = {
-  S: 3, WD: 480, HD: 400, k: 2.4, stations: [], rooms: [], stories: [], planes: [], notes: new Map(), ghosts: new Map(), lastT: -1e9,
+  S: 3, WD: 480, HD: 400, k: 2.4, stations: [], walks: [], rooms: [], stories: [], planes: [], notes: new Map(), ghosts: new Map(), lastT: -1e9,
   setTheme() { Chars.cache.clear(); this.ghosts.clear(); this.bubbleCache.clear(); this.walkCache = null; this.catCache = null; this.stat = null; this.lastT = -1e9; },
   geo() {
     const D = Chars.dims('lead'), I = Chars.dims('intern');
@@ -502,8 +551,9 @@ const Office = {
             const sy = room.y + G.TOP + ri * G.ROWH;
             room.spans.push({ x0: sx, x1: sx + rw, y: sy });
             for (const t of rt) {
-              stations.push({ n: t.a, kind: 'lead', x: sx, y: sy, room, ph: (hsh(t.a.id) % 997) / 997 });
-              t.a.kids.slice(0, 4).forEach((kid, j) => stations.push({ n: kid, kind: 'kid', x: sx + G.SW + G.IW * j, y: sy, room, ph: (hsh(kid.id) % 997) / 997 }));
+              const lf = famOf(t.a);
+              stations.push({ n: t.a, kind: 'lead', x: sx, y: sy, room, ph: (hsh(t.a.id) % 997) / 997, lk: Chars.lookOf(t.a.id, lf, 'lead') });
+              t.a.kids.slice(0, 4).forEach((kid, j) => stations.push({ n: kid, kind: 'kid', x: sx + G.SW + G.IW * j, y: sy, room, ph: (hsh(kid.id) % 997) / 997, lk: Chars.lookOf(kid.id, famOf(kid), 'intern', famOf(kid) === lf ? t.a.id : null) }));
               sx += t.w;
             }
           });
@@ -514,7 +564,7 @@ const Office = {
       }
     }
     this.groundY = y; this.HD = y + SLAB + 26;
-    this.rooms = rooms; this.stories = stories; this.stations = stations;
+    this.rooms = rooms; this.stories = stories; this.stations = stations; this.walks = [];
     this.order = stations.slice().sort((a, b) => a.y - b.y || a.x - b.x);
     [this.fb, this.fg] = mkc(WD, this.HD);
     [this.fs, this.sg] = mkc(WD, this.HD);   // sprite layer: never lit, never bloomed
@@ -525,6 +575,7 @@ const Office = {
     this.cv.style.width = (WD * S / dpr) + 'px'; this.cv.style.height = (this.HD * S / dpr) + 'px';
     const world = this.world; world.style.width = this.cv.style.width; world.style.height = this.cv.style.height;
     this.buildStatic();
+    this.planWalks();
     this.buildOverlays();
   },
   /* ---------- static layers ---------- */
@@ -567,10 +618,19 @@ const Office = {
     this.rooftop(g, P);
     for (const st of this.stories) { this.slab(g, P, st.y, bx0 + B.BW, bx1 - B.BW); for (const room of st.rooms) room.filler ? (room.kind === 'kitchen' ? this.drawKitchen(g, P, room, rr) : this.drawLounge(g, P, room, rr)) : this.drawRoom(g, P, room, rr); }
     this.slab(g, P, this.groundY, bx0 + B.BW, bx1 - B.BW);
+    // away version of each desk's chair corner (pushed-back chair over the bare floor), pasted while the agent is on a walk
+    const [, scratch] = mkc(1, 1);
+    for (const s2 of this.order) {
+      const L = s2.kind === 'lead', r = L ? [s2.x + G.cx - 12, s2.y + G.DT - 27, 28, 27] : [s2.x + G.icx - 8, s2.y + G.DT - 18, 19, 18], [pc, pg] = mkc(r[2], r[3]);
+      pg.drawImage(c, r[0], r[1], r[2], r[3], 0, 0, r[2], r[3]); pg.translate(-r[0], -r[1]);
+      L ? this.leadDesk(pg, scratch, P, s2, true) : this.kidDesk(pg, scratch, P, s2, true);
+      s2.patch = pc; s2.pr = r;
+    }
     for (const s2 of this.order) s2.kind === 'lead' ? this.leadDesk(g, frg, P, s2) : this.kidDesk(g, frg, P, s2);
     // night: one clean ambient multiply over the interiors (no noise), then emissive pixels stay bright
     if (P.night) {
       for (const r of this.rooms) { g.globalCompositeOperation = 'multiply'; F(g, r.x, r.y, r.w, r.h, P.amb); g.globalCompositeOperation = 'source-over'; }
+      for (const s2 of this.order) { const pg = s2.patch.getContext('2d'); pg.setTransform(1, 0, 0, 1, 0, 0); pg.globalCompositeOperation = 'multiply'; F(pg, 0, 0, s2.patch.width, s2.patch.height, P.amb); pg.globalCompositeOperation = 'source-over'; }
       const im = frg.getImageData(0, 0, WD, HD), D = im.data, [ar, ag, ab] = RGB(P.amb);
       for (let i = 0; i < D.length; i += 4) if (D[i + 3]) { D[i] = D[i] * ar / 255; D[i + 1] = D[i + 1] * ag / 255; D[i + 2] = D[i + 2] * ab / 255; }
       frg.putImageData(im, 0, 0);
@@ -683,7 +743,7 @@ const Office = {
     const wx = this.window(g, P, W, room);
     const sign = this.signW(room);
     let px = sign + 6;
-    room.lamps = []; room.lights = []; room.anim = [];
+    room.lamps = []; room.lights = []; room.anim = []; room.spots = [];
     const lamp = (lx, ly) => room.lamps.push([X + lx, Y + ly]);
     room.weather = { x: wx, w: d === 'gemini' ? 15 : 24, kind: { claude: 'rain', codex: P.night ? 'snow' : 'none', gemini: 'star', grok: 'rain', muse: 'snow' }[d] };
     const space = () => wx - 8 - px;
@@ -732,7 +792,7 @@ const Office = {
       F(g, 1, fy - 9, 13, 9, 0x2A5A7A); F(g, 2, fy - 8, 11, 7, 0x4AA8D0); F(g, 2, fy - 8, 11, 1, 0x9AE0F8); F(g, 2, fy - 3, 11, 2, 0xC8B080); F(g, 1, fy, 13, 7, P.desk[0]); F(g, 1, fy, 13, 1, P.desk[2]);
       room.anim.push({ k: 'fish', x: 3, y: fy - 7 }); room.lights.push([X + 7, Y + fy - 5, 0x6AD8FF, 12, .4]); this.emit.push([X + 2, Y + fy - 8, 11, 1, 0x9AE0F8]);
     } else if (pickL < .3) { F(g, 2, fy, 10, 7, 0xB98A58); F(g, 2, fy, 10, 1, 0xD8AE78); F(g, 6, fy, 2, 7, 0xE8D8B0); F(g, 3, fy - 5, 8, 5, 0xC8965E); F(g, 3, fy - 5, 8, 1, 0xE0B67C); F(g, 2, fy - 7, 10, 2, 0xE8D8C0); PX(g, 4, fy - 7, 0xC83A2A); PX(g, 8, fy - 7, 0xC83A2A); }  // boxes + pizza box
-    else if (pickL < .55) { F(g, 3, fy - 13, 2, 20, P.desk[0]); F(g, 1, fy - 14, 6, 1, P.desk[1]); F(g, 5, fy - 12, 4, 8, P.acc[1]); F(g, 5, fy - 12, 4, 1, P.acc[2]); F(g, 0, fy - 11, 3, 6, P.books[1 % P.books.length]); }  // coat rack with jacket and scarf
+    else if (pickL < .55) { room.coat = X + 6; F(g, 3, fy - 13, 2, 20, P.desk[0]); F(g, 1, fy - 14, 6, 1, P.desk[1]); F(g, 5, fy - 12, 4, 8, P.acc[1]); F(g, 5, fy - 12, 4, 1, P.acc[2]); F(g, 0, fy - 11, 3, 6, P.books[1 % P.books.length]); }  // coat rack with jacket and scarf
     else if (pickL < .8) { F(g, 1, fy - 10, 11, 17, P.metal[2]); for (let i = 0; i < 3; i++) { F(g, 2, fy - 9 + i * 5, 9, 4, P.metal[1]); F(g, 5, fy - 8 + i * 5, 3, 1, P.metal[3]); } this.plant(g, P, 6, fy - 22, 'snake'); }  // filing cabinet + plant
     else { F(g, 3, fy - 16, 6, 9, 0x8A4A1E); F(g, 4, fy - 15, 4, 7, 0xC8742E); F(g, 5, fy - 24, 2, 9, 0x5A3418); F(g, 4, fy - 25, 4, 2, 0x3A2010); PX(g, 6, fy - 12, 0x2A1408); F(g, 2, fy - 6, 8, 1, P.metal[1]); F(g, 3, fy - 5, 1, 12, P.metal[1]); F(g, 8, fy - 5, 1, 12, P.metal[1]); }  // guitar on a stand
     if (pickR < .4) { F(g, W - 9, fy + 1, 6, 6, P.metal[2]); F(g, W - 9, fy + 1, 6, 1, P.metal[3]); PX(g, W - 7, fy, 0xF4F4F0); PX(g, W - 6, fy - 1, 0xE8E8E0); }  // bin
@@ -742,8 +802,8 @@ const Office = {
     // meeting nook / whiteboard stand in wide gaps beside a short desk row
     for (const sp of room.spans || []) {
       const gapR = X + W - sp.x1, gapL = sp.x0 - X, ry = sp.y - Y + this.G.DT;
-      if (gapR >= 50) { const tx = sp.x1 - X + Math.floor((gapR - 34) / 2) + 2; F(g, tx + 2, ry - 10, 4, 10, P.chair[1]); F(g, tx + 24, ry - 10, 4, 10, P.chair[1]); F(g, tx, ry - 2, 30, 4, P.desk[2]); F(g, tx, ry - 2, 30, 1, P.desk[3]); F(g, tx + 4, ry + 2, 2, 10, P.desk[0]); F(g, tx + 24, ry + 2, 2, 10, P.desk[0]); F(g, tx + 10, ry - 5, 8, 3, P.metal[1]); F(g, tx + 10, ry - 5, 8, 1, P.metal[3]); F(g, tx + 21, ry - 4, 2, 2, P.pot[1]); F(g, tx + 5, ry - 4, 2, 2, 0xF4F4F0); F(g, tx - 3, ry + 6, 5, 3, P.chair[1]); F(g, tx + 28, ry + 6, 5, 3, P.chair[1]); }
-      if (gapL >= 44) { const bx = sp.x0 - X - 32; F(g, bx, ry - 22, 22, 14, P.metal[3]); F(g, bx + 1, ry - 21, 20, 12, 0xFAFCFC); F(g, bx + 3, ry - 19, 8, 1, 0x3A6AD0); F(g, bx + 3, ry - 17, 12, 1, 0x7A7A84); F(g, bx + 3, ry - 15, 6, 1, 0xC8342A); F(g, bx + 12, ry - 14, 6, 3, 0x2E8A5A); F(g, bx + 4, ry - 8, 1, 18, P.metal[1]); F(g, bx + 17, ry - 8, 1, 18, P.metal[1]); F(g, bx + 2, ry + 9, 18, 1, P.metal[1]); }
+      if (gapR >= 50) { const tx = sp.x1 - X + Math.floor((gapR - 34) / 2) + 2; room.spots.push({ x: X + tx + 15, k: 'nook' }); F(g, tx + 2, ry - 10, 4, 10, P.chair[1]); F(g, tx + 24, ry - 10, 4, 10, P.chair[1]); F(g, tx, ry - 2, 30, 4, P.desk[2]); F(g, tx, ry - 2, 30, 1, P.desk[3]); F(g, tx + 4, ry + 2, 2, 10, P.desk[0]); F(g, tx + 24, ry + 2, 2, 10, P.desk[0]); F(g, tx + 10, ry - 5, 8, 3, P.metal[1]); F(g, tx + 10, ry - 5, 8, 1, P.metal[3]); F(g, tx + 21, ry - 4, 2, 2, P.pot[1]); F(g, tx + 5, ry - 4, 2, 2, 0xF4F4F0); F(g, tx - 3, ry + 6, 5, 3, P.chair[1]); F(g, tx + 28, ry + 6, 5, 3, P.chair[1]); }
+      if (gapL >= 44) { const bx = sp.x0 - X - 32; room.spots.push({ x: X + bx + 11, k: 'board' }); F(g, bx, ry - 22, 22, 14, P.metal[3]); F(g, bx + 1, ry - 21, 20, 12, 0xFAFCFC); F(g, bx + 3, ry - 19, 8, 1, 0x3A6AD0); F(g, bx + 3, ry - 17, 12, 1, 0x7A7A84); F(g, bx + 3, ry - 15, 6, 1, 0xC8342A); F(g, bx + 12, ry - 14, 6, 3, 0x2E8A5A); F(g, bx + 4, ry - 8, 1, 18, P.metal[1]); F(g, bx + 17, ry - 8, 1, 18, P.metal[1]); F(g, bx + 2, ry + 9, 18, 1, P.metal[1]); }
     }
     if (rs() < .45) room.anim.push({ k: 'cat', x: wx + 4, y: 12, coat: COATS[Math.floor(rs() * COATS.length)], ph: rs() });
     if (rare > .8 && space() > 22) { const nx = px + 2, txt = P.decor === 'grok' ? 'HI' : 'OK'; F(g, nx - 1, 5, 18, 9, 0x141418); drawText(g, txt, nx + 4, 7, mixc(P.acc[2], 0, .55), null); room.anim.push({ k: 'neon', x: nx + 4, y: 7, txt }); px += 22; }
@@ -758,7 +818,7 @@ const Office = {
     const X = room.x, Y = room.y, W = room.w, H = room.h, WH = this.G.WH, M = P.metal;
     g.save(); g.beginPath(); g.rect(X, Y, W, H); g.clip(); g.translate(X, Y);
     this.walls(g, P, W, H, rr);
-    room.lamps = []; room.lights = []; room.anim = [];
+    room.lamps = []; room.lights = []; room.anim = []; room.spots = [];
     let x = 6;
     room.elev = { x: 6 }; room.walk = { a: X + 17, b: X + Math.min(W - 26, 84), y: Y + WH + 6, elev: true };
     // elevator (sized for the 16x24 walker) with floor indicator, call button and a green exit sign
@@ -768,10 +828,10 @@ const Office = {
     if (W > 120) { F(g, x + 30, 0, 9, 3, 0x0E5A2E); this.emit.push([X + x + 31, Y + 1, 7, 1, 0x5AF08A]); room.lights.push([X + x + 34, Y + 2, 0x5AF08A, 10, .35]); }
     x += 33;
     // vending machine (it glows at night)
-    if (W - x > 20) { F(g, x, 6, 14, WH + 8, mixc(P.acc[0], 0x202020, .3)); F(g, x + 2, 8, 8, 16, 0xEAF4FF); for (let r = 0; r < 4; r++) for (let c = 0; c < 3; c++) F(g, x + 3 + c * 2 + (c > 0 ? c - 1 : 0), 9 + r * 4, 1, 2, [0xE5342B, 0xFFC857, 0x5AD0C8, 0x7FE08A][(r + c) % 4]); F(g, x + 11, 10, 2, 6, M[2]); F(g, x + 2, WH + 2, 8, 3, M[0]);
+    if (W - x > 20) { room.spots.push({ x: X + x + 7, k: 'vending' }); F(g, x, 6, 14, WH + 8, mixc(P.acc[0], 0x202020, .3)); F(g, x + 2, 8, 8, 16, 0xEAF4FF); for (let r = 0; r < 4; r++) for (let c = 0; c < 3; c++) F(g, x + 3 + c * 2 + (c > 0 ? c - 1 : 0), 9 + r * 4, 1, 2, [0xE5342B, 0xFFC857, 0x5AD0C8, 0x7FE08A][(r + c) % 4]); F(g, x + 11, 10, 2, 6, M[2]); F(g, x + 2, WH + 2, 8, 3, M[0]);
       this.emit.push([X + x + 2, Y + 8, 8, 1, 0xFFFFFF]); room.lights.push([X + x + 7, Y + 16, 0xCFE8FF, 22, .45]); x += 18; }
     // water cooler
-    if (W - x > 12) { F(g, x + 1, 6, 6, 7, 0x9AD4F0); F(g, x + 1, 6, 2, 7, 0xC8ECFF); F(g, x, 13, 8, 15, 0xEDEDED); F(g, x, 13, 8, 1, 0xFFFFFF); PX(g, x + 2, 16, 0x3A7AE0); PX(g, x + 5, 16, 0xE5342B); x += 12; }
+    if (W - x > 12) { room.spots.push({ x: X + x + 4, k: 'cooler' }); F(g, x + 1, 6, 6, 7, 0x9AD4F0); F(g, x + 1, 6, 2, 7, 0xC8ECFF); F(g, x, 13, 8, 15, 0xEDEDED); F(g, x, 13, 8, 1, 0xFFFFFF); PX(g, x + 2, 16, 0x3A7AE0); PX(g, x + 5, 16, 0xE5342B); x += 12; }
     // notice board with pinned notes
     if (W - x > 28) { F(g, x, 4, 24, 15, 0x8A5A34); F(g, x + 1, 5, 22, 13, 0xC89A6A); for (let i = 0; i < 6; i++) { const nx = x + 2 + (i % 3) * 7, ny = 6 + Math.floor(i / 3) * 6; F(g, nx, ny, 5, 5, [0xFFF4B0, 0xFFFFFF, 0xC8F0FF, 0xFFD0E0][i % 4]); PX(g, nx + 2, ny, 0xE5342B); F(g, nx + 1, ny + 2, 3, 1, 0x9A9A9A); } }
     // sofa + rug + plant
@@ -787,14 +847,14 @@ const Office = {
     const X = room.x, Y = room.y, W = room.w, H = room.h, WH = this.G.WH, M = P.metal, D = P.desk;
     g.save(); g.beginPath(); g.rect(X, Y, W, H); g.clip(); g.translate(X, Y);
     this.walls(g, P, W, H, rr);
-    room.lamps = []; room.lights = []; room.anim = [];
+    room.lamps = []; room.lights = []; room.anim = []; room.spots = [];
     // wall cabinets + tiled backsplash
     F(g, 6, 4, Math.min(W - 40, 70), 9, D[1]); F(g, 6, 4, Math.min(W - 40, 70), 1, D[3]); for (let x = 6; x < 6 + Math.min(W - 40, 70); x += 14) { F(g, x, 4, 1, 9, D[0]); PX(g, x + 11, 9, D[3]); }
     for (let y = 14; y < WH - 2; y += 3) for (let x = 6; x < 6 + Math.min(W - 40, 70); x += 4) F(g, x, y, 3, 2, mixc(P.wall[3], 0xFFFFFF, .4));
     // counter
     const cw = Math.min(W - 40, 70); F(g, 6, WH - 6, cw, 3, D[3]); F(g, 6, WH - 3, cw, 13, D[1]); F(g, 6, WH - 3, cw, 1, D[0]); for (let x = 6; x < 6 + cw; x += 14) { F(g, x, WH - 3, 1, 13, D[0]); PX(g, x + 7, WH + 2, D[3]); }
     // coffee machine (steam), microwave, fruit bowl
-    F(g, 10, WH - 16, 9, 10, 0x2A2A30); F(g, 11, WH - 15, 7, 3, 0x46464E); this.emit.push([X + 12, Y + WH - 14, 1, 1, 0x5AE08A]); F(g, 13, WH - 9, 3, 3, 0xF4F4F0); room.anim.push({ k: 'steam', x: 14, y: WH - 10 });
+    F(g, 10, WH - 16, 9, 10, 0x2A2A30); F(g, 11, WH - 15, 7, 3, 0x46464E); this.emit.push([X + 12, Y + WH - 14, 1, 1, 0x5AE08A]); F(g, 13, WH - 9, 3, 3, 0xF4F4F0); room.anim.push({ k: 'steam', x: 14, y: WH - 10 }); room.spots.push({ x: X + 15, k: 'coffee' });
     if (cw > 40) { F(g, 24, WH - 13, 14, 7, M[2]); F(g, 25, WH - 12, 8, 5, 0x1E2228); F(g, 34, WH - 12, 3, 5, M[1]); this.emit.push([X + 35, Y + WH - 11, 1, 1, 0x5AE08A]); }
     if (cw > 56) { F(g, 44, WH - 9, 9, 3, 0xF2EEE6); PX(g, 45, WH - 10, 0xE5342B); PX(g, 47, WH - 11, 0xFFC857); PX(g, 49, WH - 10, 0x7FD06A); PX(g, 51, WH - 10, 0xFF9A3A); }
     // fridge with magnets + a note
@@ -839,11 +899,13 @@ const Office = {
     for (const [x0, y0, x1, y1] of leaves) { const n = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0)); for (let i = 0; i <= n; i++) { const X = Math.round(x + x0 + (x1 - x0) * i / n), Y = Math.round(y + y0 + (y1 - y0) * i / n); PX(g, X, Y, pl[1]); if (kind !== 'snake' && i > n / 3) { PX(g, X - 1, Y, pl[2]); PX(g, X + 1, Y, pl[0]); PX(g, X, Y - 1, pl[3]); } else PX(g, X + 1, Y, i % 3 ? pl[2] : pl[3]); } }
   },
   /* ---------- furniture: back parts into `g` (behind the sprite), desk fronts into `fr` (over it) ---------- */
-  leadDesk(g, fr, P, s2) {
+  leadDesk(g, fr, P, s2, away) {
     const G = this.G, x = s2.x, y = s2.y, D = P.desk, C = P.chair, M = P.metal, cx = G.cx, DT = G.DT, SW = G.SW, [mx, my] = G.L.mon;
-    // chair back
-    F(g, x + cx - 9, y + DT - 23, 18, 1, C[2]); F(g, x + cx - 11, y + DT - 22, 22, 22, C[1]); F(g, x + cx - 11, y + DT - 22, 2, 22, C[2]); F(g, x + cx + 9, y + DT - 22, 2, 22, C[0]);
-    F(g, x + cx - 9, y + DT - 15, 18, 1, C[0]); F(g, x + cx - 9, y + DT - 14, 18, 1, C[2]); for (let i = 0; i < 3; i++) { PX(g, x + cx - 6 + i * 6, y + DT - 19, C[0]); PX(g, x + cx - 6 + i * 6, y + DT - 9, C[0]); }
+    // chair back (away: pushed back from the desk and turned a little, the seat shows)
+    const X0 = x + (away ? 4 : 0), Y0 = y + (away ? -3 : 0);
+    F(g, X0 + cx - 9, Y0 + DT - 23, 18, 1, C[2]); F(g, X0 + cx - 11, Y0 + DT - 22, 22, 22, C[1]); F(g, X0 + cx - 11, Y0 + DT - 22, 2, 22, C[2]); F(g, X0 + cx + 9, Y0 + DT - 22, 2, 22, C[0]);
+    F(g, X0 + cx - 9, Y0 + DT - 15, 18, 1, C[0]); F(g, X0 + cx - 9, Y0 + DT - 14, 18, 1, C[2]); for (let i = 0; i < 3; i++) { PX(g, X0 + cx - 6 + i * 6, Y0 + DT - 19, C[0]); PX(g, X0 + cx - 6 + i * 6, Y0 + DT - 9, C[0]); }
+    if (away) { F(g, X0 + cx - 10, y + DT - 3, 20, 3, C[1]); F(g, X0 + cx - 10, y + DT - 3, 20, 1, C[2]); F(g, X0 + cx + 8, y + DT - 3, 2, 3, C[0]); }
     // desk top
     F(g, x + 1, y + DT, SW - 2, 6, D[2]); F(g, x + 1, y + DT, SW - 2, 1, D[3]); F(g, x + 1, y + DT + 5, SW - 2, 1, D[3]);
     for (let i = 0; i < SW / 10; i++) PX(g, x + 5 + i * 10 + (i % 2) * 3, y + DT + 2 + (i % 2), D[1]);
@@ -872,9 +934,10 @@ const Office = {
     F(fr, x + 1, y + DT + 6, 3, 10, D[0]); F(fr, x + 1, y + DT + 6, 1, 10, D[2]);
     F(fr, x + cx + 10, y + DT + 6, SW - cx - 11, 10, D[2]); F(fr, x + cx + 10, y + DT + 10, SW - cx - 11, 1, D[0]); F(fr, x + cx + 16, y + DT + 8, 4, 1, D[3]); F(fr, x + cx + 16, y + DT + 12, 4, 1, D[3]); F(fr, x + SW - 2, y + DT + 6, 1, 10, D[0]);
   },
-  kidDesk(g, fr, P, s2) {
-    const G = this.G, x = s2.x, y = s2.y, D = P.desk, C = P.chair, M = P.metal, cx = G.icx, DT = G.DT, IW = G.IW, [mx, my] = G.K.mon;
-    F(g, x + cx - 6, y + DT - 15, 12, 1, C[2]); F(g, x + cx - 7, y + DT - 14, 14, 14, C[1]); F(g, x + cx - 7, y + DT - 14, 1, 14, C[2]); F(g, x + cx + 6, y + DT - 14, 1, 14, C[0]);
+  kidDesk(g, fr, P, s2, away) {
+    const G = this.G, x = s2.x, y = s2.y, D = P.desk, C = P.chair, M = P.metal, cx = G.icx, DT = G.DT, IW = G.IW, [mx, my] = G.K.mon, X0 = x + (away ? 3 : 0), Y0 = y + (away ? -2 : 0);
+    F(g, X0 + cx - 6, Y0 + DT - 15, 12, 1, C[2]); F(g, X0 + cx - 7, Y0 + DT - 14, 14, 14, C[1]); F(g, X0 + cx - 7, Y0 + DT - 14, 1, 14, C[2]); F(g, X0 + cx + 6, Y0 + DT - 14, 1, 14, C[0]);
+    if (away) { F(g, X0 + cx - 7, y + DT - 2, 14, 2, C[1]); F(g, X0 + cx - 7, y + DT - 2, 14, 1, C[2]); }
     F(g, x + 1, y + DT, IW - 2, 5, D[2]); F(g, x + 1, y + DT, IW - 2, 1, D[3]); F(g, x + 1, y + DT + 4, IW - 2, 1, D[3]);
     F(g, x + cx - 5, y + DT + 1, 11, 2, M[1]); for (let i = 0; i < 5; i++) PX(g, x + cx - 4 + i * 2, y + DT + 1, M[3]);
     F(g, x + mx, y + my, 10, 9, M[0]); F(g, x + mx + 1, y + my + 1, 8, 6, P.scr); F(g, x + mx + 4, y + my + 9, 2, DT - my - 9, M[2]); F(g, x + mx + 2, y + DT, 6, 1, M[1]);
@@ -883,12 +946,12 @@ const Office = {
   },
   /* ---------- per-frame ---------- */
   sprite(s2, t) {
-    const n = s2.n, size = s2.kind === 'lead' ? 'lead' : 'intern', fam = n.tool === 'agy' ? 'agy' : n.tool === 'codex' ? 'codex' : 'claude';
+    const n = s2.n, size = s2.kind === 'lead' ? 'lead' : 'intern', fam = famOf(n);
     const since = t - (n.enteredPerf != null ? n.enteredPerf : -1e9);
     const pick = Chars.pick(fam, size, n.st, since, t, s2.ph, RM());
     if (!pick) return null;
     const period = 2600 + (hsh(n.id) % 2400), blink = !Chars.src && !RM() && ['work', 'tool', 'child', 'user'].includes(n.st) && ((t + s2.ph * 9000) % period) < 140;
-    let c = Chars.frame(fam, size, n.st, pick, hsh(n.id) % 9, blink, this.cctx);
+    let c = Chars.frame(fam, size, n.st, pick, hsh(n.id) % 9, blink, this.cctx, s2.lk);
     if (n.st === 'stopped') { let gh = this.ghosts.get(c); if (!gh) { gh = this.ghost(c); this.ghosts.set(c, gh); } c = gh; }
     const o = s2.kind === 'lead' ? this.G.L : this.G.K;
     return [c, s2.x + o.ox, s2.y + o.oy];
@@ -929,6 +992,63 @@ const Office = {
     finish(L, red ? 0x4A0E0A : 0x4A3A30, null, 0, null);
     c = L.canvas(); this.bubbleCache.set(key, c); return c;
   },
+  /* ---------- idle walks: an idle / finished agent sometimes gets up, walks along its storey to the nearest coffee machine,
+     water cooler, vending machine, whiteboard or meeting nook (else its own window / coat rack) along the aisle behind the
+     desks, stands there 4–8 s (a sip),
+     walks back and sits down. At most 2 walkers in the whole office, each agent at most every 2–4 min, never under reduced
+     motion. Any other state calls it back at once (double-speed walk). The desk keeps its monitor, bubble and hit area;
+     the chair is pushed back while it is empty. ---------- */
+  planWalks() {
+    const G = this.G, now = performance.now();
+    for (const s2 of this.stations) {
+      const st = this.stories.find(q => q.rooms.includes(s2.room)), xd = s2.x + (s2.kind === 'lead' ? G.cx : G.icx), cand = [];
+      for (const r of st.rooms) if (r.filler || r === s2.room) for (const sp of r.spots || []) cand.push(sp.x);
+      if (!cand.length) cand.push(s2.room.coat != null ? s2.room.coat : s2.room.x + (s2.room.win ? s2.room.win[0] + (s2.room.win[1] >> 1) : 10));
+      let best = cand[0]; for (const c of cand) if (Math.abs(c - xd) < Math.abs(best - xd)) best = c;
+      const dir = best >= xd ? 1 : -1;
+      s2.walk = { xd, xt: Math.abs(best - xd) < 10 ? xd + dir * 10 : best - dir * 5, y: s2.y + 20 };   // feet on the back aisle (= the lounge walk line on row 1)
+      s2.nw = now + 25000 + hsh(s2.n.id + 'w') % 140000;   // first walk after 25-165 s, then every 2-4 min
+      s2.away = null;
+    }
+    if (this.forced) this.force = true;   // a relayout drops walks; the dev hook re-arms its walk
+  },
+  walkTick(t, R) {
+    const WK = Chars.walker(); if (!WK) return;
+    if (R) { for (const w of this.walks) w.s2.away = null; this.walks = []; return; }
+    const ms = 1000 / WK.walk.fps;
+    this.walks = this.walks.filter(w => {
+      const s2 = w.s2, ok = IDLE_ST[s2.n.st] && this.stations.includes(s2);
+      if (!ok && w.ph === 'up') { s2.away = null; return false; }
+      if (!ok && (w.ph === 'out' || w.ph === 'stay')) { w.x0 = w.x; w.ph = 'back'; w.t0 = t; w.fast = true; }
+      const leg = (from, to, k) => { const d = Math.abs(to - from), a = Math.min(d, Chars.advance(k)); w.x = from + Math.sign(to - from) * a; return a >= d; };
+      if (w.ph === 'up') { w.x = w.xd; if (t - w.t0 > 450) { w.ph = 'out'; w.t0 = t; } }
+      else if (w.ph === 'out') { if (leg(w.xd, w.xt, Math.floor((t - w.t0) / ms))) { w.ph = 'stay'; w.t0 = t; } }
+      else if (w.ph === 'stay') { if (t - w.t0 > w.dur) { w.ph = 'back'; w.t0 = t; w.x0 = w.xt; } }
+      else if (w.ph === 'back') { if (leg(w.x0, w.xd, Math.floor((t - w.t0) / (w.fast ? ms / 2 : ms)))) { w.ph = 'down'; w.t0 = t; } }
+      else if (w.ph === 'down' && t - w.t0 > 350) { s2.away = null; s2.nw = t + 120000 + hsh(s2.n.id + Math.floor(t)) % 120000; return false; }
+      return true;
+    });
+    if (!this.force && (this.walks.length >= 2 || t - (this.lastWalk || -1e9) < 9000)) return;
+    for (const s2 of this.stations) {
+      if (s2.away || !s2.walk || (!this.force && t < s2.nw)) continue;
+      if (!IDLE_ST[s2.n.st] || !Chars.famWalker(famOf(s2.n), s2.kind === 'lead' ? 'lead' : 'intern')) { if (!this.force) s2.nw = t + 20000 + hsh(s2.n.id) % 20000; continue; }
+      const w = { s2, ph: 'up', t0: t, xd: s2.walk.xd, xt: s2.walk.xt, x: s2.walk.xd, y: s2.walk.y, dur: this.force ? 6e5 : 4000 + hsh(s2.n.id + t) % 4000, fast: false };
+      s2.away = w; this.walks.push(w); this.lastWalk = t; this.force = false;
+      break;
+    }
+  },
+  drawWalks(s, t) {
+    const WK = Chars.walker(); if (!WK) return;
+    for (const w of this.walks) {
+      const s2 = w.s2, fam = famOf(s2.n), V = Chars.famWalker(fam, s2.kind === 'lead' ? 'lead' : 'intern'); if (!V) continue;
+      const out = w.ph === 'up' || w.ph === 'out' || w.ph === 'stay', left = out ? w.xt < w.xd : w.xd < w.x0, ms = 1000 / WK.walk.fps;
+      let mode = 'stand', fi = 0;
+      if (w.ph === 'out' || w.ph === 'back') { mode = 'walk'; fi = Math.floor((t - w.t0) / (w.fast ? ms / 2 : ms)); }
+      else if (w.ph === 'stay') fi = Math.floor((t - w.t0) / ms) + 100 - Math.floor(Math.min(w.dur, 8000) / ms / 2);   // the sip lands mid-stay
+      const im = Chars.walkerFrame(mode, ((fi % 144) + 144) % 144, left, this.cctx, { v: V, fam, lk: s2.lk });
+      s.drawImage(im, Math.round(w.x) - (left ? WK.w - 1 - WK.anchorX : WK.anchorX), w.y - WK.anchorY);
+    }
+  },
   /* ambient life: a tiny colleague takes the elevator to the vending machine / makes coffee, then leaves */
   life(g, s, t, room, lights) {
     const w = room.walk; if (!w) return;
@@ -937,7 +1057,7 @@ const Office = {
     const dist = Math.abs(w.b - w.a), ms = WK ? 1000 / WK.walk.fps : 170;
     const nWalk = WK ? Chars.framesFor(dist) : Math.ceil(dist / 1.5);
     const tW = nWalk * ms, t0 = 600, t1 = t0 + 500, t2 = t1 + tW, t3 = t2 + 3200, t4 = t3 + tW, t5 = t4 + 400, t6 = t5 + 700;
-    const T = Math.max(24000, t6 + 6000), c = R ? -1 : (t + room.i * 7919) % T;
+    const T = Math.max(24000, t6 + 6000), c = R ? -1 : (t + room.i * 7919) % T, CO = WK ? Chars.colleagues() : null, who = CO ? CO[hsh(room.i + ':' + Math.floor((t + room.i * 7919) / T)) % CO.length] : null;
     if (room.elev) {
       const dOpen = c < 0 ? 0 : c < t0 ? c / t0 : c < t1 ? 1 : c < t1 + 400 ? (t1 + 400 - c) / 400 : c >= t5 - 300 && c < t5 ? (c - t5 + 300) / 300 : c >= t5 && c < t6 - 300 ? 1 : c >= t6 - 300 && c < t6 ? (t6 - c) / 300 : 0;
       const d = Math.round(dOpen * 9), ex = room.x + room.elev.x + 11, ey = room.y + 5;
@@ -953,7 +1073,7 @@ const Office = {
     else x = w.a;
     const left = back ? w.a < w.b : w.b < w.a;
     if (WK) {
-      const im = Chars.walkerFrame(mode, fi, left, this.cctx);
+      const im = Chars.walkerFrame(mode, fi, left, this.cctx, who);
       s.drawImage(im, Math.round(x) - (left ? WK.w - 1 - WK.anchorX : WK.anchorX), w.y - WK.anchorY);
       return;
     }
@@ -1005,8 +1125,10 @@ const Office = {
       if (!room.filler && room.lampAt && this.stations.some(s2 => s2.room === room && s2.n.st === 'user')) { const [lx, ly] = room.lampAt, on = R || Math.floor(t / 600) % 2 === 0; F(g, lx, ly, 3, 3, on ? 0xFF3B2E : 0x9A2018); PX(g, lx, ly, on ? 0xFFB0A8 : 0xC03028); if (on) { lights.push([lx + 1, ly + 1, 0xFF4A3A, 12, .5, 1]); cores.push([lx + 1, ly + 1, 0xFF4A3A, 4, .9]); } }
     }
     // stations: screen + machine (lit layer) / character, steam, note (sprite layer)
+    this.walkTick(t, R); this.drawWalks(s, t);   // the back aisle: seated agents and the desk fronts of the row in front stay in front
     for (const s2 of this.order) {
       const n = s2.n, small = s2.kind === 'kid', o = small ? G.K : G.L;
+      if (s2.away && s2.patch) g.drawImage(s2.patch, s2.pr[0], s2.pr[1]);
       const sc = this.screen(g, s2, t), gx = s2.x + o.scr[0] + (o.scr[2] >> 1), gy = s2.y + o.scr[1] + (o.scr[3] >> 1);
       const flick = R ? 1 : .88 + .12 * Math.sin(t / 90 + s2.ph * 40) * Math.sin(t / 37 + s2.ph * 9);
       const col = sc === 'red' ? 0xFF4A3A : sc === 'amber' ? 0xFFAA40 : P.glow;
@@ -1017,7 +1139,7 @@ const Office = {
         cores.push([gx, gy, col, small ? 2 : 4, sc === 'dim' ? .18 : .4]);
       }
       if (!small) { const bx = s2.x + G.cx + 19, by = s2.y + G.DT - 16, fast = n.st === 'tool'; for (let i = 0; i < 3; i++) { const on = R ? i === 0 : fast ? (Math.floor(t / 90) + i * 2) % 3 === 0 : (Math.floor(t / 1200) + i) % 3 === 0; PX(g, bx + 10, by + 3 + i * 2, on ? (fast ? P.acc[3] : 0x5AE08A) : P.metal[0]); } if (fast && !R && Math.floor(t / 110) % 2) { PX(g, bx + 2, by + 8, 0xFFFFFF); lights.push([bx + 2, by + 8, P.acc[2], 8, .5, 1]); cores.push([bx + 2, by + 8, 0xFFFFFF, 3, .8]); } }
-      const sp = this.sprite(s2, t);
+      const sp = s2.away ? null : this.sprite(s2, t);
       if (sp) s.drawImage(sp[0], sp[1], sp[2]);
       const mugInHand = Chars.src && n.st === 'idle';
       if (!small && !mugInHand) { const mx = s2.x + G.cx + 10, my = s2.y + G.DT - 3; F(g, mx, my, 4, 5, nightc(P, P.pot[1])); F(g, mx, my, 1, 5, nightc(P, P.pot[2])); F(g, mx + 4, my + 1, 1, 2, nightc(P, P.pot[0])); F(g, mx + 1, my, 2, 1, nightc(P, 0x3A2418)); }
@@ -1054,7 +1176,7 @@ const Office = {
         s.drawImage(img, bx, by);
         if (kind === 'bang') { lights.push([bx + 7, by + 6, 0xFF4A3A, 14, R ? .35 : .4 + .12 * Math.sin(t / 220), 1]); cores.push([bx + 7, by + 6, 0xFF4A3A, 6, .7]); }
       }
-      if (n.st === 'idle') for (let i = 0; i < 3; i++) {
+      if (n.st === 'idle' && !s2.away) for (let i = 0; i < 3; i++) {
         const p = R ? (i + .5) / 3 : ((t / 2600) + i / 3 + s2.ph) % 1;
         const zx = s2.x + cx + (small ? 4 : 6) + Math.round(p * 7 + Math.sin(p * 6) * 1.5), zy = s2.y + o.oy + (small ? 4 : 8) - Math.round(p * 13);
         if (p > .85) continue;
@@ -1138,7 +1260,10 @@ const Office = {
   }
   return {
     available: () => Chars.load(),
-    chars: () => (Chars.load() ? Chars : null),   // selftest hook (variant rotation)
+    chars: () => (Chars.load() ? Chars : null),   // selftest hook (variant rotation, looks)
+    walkNow() { Office.force = Office.forced = true; },            // dev hook (?walk=1 in the talkfx page): start an idle walk now, long stay
+    /* selftest hook: make every agent due for a walk, run one scheduling step (reduced or not); returns the walkers started */
+    walkTest(reduce) { if (!Office.stations.length) return -1; for (const s2 of Office.stations) s2.nw = 0; Office.lastWalk = -1e9; Office.walkTick(performance.now(), !!reduce); const n = Office.walks.length; for (const w of Office.walks) w.s2.away = null; Office.walks = []; return n; },
     update(host, D, api, force) {
       AP = api; Office.D = D;
       if (!Chars.load()) return;

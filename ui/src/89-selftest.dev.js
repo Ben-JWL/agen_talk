@@ -64,6 +64,16 @@
       }
       A(seen.size > 1 && seen2.size > 1 && seams, 'pick rotates work variants only at loop boundaries (' + [...seen].join(',') + ')');
       A(CH.pick('claude', 'lead', 'work', 0, 12345, .37, true).state === 'work' && CH.pick('claude', 'lead', 'user', 1e6, 1e6, .37, false).state.startsWith('user_loop'), 'reduced motion = base key; intros hand over to the loop rotation');
+      // per-agent looks (v2.1): palette swaps + accessory overlays with per-raster head anchors; deterministic per id
+      const LK = CH.src.looks, ids = Array.from({ length: 24 }, (_, i) => 'agent-' + i), lks = ids.map(id => CH.lookOf(id, 'claude', 'lead'));
+      A(LK && LK.n >= 4 && LK.skin.length >= 3 && LK.pal.claude.claude.length === LK.n && LK.acc.lead.glasses && LK.acc.intern.round && LK.acc.walker.cap && LK.acc.allow.codex.lead.length, 'looks + accessory data exist');
+      A(new Set(lks.map(l => l.k)).size > 4 && new Set(lks.map(l => l.look)).size > 2 && lks.some(l => l.acc) && lks.some(l => !l.acc) && CH.lookOf('agent-3', 'claude', 'lead').k === lks[3].k, 'two same-family agents with different ids get different looks (deterministic)');
+      A(ids.every(id => CH.lookOf(id + 'k', 'claude', 'intern', 'agent-0').look !== lks[0].look), 'an intern never wears its lead look');
+      A(lks.every(l => !l.acc || LK.acc.allow.claude.lead.includes(l.acc)) && !LK.acc.allow.codex.lead.includes('buds') && !LK.acc.allow.agy.lead.includes('cap'), 'accessories respect each family own headwear');
+      const fr0 = CH.anim('codex', 'lead', 'work').frames[0];
+      A(fr0._hd && fr0._hd.length === 5 && /^[A-E]$/.test(fr0._hd[0]) && CH.famWalker('agy', 'intern') && CH.famWalker('agy', 'intern').anims.walk.frames[0]._hd[0] === 'S' && CH.colleagues().length >= 7, 'head anchors per raster, family walkers and 7 colleagues decode');
+      const p1 = CH.pal('claude', 'claude', lks.find(l => l.look)), p0 = CH.pal('claude', 'claude', null);
+      A(p1.length === p0.length && p1.some((c, i) => c !== p0[i]) && p1[parseInt('p', 36)] === p0[parseInt('p', 36)], 'a look recolours hair/outfit but keeps the family accent');
     }
     A(R.isWaiting({ st: 'dead', age: 10 }) && !R.isWaiting({ st: 'dead', age: 9999 }) && R.isWaiting({ st: 'stall', age: 9999 }), 'isWaiting');
     // talk (TALK-UX §10): previews, msgs normalisation, spawn/down merge, done/up dedupe, fan-out, my talk matched by msg_id, 5-minute hold expiry
@@ -145,6 +155,10 @@
         // mode toggle: header radio -> 재미 모드 (office if sprites exist, else the map with a note); back
         ov.querySelector('.ov-seg [data-v=office]').click(); await tick();
         A(S.fun === true && (typeof OvOffice !== 'undefined' && OvOffice.available() ? Overview.mode === 'office' && ov.querySelector('.ovo canvas') : Overview.mode === 'wire' && !ov.querySelector('.ov-note').hidden), 'mode toggle switches to 픽셀 오피스 (or explains the fallback)');
+        if (Overview.mode === 'office') {   // idle walks: scheduled for idle agents, never under reduced motion
+          A(OvOffice.walkTest(true) === 0, 'idle walks never start under reduced motion');
+          A(OvOffice.walkTest(false) === 1, 'an idle agent gets up for a walk (one per scheduling step)');
+        }
         ov.querySelector('.ov-seg [data-v=wire]').click(); await tick();
         A(S.fun === false && Overview.mode === 'wire', 'mode toggle back to 배선 지도');
         // clicking an agent routes to its room
