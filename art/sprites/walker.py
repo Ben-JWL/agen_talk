@@ -577,12 +577,16 @@ def frame(i=None, stand=None, var='a'):
     cv = Canvas(W, H)
     walk = i is not None
     st = None if walk else stand % 144
-    b = BOB[i] if walk else (1 if 48 <= st < 76 else 0)
+    # Carrying weight damps the up pose; the free arm trails the contact by one exposure.
+    b = BOB[i] if walk else (1 if 48 <= st < 70 else 0)
+    if walk and V.get('prop') in ('box', 'plant'): b = max(0, b)
     dy = V.get('dy', 0)
     ty = 12 + b + dy
     prop = V.get('prop')
-    sip = V.get('sip') and not walk and 100 <= st < 124
-    far = FAR[FARA[i]] if walk and prop not in ('box', 'plant') else FAR['mid']
+    sip = V.get('sip') and not walk and 92 <= st < 134
+    lift = (1 if st < 94 else 3 if st < 96 else 5 if st < 98 else 7 if st < 100 else
+            8 if st < 124 else 7 if st < 126 else 5 if st < 128 else 3 if st < 131 else 1) if sip else 0
+    far = FAR[FARA[(i-1)%12]] if walk and prop not in ('box', 'plant') else FAR['mid']
     cv.put(far, 7, ty + 1)
     if walk:
         cv.put(V.get('legs', LEGS)[i], 0, 18)
@@ -590,25 +594,53 @@ def frame(i=None, stand=None, var='a'):
         cv.put(V.get('stand', STAND), 3, 19)
     cv.put(V['torso'](), V['tx'], ty)
     hx, hy = 3 + (1 if walk else 0), 4 + b + dy + V.get('hdy', 0)
-    cv.put(V['head'](), hx, hy)
+    head=V['head']()
+    if not walk and st in (34,35,112,113):
+        rows=[''.join(r) for r in head.g]
+        ex,ey=V.get('eye',(6,4))
+        rows[ey]=rows[ey][:ex]+'a'+rows[ey][ex+1:]
+        head=Part(rows,kx=head.kx,ky=head.ky)
+    cv.put(head, hx, hy)
     head_end = cv.n
     if prop == 'mop':
+        # Grip bobs with the shoulder; the flexible shaft ends in a grounded mop head.
+        end=13 if walk or not 56 <= st < 84 else 12
+        y0=ty+1
+        rows=[]
+        for y in range(y0,26):
+            row=['.']*10
+            x=10 if y<=ty+4 else round(10+(end-10)*(y-ty-4)/max(1,24-ty-4))
+            if y<24: row[x-5]='u'
+            else:
+                for x in range(end-2,end+2): row[min(9,x-5)]='x'
+            rows.append(''.join(row))
+        cv.put(Part(rows,kx=0,ky=0),5,y0)
         cv.put(HOLD, 6, ty + 2)
-        cv.put(MOP if walk else MOP_SWEEP[(st // 24) % 2], 5, ty + 1)
     elif prop == 'box':
         cv.put(BOX, 8, ty + 1)
         cv.put(HOLD, 6, ty + 3)
     elif prop == 'plant':
-        cv.put(PLANT[0 if walk else (st // 30) % 2], 9, ty - 1)
+        cv.put(PLANT[(1 if i%6 in (2,3) else 0) if walk else (1 if 52<=st<74 else 0)], 9, ty - 1)
         cv.put(HOLD, 6, ty + 2)
     elif prop == 'laptop':
         cv.put(LAPTOP, 3, ty + 4)
         cv.put(UNDER, 5, ty + 2)
     elif walk:
-        cv.put(ARM[NEAR[i]], 5, ty + 2)
+        cv.put(ARM[NEAR[(i-1)%12]], 5, ty + 2)
     elif sip:
-        cv.put(SIP, 5, ty - 1)
-        cv.put(CUP, 8, ty - 4)
+        # Wrist and cup share one lift trajectory; elbow stays joined to the shoulder.
+        wrist=5-lift; elbow=5-max(0,lift-3)//2
+        top=min(2,wrist); rows=[]
+        for y in range(top,elbow+2):
+            row=['.']*5
+            if 2<=y<=elbow:
+                row[0]=row[1]='C'
+            if wrist<=y<=elbow:
+                x=round(3-2*(y-wrist)/max(1,elbow-wrist))
+                row[x]=row[x+1]='4' if y<=wrist+1 else 'C'
+            rows.append(''.join(row))
+        cv.put(Part(rows,kx=.5,ky=0,cast=1),5,ty+top)
+        cv.put(CUP,9,ty+4-lift)
     else:
         cv.put(CUP, 9, ty + 4)
         cv.put(ARM['cup'], 5, ty + 2)

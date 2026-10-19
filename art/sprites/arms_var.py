@@ -139,3 +139,66 @@ CCCC....
 ''', 3, 8))
 IA['raise_l'] = mirror_native(I2.A['raise'], I.AXIS)
 IA['raise_antic_l'] = mirror_native(I2.A['raise_antic'], I.AXIS)
+# Transition drawings: shoulders stay planted while the wrist follows an arc.
+# A low elbow bend and an outward shoulder-height bend bridge desk -> stretch.
+LA['lift_low'] = sl('''
+......CCC..
+.....CCCCC.
+....CCCCC..
+...CCCCC...
+..CCCCC....
+.CCCC.....D
+CCCC....DD:
+CCCC...CCC.
+.CCCC.CCC..
+..CCCCCC...
+...CCCC....
+''', 4, 26, hands=[(HN.FIST, 8, 3)])
+LA['lift_mid'] = sl('''
+..DD:D......
+..CC+C......
+.CC+CC......
+.CCCC.......
+CCCC........
+CCCC........
+CCCC.....CCC
+.CCCC...CCCC
+..CCCC.CCCCC
+...CCCCCCCC.
+....CCCCCC..
+.....CCCC...
+''', 3, 20, hands=[(HN.FIST, 2, -3)])
+IA['lift_low'] = atelier.tailor(I2.sl('''
+....CCC..
+...CCCCC.
+..CCCCC..
+.CCCC..D.
+CCCC..DD:
+.CCC.CCC.
+..CCCCC..
+...CCC...
+''', 3, 22, hands=[(HN.I_FIST, 6, 1)]))
+IA['lift_mid'] = atelier.tailor(I2.sl('''
+.DD:.....
+.CCC.....
+CCC......
+CCC......
+CCC...CCC
+.CCC.CCCC
+..CCCCCC.
+...CCCC..
+''', 2, 18, hands=[(HN.I_FIST, 1, -2)]))
+
+# Use the already drawn mug contours: wrist/hand/phone always travel together.
+for V, holds, fist, phone, phone_b, lo, hi in (
+        (LA, AR.HOLD, HN.FIST, PHONE, PHONE_B, 36, 31),
+        (IA, I2.HOLD, HN.I_FIST, I_PHONE, I_PHONE_B, 28, 25)):
+    for k in range(hi, lo+1):
+        V['phone%d'%k] = top_hand(holds[k], phone, 0, 1)
+        V['phone%db'%k] = top_hand(holds[k], phone_b, 0, 1)
+    V['phone_palm'] = top_hand(holds[lo], fist, 0, 1)
+    for k in range(21 if V is IA else 27, lo+1):
+        V['chin%d'%k] = top_hand(holds[k], fist, 0, 1)
+    axis = 21 if V is LA else I.AXIS
+    base = AR.A if V is LA else I2.A
+    V['raise_lmid'] = mirror_native(base['raise_mid'], axis)
