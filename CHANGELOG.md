@@ -1,6 +1,6 @@
 # Changelog / 변경 내역
 
-## 0.2.0 (unreleased)
+## 0.2.0 (2026-11-16)
 
 업데이트는 새 설치 파일을 그대로 실행하면 됩니다. 서버 목록과 설정은 그대로 남습니다.
 To update, run the new installer over the old one; servers and settings are kept.
