@@ -6058,7 +6058,9 @@ def selftest_sshux():
     """SSH convenience: host parsing (IPv6 / underscores), key-only servers (password_disabled), the ~/.ssh/config importer, and the
     retry / rename / move / remove routes with their gates. Temp dirs only: conf_dir and HOME point into one for the whole test."""
     import http.client, tempfile, threading
-    global conf_dir, HOME, pm_open, app_key
+    global conf_dir, HOME, pm_open, app_key, PROC
+    PROC = {}   # the earlier selftests leave fake entries behind (no "cpu"): the hub's local channel below would fail on them off Windows
+    PREV.clear()
     # addresses: IPv6 literals and underscores end-to-end; never brackets, zone ids or a leading '-'
     for h in ("2001:db8::1", "::1", "fe80::1:2", "my_host", "gpu_1.lab", "203.0.113.9", "a"):
         assert host_ok(h) and srv_check({"host": h, "user": "u"}, {})["host"] == h, h
