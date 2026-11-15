@@ -5882,8 +5882,11 @@ def talk_fixture(root):
     ast = lambda ago, blocks, stop="end_turn": {"type": "assistant", "timestamp": iso_(ago), "message": {"id": "m%d" % ago, "stop_reason": stop, "content": blocks}}
     txt = lambda t: [{"type": "text", "text": t}]
     (root / "bin").mkdir(exist_ok=True)
-    shutil.copy("/bin/sleep", str(root / "bin/claude"))
-    cp = subprocess.Popen([str(root / "bin/claude"), "600"], **popen_kw())
+    # a script, not a copy of /bin/sleep: a multi-call coreutils binary (Ubuntu 26) refuses to run under another name. The kernel
+    # names a #! script's process after the script, so its comm is still "claude"
+    (root / "bin/claude").write_text("#!%s\nimport time\ntime.sleep(600)\n" % sys.executable, encoding="utf-8")
+    os.chmod(str(root / "bin/claude"), 0o700)
+    cp =subprocess.Popen([str(root / "bin/claude"), "600"], **popen_kw())
     procs.append(cp)
     time.sleep(0.2)
     st = open("/proc/%d/stat" % cp.pid).read()
