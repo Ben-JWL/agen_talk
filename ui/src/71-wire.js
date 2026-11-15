@@ -59,7 +59,7 @@ const OvWire = (() => {
       } else {
         const key = b.n.key;
         el = h('button.ovn' + (b.kind === 'kid' ? '.kid' : ''), { type: 'button', data: { agent: key } },
-          h('div.t', R.svgUse('t-' + b.n.tool, 'amk'), h('span.nm')), h('div.s', C.glyph(b.n.st), h('span.stl'), h('span.why')));
+          h('div.t', R.svgUse('t-' + b.n.tool, 'amk'), h('span.nm'), h('span.mdl', { hidden: true })), h('div.s', C.glyph(b.n.st), h('span.stl'), h('span.why')));
         A.bindAgent(el, () => { const c = cards.get(key); return c && c.b.n; });
       }
       el.style.cssText = 'left:' + b.x + 'px;top:' + b.y + 'px;width:' + b.w + 'px;height:' + b.h + 'px';
@@ -91,10 +91,14 @@ const OvWire = (() => {
         R.stClass(el, n.st); el.dataset.st = n.st; el.dataset.w = n.waiting ? '1' : ''; el.dataset.ack = n.ack ? '1' : '';
         attr(el, 'aria-label', A.label(n));
         text(el.querySelector('.nm'), n.name);
+        // the model that answered last; '⇄' when it changed during the session, warn colour while a safeguard reroute holds
+        const md = el.querySelector('.mdl'), sm = R.shortModel(n.a.model);
+        text(md, (n.a.modelPrev ? '⇄ ' : '') + sm); md.hidden = !sm; cls(md, 'chg', !!n.a.modelPrev); cls(md, 'fb', n.a.modelFb);
+        const idle = R.REST.has(n.st) && !n.waiting ? R.idleFor(n.a) : 0; el.dataset.idle = R.isLongIdle(n.a) ? '1' : '';
         C.setGlyph(el.querySelector('.s .gl'), n.st);
         text(el.querySelector('.stl'), SHORT[n.st] || ST[n.st]);
         const sub = n.st === 'tool' && n.a.now ? n.a.now : n.why;
-        text(el.querySelector('.why'), (sub ? '· ' + sub : '') + (n.ack ? ' · 읽음' : '') + (n.kids.length < n.nKids ? ' · 하위 ' + n.nKids : ''));
+        text(el.querySelector('.why'), (sub ? '· ' + sub : '') + (idle >= 3600 ? ' · ' + R.fmtAgo(idle) : '') + (n.ack ? ' · 읽음' : '') + (n.kids.length < n.nKids ? ' · 하위 ' + n.nKids : ''));
       }
     }
     edges(D);

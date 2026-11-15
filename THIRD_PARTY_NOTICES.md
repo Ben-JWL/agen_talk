@@ -7,6 +7,7 @@ its own license; this file is a summary, not a replacement for their texts.
 | Component | Where | License |
 |---|---|---|
 | UI snippets from [uiverse.io](https://uiverse.io) | `ui/src/*.css` (a few copied and adapted CSS effects) | MIT (uiverse.io content is published under the MIT license by its authors) |
+| Sprites from the [Pixel Art Atlas](https://huggingface.co/datasets/Angais/pixel-art-atlas-1.4m) by Angais | `ui/src/72-atlas.js` (110 16×16 sprites of the pixel dungeon, copied unmodified apart from palette indexing; source rows listed in `art/atlas/sprites.json`) | CC0 1.0 (public-domain dedication). The sprites are AI-generated (Krea 2 Turbo with a pixel-art LoRA); the dataset is an independent release, not endorsed by Krea |
 | [pywebview](https://github.com/r0x0r/pywebview) | bundled in the Windows app | BSD-3-Clause |
 | [Python](https://www.python.org/) runtime | bundled in the Windows app | PSF License Version 2 |
 | [PyInstaller](https://pyinstaller.org/) bootloader | `AgenTalk.exe` is built on it | GPL-2.0-or-later **with a special exception** that permits distributing the bootloader inside programs under any license; PyInstaller itself is not bundled |

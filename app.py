@@ -27,11 +27,16 @@ IDLE_SECONDS = 120   # fallback mode: no /api request for this long -> exit
 
 # ---------- small pieces (all testable without a display) ----------
 def write_private(path, data):
-    """Atomic write, user-only (0600; on Windows the folder is already per-user)."""
+    """Atomic write, user-only (0600; on Windows a protected DACL naming only this user: the profile folder can hand
+    inherited read access to other principals, e.g. the Codex sandbox group, and run.json holds the hub's secret and token)."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(path.name + ".%d.tmp" % os.getpid())
-    fd = os.open(str(tmp), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    tmp = path.with_name(path.name + ".%d.%s.tmp" % (os.getpid(), os.urandom(6).hex()))
+    try:
+        fd = ar.private_fd(tmp)   # created with its DACL: no handle opened earlier can read it; os.replace keeps the file's own DACL
+    except OSError as e:   # still written: a launch must not fail on it
+        logging.getLogger("agen-talk").info("write_private %s: %s", path.name, e)
+        fd = os.open(str(tmp), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(fd, "w", encoding="utf-8") as f:
         json.dump(data, f)
         f.flush()
@@ -52,6 +57,20 @@ def loopback_open(req, timeout):
     return urllib.request.build_opener(urllib.request.ProxyHandler({})).open(req, timeout=timeout)
 
 
+class PrivateLog(logging.handlers.RotatingFileHandler):
+    """The rotating log, user-only on Windows too: every file it opens (the first one and each one after a rotation) gets the
+    same protected DACL as run.json. The log names servers, sessions and pids."""
+    def _open(self):
+        try:
+            if not os.path.exists(self.baseFilename):
+                os.close(ar.private_fd(self.baseFilename))   # a new log is private from its creation
+            else:
+                ar.pm_acl(self.baseFilename)                  # one written by an older version
+        except (OSError, ar.SrvErr):
+            pass   # logging must work even where the DACL cannot be set
+        return super()._open()
+
+
 def setup_logging(state):
     """Rotating log (~1 MB x 3); stdout/stderr (None in a windowed exe) are sent to it too."""
     state = Path(state)
@@ -59,7 +78,7 @@ def setup_logging(state):
     log = logging.getLogger("agen-talk")
     log.setLevel(logging.INFO)
     if not log.handlers:
-        h = logging.handlers.RotatingFileHandler(str(state / "agen-talk.log"), maxBytes=1 << 20, backupCount=3, encoding="utf-8")
+        h = PrivateLog(str(state / "agen-talk.log"), maxBytes=1 << 20, backupCount=3, encoding="utf-8")
         h.setFormatter(logging.Formatter("%(asctime)s %(message)s"))
         log.addHandler(h)
 

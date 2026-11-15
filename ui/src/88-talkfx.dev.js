@@ -15,10 +15,10 @@
   const kid = (parent, id, tool, name, st, why, age, since, down, o = {}) => nd(id, tool, name, st, why, age, since, { ...o, msgs: [down ? (down.enc ? M_('down', tool === 'codex' ? 'codex' : 'agent', parent.id, id, parent.name, down.ago, '', { encrypted: true, role: down.role || 'worker' }) : M_('down', 'agent', parent.id, id, parent.name, down.ago, down.t)) : null, ...(o.msgs || [])].filter(Boolean) });
 
   // 1. Claude root with sub-agents: parent room, child rooms, report, follow-up, locked (codex) instruction, cross-process child
-  const P = nd('cl-data', 'claude', '데이터셋 정리', 'user', '질문함 · 답변 기다림', 240, 3100, { last: 'data_lint 승인이 끝나면 통계까지 이어서 진행할까요?', meta: 'pid 51044 · ~/work/data · claude-opus-4', talk: TOK, hidden: 0 });
+  const P = nd('cl-data', 'claude', '데이터셋 정리', 'user', '질문함 · 답변 기다림', 240, 3100, { last: 'data_lint 승인이 끝나면 통계까지 이어서 진행할까요?', meta: 'pid 51044 · ~/work/data · claude-opus-4', model: 'claude-opus-5-5', end: { ok: true, pid: 51044 }, talk: TOK, hidden: 0 });
   P.kids = [
     kid(P, 'data-dedupe', 'claude', 'data_dedupe', 'done', '완료 보고됨', 900, null, { ago: 3000, t: '데이터셋 v2에서 중복 행을 찾아 제거해 줘.\n같은 키는 하나만 남기고, 제거 목록은 results/dups.txt 에 남겨 줘.\n통계는 건드리지 마.' }, { meta: 'general-purpose', msgs: [M_('up', 'agent', 'data-dedupe', 'cl-data', '데이터셋 정리', 1800, '중복 12건 제거함. 제거 목록은 results/dups.txt.')] }),
-    kid(P, 'data-stats', 'codex', 'data_stats', 'work', '모델 응답 중', 8, 1500, { enc: true, ago: 1520, role: 'worker' }, { meta: 'gpt-5.1 · worker', now: '통계 요약을 작성하는 중입니다', acts: acts([1500, 'say', '통계 요약을 작성하는 중입니다'], [1490, 'tool', '$ python stats.py --lib v2']),
+    kid(P, 'data-stats', 'codex', 'data_stats', 'work', '모델 응답 중', 8, 1500, { enc: true, ago: 1520, role: 'worker' }, { meta: 'gpt-5.1 · worker', model: 'gpt-6.1-codex', now: '통계 요약을 작성하는 중입니다', acts: acts([1500, 'say', '통계 요약을 작성하는 중입니다'], [1490, 'tool', '$ python stats.py --lib v2']),
       msgs: [M_('follow', 'codex', 'cl-data', 'data-stats', '데이터셋 정리', 900, '분포 표는 CSV로도 저장해 줘.'), M_('follow', 'codex', 'cl-data', 'data-stats', '데이터셋 정리', 300, '', { encrypted: true, role: 'worker' })] }),
     kid(P, 'data-lint', 'claude', 'data_lint', 'user', '명령 승인 대기', 120, 900, { ago: 880, t: '린트 규칙으로 레코드 형식을 검사해 줘.' }, { now: '$ ruff check .', meta: 'general-purpose' }),
   ];
@@ -29,27 +29,27 @@
   P.kids[1].kids[1].talk = { ok: false, reason: 'subagent' };
 
   // 2. Claude root, prompting; foreign talk + peer from a known room
-  const MM = nd('cl-parse', 'claude', '검색 결과 파싱', 'tool', 'Bash 실행 중 3m', 2, 190, { now: 'Bash: python parse.py --all results/', meta: 'pid 51022 · ~/work/msa · claude-opus-4', talk: TOK,
-    acts: acts([900, 'user', 'results/ 의 검색 결과를 전부 파싱해서 TSV 로 합쳐 줘.'], [880, 'say', '결과 파일 240개를 읽는 중입니다.'], [800, 'tool', 'Read: results/batch_01.m8'], [190, 'tool', 'Bash: python parse.py --all results/']),
+  const MM = nd('cl-parse', 'claude', '검색 결과 파싱', 'tool', 'Bash 실행 중 3m', 2, 190, { now: 'Bash: pytest -q tests/', meta: 'pid 51022 · ~/work/msa · claude-opus-4', model: 'claude-sonnet-5-5', end: { ok: true, pid: 51022 }, talk: TOK,
+    acts: acts([900, 'user', 'results/ 의 검색 결과를 전부 파싱해서 TSV 로 합쳐 줘.'], [880, 'say', '결과 파일 240개를 읽는 중입니다.'], [800, 'tool', 'Read: results/batch_01.m8'], [190, 'tool', 'Bash: pytest -q tests/']),
     msgs: [M_('down', 'talk', 'agen-talk:alice@OTHER-PC', 'cl-parse', '에겐 톡', 500, '파싱 끝나면 요약 표도 같이 만들어 주세요.', { msg_id: 'at-0badf00d', by: 'alice@OTHER-PC' }), M_('down', 'peer', 'cl-data', 'cl-parse', '데이터셋 정리', 300, '결과 위치는 ~/work/data/results 야.')] });
   // 3. bypass room with every delivery state seeded (its turn ended with a plain answer: done, not 입력 대기)
-  const BY = nd('cl-bypass', 'claude', '테스트 결과 점검', 'done', '답변 완료', 60, null, { meta: 'pid 51100 · ~/work/tests · claude-opus-4 · --dangerously-skip-permissions', talk: { ok: true, hold: true, max: 4000 }, acts: acts([4000, 'user', '정렬 결과를 점검해 줘.'], [3900, 'say', '정렬 결과 12개를 점검했고 이상은 없습니다.']) });
+  const BY = nd('cl-bypass', 'claude', '테스트 결과 점검', 'done', '답변 완료', 60, null, { meta: 'pid 51100 · ~/work/tests · claude-opus-4 · --dangerously-skip-permissions', model: 'claude-opus-5-5', model_prev: 'claude-fable-5-2', model_fb: true, end: { ok: true, pid: 51100 }, talk: { ok: true, hold: true, max: 4000 }, acts: acts([4000, 'user', '정렬 결과를 점검해 줘.'], [3900, 'say', '정렬 결과 12개를 점검했고 이상은 없습니다.']) });
   // 4. waiting for approval (confirm card adds the line)
-  const WA = nd('cl-wait', 'claude', '로그 정리 스크립트', 'user', '명령 승인 대기', 130, 400, { now: '$ rm -rf build/ && make all', meta: 'pid 51200 · ~/work/logs · claude-opus-4', talk: TOK, acts: acts([420, 'user', 'build 폴더 정리하고 다시 빌드해 줘.'], [400, 'say', 'build/ 를 지우고 다시 빌드하겠습니다.'], [130, 'ask', '$ rm -rf build/ && make all']) });
+  const WA = nd('cl-wait', 'claude', '로그 정리 스크립트', 'user', '명령 승인 대기', 130, 400, { now: '$ rm -rf build/ && make all', meta: 'pid 51200 · ~/work/logs · claude-opus-4', model: 'claude-opus-5-5', end: { ok: true, pid: 51200 }, talk: TOK, acts: acts([420, 'user', 'build 폴더 정리하고 다시 빌드해 줘.'], [400, 'say', 'build/ 를 지우고 다시 빌드하겠습니다.'], [130, 'ask', '$ rm -rf build/ && make all']) });
   // 5. codex: daemon-hosted (steer line), --no-daemon
-  const CD = nd('cx-daemon', 'codex', '성능 리포트', 'work', '모델 응답 중', 4, 600, { now: '리포트 초안을 작성하는 중입니다', meta: 'pid 48001 · ~/work/aff · gpt-5.1', talk: TOK, acts: acts([700, 'user', '성능 측정 결과를 리포트로 정리해 줘.'], [600, 'say', '리포트 초안을 작성하는 중입니다']) });
-  const CN = nd('cx-nodaemon', 'codex', '스키마 마이그레이션', 'idle', '답변 끝남', 500, null, { meta: 'pid 48310 · ~/work/db · gpt-5.1', talk: { ok: false, reason: 'no-daemon' }, acts: acts([900, 'user', '마이그레이션 스크립트를 검토해 줘.'], [800, 'say', '검토했고 두 곳을 고치면 됩니다.']) });
+  const CD = nd('cx-daemon', 'codex', '성능 리포트', 'work', '모델 응답 중', 4, 600, { now: '리포트 초안을 작성하는 중입니다', meta: 'pid 48001 · ~/work/aff · gpt-5.1', model: 'gpt-6.1-codex', end: { ok: true, pid: 48001 }, talk: TOK, acts: acts([700, 'user', '성능 측정 결과를 리포트로 정리해 줘.'], [600, 'say', '리포트 초안을 작성하는 중입니다']) });
+  const CN = nd('cx-nodaemon', 'codex', '스키마 마이그레이션', 'idle', '답변 끝남', 500, null, { meta: 'pid 48310 · ~/work/db · gpt-5.1', model: 'gpt-6.1-codex', end: { ok: true, pid: 48310 }, talk: { ok: false, reason: 'no-daemon' }, acts: acts([900, 'user', '마이그레이션 스크립트를 검토해 줘.'], [800, 'say', '검토했고 두 곳을 고치면 됩니다.']) });
   // 6. the other disabled reasons
   const dis = (id, tool, name, reason, st = 'idle', extra = {}) => nd(id, tool, name, st, '답변 끝남', 300, null, { meta: 'pid 40000 · ~/work/x · ' + (tool === 'agy' ? '14 steps' : 'claude-opus-4'), talk: { ok: false, reason }, acts: acts([600, 'user', '확인해 줘.'], [500, 'say', '확인했습니다.']), ...extra });
-  const D = [dis('cl-nosock', 'claude', '구버전 세션', 'no-socket'), dis('cl-print', 'claude', 'claude -p 배치', 'not-interactive'), dis('cl-self', 'claude', '에겐 톡을 띄운 세션', 'self'), dis('cl-ended', 'claude', '끝난 세션', 'ended', 'done')];
+  const D = [dis('cl-nosock', 'claude', '구버전 세션', 'no-socket'), dis('cl-print', 'claude', 'claude -p 배치', 'not-interactive'), dis('cl-self', 'claude', '에겐 톡을 띄운 세션', 'self', 'idle', { end: { ok: false, reason: 'self' }, model: 'claude-sonnet-5' }), dis('cl-ended', 'claude', '끝난 세션', 'ended', 'done')];
   const AG = dis('agy-main', 'agy', '문서 요약 (agy)', 'unsupported', 'idle', { acts: [], last: '초록 12편 중 9편을 요약했습니다.' });
   AG.kids = [nd('agy-sub', 'agy', 'literature_scan', 'done', '완료', 200, null, { meta: '6 steps', msgs: [M_('down', 'agy', 'agy-main', 'agy-sub', '문서 요약 (agy)', 900, '최근 2년 관련 논문 12편의 초록을 읽고 핵심 주장을 한 줄씩 정리해 줘.'), M_('up', 'agy', 'agy-sub', 'agy-main', '문서 요약 (agy)', 400, '12편 중 9편을 정리했습니다. 3편은 초록이 없어 건너뛰었습니다.')] })];
-  // 6b. look variety in the pixel office: a second AGY lead next to the first, a Codex lead with two Codex interns
+  // 6b. look variety in the pixel dungeon: a second AGY lead next to the first, a Codex lead with two Codex interns
   const AG2 = dis('agy-notes', 'agy', '용어집 정리 (agy)', 'unsupported', 'idle', { acts: [], last: '용어 40개를 정리했습니다.' });
   AG2.kids = [nd('agy-gloss', 'agy', 'glossary_check', 'work', '응답 생성 중', 3, 120, { meta: '4 steps' }), nd('agy-terms', 'agy', 'term_links', 'idle', '완료', 300, null, { meta: '3 steps' })];
   CD.kids = [nd('cx-chart', 'codex', 'chart_draw', 'work', '모델 응답 중', 5, 200, { meta: 'gpt-5.1 · worker' }), nd('cx-table', 'codex', 'table_fmt', 'idle', '답변 끝남', 400, null, { meta: 'gpt-5.1 · worker' })];
   // 7. 20+ node tree
-  const B = nd('cl-big', 'claude', '릴리스 전 일괄 점검', 'child', '하위 에이전트 12개 대기', 20, 3400, { meta: 'pid 52000 · ~/work/release · claude-opus-4', talk: TOK, hidden: 0 });
+  const B = nd('cl-big', 'claude', '릴리스 전 일괄 점검', 'child', '하위 에이전트 12개 대기', 20, 3400, { meta: 'pid 52000 · ~/work/release · claude-opus-4', model: 'claude-opus-5-5', end: { ok: true, pid: 52000 }, talk: TOK, hidden: 0 });
   const ws = [['done', 5], ['done', 4], ['done', 3], ['done', 5], ['done', 6], ['work', 2], ['work', 1], ['user', 3]];
   B.kids = ws.map(([st, age], i) => kid(B, 'big-w' + (i + 1), 'claude', 'lint_shard_' + (i + 1), st, st === 'user' ? '명령 승인 대기' : st === 'done' ? '완료 보고됨' : '응답 생성 중', age, st === 'done' ? null : 120 + i * 20, { ago: 3300 - i, t: DUP }, { meta: 'general-purpose', msgs: st === 'done' ? [M_('up', 'agent', 'big-w' + (i + 1), 'cl-big', B.name, 2000 - i * 30, 'shard ' + (i + 1) + ': 이슈 ' + (i + 2) + '건, 목록은 reports/lint_' + (i + 1) + '.txt')] : [] }));
   const TA = kid(B, 'big-ta', 'claude', 'type_audit', 'work', '하위 대기', 3, 1800, { ago: 3200, t: '타입 오류를 모듈별로 점검하고, 가장 많은 모듈부터 고쳐 줘.\n고친 뒤에는 mypy 를 다시 돌려 결과를 알려 줘.' }, { meta: 'general-purpose' });
@@ -65,8 +65,16 @@
   B.kids.push(TA, DC, PF, SC);
   B.acts = acts([3500, 'user', '릴리스 전에 린트, 타입, 문서, 성능, 보안을 한꺼번에 점검해 줘.'],
     ...B.kids.slice(0, 8).map((k, i) => [3300 - i, 'spawn', k.name]), [3200, 'spawn', 'type_audit'], [2000, 'done', 'lint_shard_1: 이슈 2건, 목록은 reports/lint_1.txt'], [1200, 'done', 'docs_check: 죽은 링크 2건']);
-  const CL = nd('cl-cloud', 'claude', '클라우드 배치 점검', 'work', '응답 생성 중', 30, 600, { meta: 'pid 900 · ~/bench · claude-opus-4', talk: TOK, acts: acts([700, 'user', '배치 상태를 점검해 줘.'], [600, 'say', '점검 중입니다.']) });
-  const WN = nd('cl-win', 'claude', '윈도 빌드 스크립트', 'work', '응답 생성 중', 6, 400, { meta: 'pid 11234 · C:\\Users\\me\\proj · claude-opus-4', talk: { ok: false, reason: 'windows' }, acts: acts([500, 'user', '빌드 스크립트를 손봐 줘.'], [400, 'say', '수정 중입니다.']) });
+  const CL = nd('cl-cloud', 'claude', '클라우드 배치 점검', 'work', '응답 생성 중', 30, 600, { meta: 'pid 900 · ~/bench · claude-opus-4', model: 'claude-sonnet-5-5', end: { ok: true, pid: 900 }, now: 'Grep: TODO src/', talk: TOK, acts: acts([700, 'user', '배치 상태를 점검해 줘.'], [600, 'say', '점검 중입니다.']) });
+  const WN = nd('cl-win', 'claude', '윈도 빌드 스크립트', 'work', '응답 생성 중', 6, 400, { meta: 'pid 11234 · C:\\Users\\me\\proj · claude-opus-4', model: 'claude-opus-5-5', end: { ok: true, pid: 11234 }, now: 'Edit: build.ps1', talk: { ok: false, reason: 'windows' }, acts: acts([500, 'user', '빌드 스크립트를 손봐 줘.'], [400, 'say', '수정 중입니다.']) });
+
+  // the dungeon's other activities (one root each, on the local PC): WebSearch, a stall, stopped, dead, and a long-idle root (3 days) that 유휴 세션 정리 offers
+  const WS = nd('cl-web', 'claude', '라이브러리 조사', 'tool', 'WebSearch 실행 중', 4, 60, { now: 'WebSearch: pytest fixture scope', meta: 'pid 11300 · C:\\Users\\me\\x · claude-sonnet-5-5', model: 'claude-sonnet-5-5', end: { ok: true, pid: 11300 }, talk: { ok: false, reason: 'windows' }, acts: acts([200, 'user', 'pytest 픽스처 범위 문서를 찾아봐 줘.'], [60, 'tool', 'WebSearch: pytest fixture scope']) });
+  const SL = nd('cl-stall', 'claude', '응답 없는 배치', 'stall', '25m 동안 신호 없음 · Bash 실행 중', 1500, 1500, { now: 'Bash: make all', meta: 'pid 11400 · C:\\Users\\me\\x · claude-opus-5-5', model: 'claude-opus-5-5', end: { ok: true, pid: 11400 }, talk: { ok: false, reason: 'windows' }, acts: acts([1600, 'user', '배치를 돌려 줘.'], [1500, 'tool', 'Bash: make all']) });
+  const WR = nd('cl-grep', 'claude', '코드 검색', 'tool', 'Grep 실행 중', 3, 40, { now: 'Grep: TODO src/', meta: 'pid 11350 · C:\\Users\\me\\x · claude-sonnet-5-5', model: 'claude-sonnet-5-5', end: { ok: true, pid: 11350 }, talk: { ok: false, reason: 'windows' }, acts: acts([100, 'user', 'TODO 주석을 모아 줘.'], [40, 'tool', 'Grep: TODO src/']) });
+  const SP = nd('cl-stopped', 'claude', '중단한 세션', 'stopped', '사용자가 중단함', 900, null, { meta: 'pid 11500 · C:\\Users\\me\\x · claude-opus-5-5', model: 'claude-opus-5-5', end: { ok: true, pid: 11500 }, talk: { ok: false, reason: 'windows' }, acts: acts([1000, 'user', '정리해 줘.'], [900, 'say', '정리를 시작합니다.']) });
+  const DD = nd('cl-dead', 'claude', '끊긴 세션', 'dead', '프로세스 사라짐', 60, null, { meta: 'pid 11600 · C:\\Users\\me\\x · claude-opus-5-5', model: 'claude-opus-5-5', talk: { ok: false, reason: 'windows' }, acts: acts([700, 'user', '로그를 정리해 줘.']) });
+  const OLD = nd('cl-old', 'claude', '오래된 리팩터링 세션', 'idle', '답변 끝남', 259200, null, { last: '리팩터링을 끝냈습니다.', meta: 'pid 11700 · C:\\Users\\me\\x · claude-sonnet-5-5', model: 'claude-sonnet-5-5', end: { ok: true, pid: 11700 }, talk: { ok: false, reason: 'windows' }, acts: acts([260000, 'user', '모듈 구조를 정리해 줘.'], [259500, 'say', '리팩터링을 끝냈습니다.']) });
 
   // project (OVERVIEW-CONTRACT §1): generic repos; one subagent in another repo, two roots without a project (기타), one name that looks like markup
   const PJ = (name, branch, key, root) => ({ name, branch, key, root });
@@ -77,30 +85,49 @@
   AG.project = PJ('문서-사이트', 'main', 'local:~/work/문서-사이트', '~/work/문서-사이트'); AG2.project = AG.project; CL.project = PJ('<b>lab</b>', 'x', 'local:~/work/x', '~/work/x');   // the markup-looking name lives on the last server so screenshots stay clean
   D[1].project = PJ('infra-scripts', 'ops/cron', 'github.com/example/infra-scripts', '~/infra');
   const ROOTS = { s01: [P, MM, BY, WA, CD, CN, ...D, AG, AG2, B], pc: [WN], cloud: [CL] };
-  const chans = () => [{ id: 's01', name: 'gpu-01', kind: 'ssh', state: 'ok', error: null, t: Date.now() / 1000, ssh: 'gpu.example.com', ssh_args: [] }, { id: 'pc', name: '내 PC', kind: 'local', state: 'ok', error: null, t: Date.now() / 1000 },
+  ROOTS.pc.push(WS, WR, SL, SP, DD, OLD);
+  const ENDED = new Set();   // POST api/end: that agent is gone from the next poll
+  // the channel list is state (설정 › 채널 renames / moves / removes it); t of a healthy channel is always 'now', retry_at only while errored
+  const CH = [{ id: 's01', name: 'gpu-01', kind: 'ssh', state: 'ok', error: null, ssh: 'gpu.example.com', ssh_args: [] }, { id: 'pc', name: '내 PC', kind: 'local', state: 'ok', error: null },
     { id: 'cloud', name: 'cloud-a', kind: 'ssh', state: 'error', error: 'Permission denied: 키 로그인이 거절된 서버라 이번 실행에서는 비밀번호가 필요합니다 (비밀번호로 연결 또는 키 로그인 설정)', t: Date.now() / 1000 - 120, ssh: 'cloud.example.com', ssh_args: [], auth: 'password-session', session_pw: false }];
+  const chans = () => CH.map(c => ({ ...c, t: c.state === 'ok' ? Date.now() / 1000 : c.t, retry_at: c.state === 'error' && !(c.auth === 'password-session' && !c.session_pw) ? c.retry_at || null : null }));
+  // ~/.ssh/config as the hub would serve it (GET api/sshconfig): a plain entry, one already registered, a jump host, one the app cannot use
+  const SSHCONF = { entries: [{ alias: 'gpu1', host: 'gpu1.lab.example', user: 'alice', port: 2222, jump: false }, { alias: 'gpu-01', host: 'gpu.example.com', user: '', port: 22, jump: false },
+    { alias: 'behind', host: 'inner.lab', user: 'bob', port: 22, jump: true }, { alias: 'tok', host: '%h.lab', user: '', port: 22, jump: false, skipped: 'token' }, { alias: 'v6box', host: '2001:db8::7', user: 'carol', port: 22, jump: false }] };
   const aged = (list, dt) => list.map(n => ({ ...n, age: n.age == null ? null : n.age + dt, since: n.since == null ? null : n.since + dt, kids: aged(n.kids, dt) }));
   const find = (id, list = Object.values(ROOTS).flat()) => { for (const n of list) { if (n.id === id) return n; const r = find(id, n.kids); if (r) return r; } return null; };
-  // ?walk=1 (screenshots): the pixel office starts an idle walk as soon as an idle agent is on screen, with a long stay
-  if (new URLSearchParams(location.search).has('walk')) setTimeout(() => { if (typeof OvOffice !== 'undefined') OvOffice.walkNow(); }, 300);
-  const fx = window.__fx = { down: false, nodes: ROOTS, talkOn: true, posts: [], srvPosts: [], srvJob: { id: null }, find,
+  const fx = window.__fx = { down: false, nodes: ROOTS, talkOn: true, posts: [], srvPosts: [], srvJob: { id: null }, ends: [], find, CH, sshconf: SSHCONF, retries: [], manage: [], keyReg: false, keyGets: 0, confGets: 0,
     deliver(key) { const [ch, id] = [key.slice(0, key.indexOf(':')), key.slice(key.indexOf(':') + 1)], n = find(id), e = (R.A.talks[key] || []).slice().reverse().find(x => x.mid); if (!n || !e) return false; n.msgs = [...n.msgs, M_('down', 'talk', 'agen-talk:alice@PC', id, '에겐 톡', 1, e.text, { msg_id: e.mid, by: 'alice@PC' })]; return true; } };
   const j = (code, body, wait = 0) => new Promise(r => setTimeout(() => r(new Response(JSON.stringify(body), { status: code, headers: { 'Content-Type': 'application/json' } })), wait));
   window.fetch = (url, opts) => {
     const u = new URL(String(url), location.href), p = u.pathname.replace(/^.*\/(api\/.*)$/, '$1');
     if (fx.down && p.startsWith('api/')) return Promise.reject(new TypeError('hub down'));
     if (p === 'api/channels') return j(200, chans());
-    if (p === 'api/state') { const ch = u.searchParams.get('ch'), dt = (Date.now() - T0) / 1000; return j(200, { time: new Date().toTimeString().slice(0, 8), ts: Date.now() / 1000, host: ch, user: 'me', os: ch === 'pc' ? 'windows' : 'linux', warnings: [], agents: aged(ROOTS[ch] || [], dt) }); }
-    if (p === 'api/app') return j(200, { version: 'dev-talkfx', mode: 'cli', logdir: '', talk_on: fx.talkOn, talk_max: 4000 });
+    if (p === 'api/state') { const ch = u.searchParams.get('ch'), dt = (Date.now() - T0) / 1000; return j(200, { time: new Date().toTimeString().slice(0, 8), ts: Date.now() / 1000, host: ch, user: 'me', os: ch === 'pc' ? 'windows' : 'linux', warnings: [], agents: aged((ROOTS[ch] || []).filter(n => !ENDED.has(n.id)), dt) }); }
+    if (p === 'api/app') return j(200, { version: 'dev-talkfx', mode: 'cli', logdir: '', talk_on: fx.talkOn, talk_max: 4000, end_on: true, key_comment: 'agen-talk@FX' });
     if (p === 'api/presets') return j(200, []);
+    if (p === 'api/key') { fx.keyGets++; const pub = 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFakeDevKeyOnly agen-talk@FX'; return j(200, { pub, comment: 'agen-talk@FX', cmd: `sh -c "umask 077; mkdir -p ~/.ssh && … (echo; echo 'no-port-forwarding,no-agent-forwarding,no-X11-forwarding,no-pty ${pub}') >> ~/.ssh/authorized_keys"` }); }
+    if (p === 'api/sshconfig') { fx.confGets++; return j(200, fx.sshconf); }
+    // 지금 확인 / rename / move / remove (설정 › 채널): the fixture applies them to CH; a removed channel's agents go with it
+    if (p === 'api/channels/retry') { const b = JSON.parse(opts.body), c = CH.find(x => x.id === b.id); if (!c) return j(404, { error: 'nf' }); fx.retries.push(b.id); if (c.state === 'error') c.retry_at = null; return j(200, { ok: true, state: c.state }); }
+    if (p === 'api/servers/rename' || p === 'api/servers/move' || p === 'api/servers/remove') {
+      const b = JSON.parse(opts.body), i = CH.findIndex(x => x.id === b.id), c = CH[i]; fx.manage.push({ p, ...b });
+      if (!c) return j(404, { error: '알 수 없는 채널' });
+      if (p === 'api/servers/rename') { const nm = String(b.name || '').trim(); if (!nm || nm.length > 40) return j(400, { error: '이름은 1~40자입니다', field: 'name' }); if (CH.some(x => x !== c && x.name === nm)) return j(409, { error: '같은 이름의 채널이 이미 있습니다', field: 'name' }); c.name = nm; return j(200, { ok: true, id: c.id, name: nm }); }
+      if (p === 'api/servers/move') { const k = i + (b.dir === 'up' ? -1 : 1); if (k >= 0 && k < CH.length) [CH[i], CH[k]] = [CH[k], CH[i]]; return j(200, { ok: true, order: CH.map(x => x.id) }); }
+      if (c.kind === 'local') return j(400, { error: '내 PC 채널은 지울 수 없습니다' });
+      CH.splice(i, 1); delete ROOTS[c.id]; return j(200, { ok: true, forgot: !!b.forget_hostkey, comment: 'agen-talk@FX' });
+    }
     // 서버 추가 jobs (key_rejected flow): POST -> diagnosing -> confirm_fix (a group-writable home) -> the answer -> fixing -> done | error
     const sj = fx.srvJob;
-    if (p === 'api/servers' && opts && opts.method === 'POST') { const b = JSON.parse(opts.body); fx.srvPosts.push({ ...b, password: b.password ? '***' : '' }); Object.assign(sj, { id: 'fxjob' + (++seq), n: 0, choice: null, after: 0 }); return j(202, { job: sj.id }); }
+    if (p === 'api/servers' && opts && opts.method === 'POST') { const b = JSON.parse(opts.body); fx.srvPosts.push({ ...b, password: b.password ? '***' : '' }); Object.assign(sj, { id: 'fxjob' + (++seq), n: 0, choice: null, after: 0, mode: /keyonly/.test(b.host) ? (!b.password && fx.keyReg ? 'keyok' : 'pwoff') : 'rej' }); return j(202, { job: sj.id }); }
     if (p === 'api/servers/job/confirm') { const b = JSON.parse(opts.body); if (b.id !== sj.id) return j(404, { error: 'nf' }); if (b.action === 'fix') { sj.choice = b.choice; sj.after = 0; } return j(200, { ok: true }); }
     if (p === 'api/servers/job/cancel') { sj.choice = 'cancel'; return j(200, { ok: true }); }
     if (p === 'api/servers/job') {
       if (u.searchParams.get('id') !== sj.id) return j(404, { error: 'nf' });
       const base = { id: sj.id, key: 'C:\\fx\\id_ed25519.pub', comment: 'agen-talk@FX', findings: [{ id: 'home_w', level: 'fix', text: '홈 디렉터리(~)를 그룹/다른 사용자가 쓸 수 있어서 sshd(StrictModes)가 키를 무시합니다 (현재 775)', fix: 'home_w' }, { id: 'nocfg', level: 'info', text: '<b>sshd</b> 설정 파일을 읽을 수 없어 서버 설정은 확인하지 못했습니다', fix: null }], fix_cmds: ['chmod go-w ~'], session_ok: true };
+      if (sj.mode === 'pwoff') return j(200, { id: sj.id, key: base.key, comment: base.comment, state: 'error', phase: 'connecting', kind: 'password_disabled', message: 'Permission denied (publickey): 이 서버는 비밀번호 로그인이 꺼져 있어 키로만 접속됩니다 — 이 PC의 키를 서버에 직접 등록하세요' });   // a key-only server
+      if (sj.mode === 'keyok') return j(200, { id: sj.id, key: base.key, comment: base.comment, state: 'done', phase: 'verifying', channel: { id: 'keyonly', name: 'keyonly' } });
       if (++sj.n === 1) return j(200, { ...base, state: 'diagnosing', phase: 'diagnosing' });
       if (!sj.choice) return j(200, { ...base, state: 'confirm_fix', phase: 'confirm_fix' });
       if (sj.choice === 'fix' && ++sj.after === 1) return j(200, { ...base, state: 'fixing', phase: 'fixing' });
@@ -108,6 +135,7 @@
       return j(200, { ...base, state: 'error', phase: 'confirm_fix', kind: sj.choice === 'cancel' ? 'cancelled' : 'key_rejected', message: '키는 등록됐지만 키 로그인이 거절됐습니다' });
     }
     if (p === 'api/talk/setting') { const b = JSON.parse(opts.body); fx.talkOn = !!b.on; return j(200, { on: fx.talkOn }); }
+    if (p === 'api/end') { const b = JSON.parse(opts.body); fx.ends.push(b); const n = find(b.id), ok = !!(n && n.end && n.end.ok); if (ok) ENDED.add(b.id); return j(200, { msg_id: 'at-00000001', outcome: ok ? 'ended' : 'gone' }, 50); }
     if (p === 'api/talk') {
       const b = JSON.parse(opts.body); fx.posts.push(b); const t = b.text, mid = 'at-' + Math.random().toString(16).slice(2, 10).padEnd(8, '0'), wait = /#slow/.test(t) ? 4000 : 150;
       if (/#429/.test(t)) return j(429, { retry_after: 12 }, wait);

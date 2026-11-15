@@ -22,7 +22,7 @@ window.States = (() => {
   function mkBanner(ch) {
     const log = h('pre.inset', { hidden: true, id: 'bnlog-' + ch });
     const logBtn = h('button.btn.link', { type: 'button', 'aria-expanded': 'false', 'aria-controls': 'bnlog-' + ch, on: { click: () => { log.hidden = !log.hidden; attr(logBtn, 'aria-expanded', log.hidden ? 'false' : 'true'); } } }, '로그 보기');
-    const retry = () => { R.refresh(); again2.disabled = true; text(again2, '확인하는 중…'); setTimeout(() => { again2.disabled = false; text(again2, '지금 확인'); }, 2500); };
+    const retry = () => { R.retryChan(ch); again2.disabled = true; text(again2, '확인하는 중…'); setTimeout(() => { again2.disabled = false; text(again2, '지금 확인'); }, 2500); };   // the hub reconnects now, not after its backoff
     const again2 = h('button.btn.primary', { type: 'button', on: { click: retry } }, '지금 확인');
     const fixBtn = h('button.btn.primary', { type: 'button', hidden: true, on: { click: () => AddServer.open({ ch }) } }, '이 서버에 키 등록하기');
     const rekeyBtn = h('button.btn', { type: 'button', hidden: true, title: '키를 다시 등록해 다음부터 비밀번호 없이 연결합니다 (거절되면 원인을 찾아 고칩니다)', on: { click: () => AddServer.open({ ch, rekey: true }) } }, '키 로그인 설정');
@@ -31,7 +31,7 @@ window.States = (() => {
     const more = h('button.btn.link.more', { type: 'button', 'aria-expanded': 'false', 'aria-controls': 'bnraw-' + ch, on: { click: () => { raw.hidden = !raw.hidden; attr(more, 'aria-expanded', raw.hidden ? 'false' : 'true'); text(more, raw.hidden ? '자세히' : '접기'); } } }, '자세히');
     const tunnel = h('div.hint', h('span.ht'), ' ', more, raw), sep1 = h('span.sep', '·'), bp = badperm();
     const err = h('div.bn-err', { role: 'alert', hidden: true },
-      h('div.ttl', svgUse('g-dead', 'gl'), h('span.t')), h('div.sub'), tunnel,
+      h('div.ttl', svgUse('g-dead', 'gl'), h('span.t')), h('div.sub', h('span.last'), h('span.nx')), tunnel,
       h('div.acts', bp, sep1, fixBtn, rekeyBtn, logBtn, again2), log);
     const longer = h('span.meta', { hidden: true }, '오래 걸리면 허브 창의 로그와 channels.json의 주소를 확인하세요');
     const conn = h('div.bn-conn', { role: 'status', hidden: true }, h('span', '서버에 연결하는 중입니다…'), longer, h('div.indet', { 'aria-hidden': 'true' }));
@@ -55,8 +55,10 @@ window.States = (() => {
       text(p.err.querySelector('.t'), bpm ? R.BADPERM.title : c.state === 'ok' ? '수집이 중단되었습니다' : ssh ? 'SSH 연결이 끊겼습니다' : '연결 오류');
       const pws = ssh && c.auth === 'password-session';   // the server refused our key: this run connects with a password
       const waitPw = pws && !c.session_pw;                 // ...and the hub has none yet: it will not retry on its own
-      text(p.err.querySelector('.sub'), (c.t ? '마지막 수집 ' + R.fmtHM(c.t) : '아직 받은 데이터가 없습니다') + (waitPw ? '' : ' · 허브가 자동으로 다시 연결합니다 (최대 1분 간격)'));
+      text(p.err.querySelector('.sub .last'), (c.t ? '마지막 수집 ' + R.fmtHM(c.t) : '아직 받은 데이터가 없습니다') + (c.state === 'error' ? ' · ' : ''));   // then '12초 뒤 다시 연결' / '연결 중…' / '비밀번호를 기다리는 중', ticking locally
+      R.setRetry(p.err.querySelector('.sub .nx'), c.state === 'error' ? c : null); attr(p.err.querySelector('.sub'), 'title', waitPw ? null : '허브가 자동으로 다시 연결합니다 (최대 1분 간격)');
       const fx = R.sshFix(c); p.fixBtn.hidden = !fx; p.rekeyBtn.hidden = !pws; cls(p.again2, 'primary', !fx); cls(p.again2, 'link', fx);
+      p.again2.hidden = waitPw;   // nothing to retry until a password is typed: 비밀번호로 연결 is the way
       text(p.fixBtn, pws ? '비밀번호로 연결' : '이 서버에 키 등록하기');
       p.tunnel.hidden = !ssh; p.sep1.hidden = true;
       if (ssh) {

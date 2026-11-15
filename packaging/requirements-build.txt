@@ -11,6 +11,6 @@
 # deps to their latest versions, otherwise existing lock pins are kept.) Review the diff, then commit both files.
 pyinstaller==6.22.3
 pywebview==6.2.1
-pillow==12.3.0
+pillow==13.0.0
 # in-app SSH (the app bundles these; their dependencies cryptography, bcrypt, pynacl, cffi come with it)
 paramiko==5.0.0

@@ -101,7 +101,7 @@ const R = (() => {
     const mine = M.app && profileOf(M.app.logdir + '\\');   // the hub's log dir lives in the user's profile: when known, the names must match
     return !mine || profileOf(p) === mine;
   }
-  const sshKind = e => { e = String(e || ''); return /REMOTE HOST IDENTIFICATION HAS CHANGED/i.test(e) ? 'hostchanged' : /Host key verification failed/i.test(e) ? 'hostkey' : /Bad owner or permissions on/i.test(e) ? (ownSshConfig(badpermPath(e)) ? 'badperm' : 'badpermx') : /Permission denied/i.test(e) ? 'perm' : /Could not resolve|Connection refused|timed out|No route/i.test(e) ? 'net' : /python3?: (not found|No such file)|command not found/i.test(e) ? 'nopy' : /No such file or directory|WinError 2|지정된 파일/i.test(e) ? 'nossh' : 'other'; };
+  const sshKind = e => { e = String(e || ''); return /REMOTE HOST IDENTIFICATION HAS CHANGED/i.test(e) ? 'hostchanged' : /Host key verification failed/i.test(e) ? 'hostkey' : /Bad owner or permissions on/i.test(e) ? (ownSshConfig(badpermPath(e)) ? 'badperm' : 'badpermx') : /Permission denied/i.test(e) ? 'perm' : /Could not resolve|Connection refused|timed out|No route|\bEOF(?:Error)?\b|Connection (?:reset|aborted)|forcibly closed|WinError 100(?:53|54|60)|Broken pipe|연결이 끊겼습니다/i.test(e) ? 'net' : /python3?: (not found|No such file)|command not found/i.test(e) ? 'nopy' : /No such file or directory|WinError 2|지정된 파일/i.test(e) ? 'nossh' : 'other'; };
   const HINT = {
     hostkey: '처음 연결하는 서버입니다 — 키 등록하기 버튼으로 호스트 키를 확인하고 접속을 등록하세요.',
     perm: '키 로그인이 되지 않습니다 — 키 등록하기 버튼으로 비밀번호를 한 번만 입력해 등록하세요.',
@@ -114,6 +114,8 @@ const R = (() => {
   // kind badperm (ADD-SERVER-ENG §10): generic fix, no user names; the command is a constant
   const BADPERM = { title: '이 PC의 SSH 설정 파일 권한 문제입니다', cmd: '$f = "$env:USERPROFILE\\.ssh\\config"; $me = whoami; icacls $f /setowner $me; icacls $f /inheritance:r /grant:r "${me}:F"', extra: '그래도 같으면 ssh -V 가 8.x 인지 확인하고 OpenSSH 를 새 버전으로 올리세요' };
   const sshHint = e => { const k = sshKind(e); return k === 'badpermx' ? 'Windows가 이 PC의 ssh 설정 파일 ' + badpermPath(e) + ' 의 권한을 거부했습니다 — 내 사용자 폴더의 .ssh\\config 가 아니므로 관리자 권한 PowerShell에서 이 파일의 소유자·권한을 고쳐야 합니다 (자동 명령 없음).' : HINT[k] || '허브 창의 로그를 확인하세요.'; };
+  // a server address: a host name / IPv4 (letters, digits, . _ -) or a bare IPv6 literal (the URL parser validates it); mirrors host_ok in agen_talk.py
+  const hostOk = v => { v = String(v || ''); if (/^(?=.{1,253}$)[A-Za-z0-9_](?:[A-Za-z0-9._-]*[A-Za-z0-9_])?$/.test(v)) return true; if (!/^[0-9A-Fa-f.]*:[0-9A-Fa-f:.]*$/.test(v)) return false; try { new URL('http://[' + v + ']/'); return true; } catch { return false; } };
   const sshFix = c => c.kind === 'ssh' && c.state === 'error' && ['perm', 'hostkey', 'hostchanged'].includes(sshKind(c.error));   // these three get the 키 등록하기 button
   const sshErr = e => (String(e || '').split('\n').map(x => x.trim()).filter(Boolean).pop() || '').slice(0, 200);
   const fmtAgo = sec => sec < 10 ? '방금' : fmtDur(sec) + ' 전';
@@ -148,8 +150,13 @@ const R = (() => {
     set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { } },
   };
   // settings (room.settings) — DIRECTION §6
-  const S = Object.assign({ theme: 'system', motion: 'system', notify: false, titleBadge: true, interval: 3, stallMin: 5, longMin: 30, talkOn: true, fun: false, ovTheme: 'claude', ofcSize: 'm', palette: 'default' }, store.get('room.settings', {}));   // fun = 재미 모드 (픽셀 오피스), ovTheme = 오버뷰 팬 테마 (OVERVIEW-CONTRACT §3), palette = 색 팔레트 (21-palettes.css)
-  if (!['s', 'm', 'l'].includes(S.ofcSize)) S.ofcSize = 'm';   // 픽셀 오피스 크기: 작게 / 보통 / 크게 (Office.layout)
+  const S = Object.assign({ theme: 'system', motion: 'system', notify: false, titleBadge: true, interval: 3, stallMin: 5, longMin: 30, talkOn: true, fun: false, ovTheme: 'claude', ofcSize: 'm', palette: 'default', idleHours: 24 }, store.get('room.settings', {}));   // fun = 재미 모드 (픽셀 던전), ovTheme = 오버뷰 팬 테마 (OVERVIEW-CONTRACT §3), palette = 색 팔레트 (21-palettes.css)
+  if (![1, 6, 24, 72, 168].includes(S.idleHours)) S.idleHours = 24;       // 유휴 세션 정리: a rest session quiet for this long is offered
+  if (![2, 3, 5, 10].includes(S.interval)) S.interval = 3;     // stored settings are untrusted: 0 or a string would make poll() spin
+  if (![10, 30, 60].includes(S.longMin)) S.longMin = 30;
+  if (!(Number.isFinite(S.stallMin) && S.stallMin >= 1 && S.stallMin <= 1440)) S.stallMin = 5;
+  if (!['system', 'light', 'dark'].includes(S.theme)) S.theme = 'system';
+  if (!['s', 'm', 'l'].includes(S.ofcSize)) S.ofcSize = 'm';   // 픽셀 던전 크기: 작게 / 보통 / 크게 (the key keeps its old name)
   delete S.showKids;   // moved to U.showKids (CHAT-UX §3)
   // per-user UI state (room.ui) — CHAT-UX §3: chip filter, sort, open room, drawer, last-viewed marks, 하위 rows, 조용함 expand
   const U = Object.assign({ expanded: {}, chFilter: 'all', sort: 'recent', room: null, drawer: false, seen: {}, showKids: false, quietOpen: false, flowText: false }, store.get('room.ui', {}));
@@ -252,7 +259,7 @@ const R = (() => {
   const mq = matchMedia('(prefers-color-scheme: dark)');
   // 색 팔레트 (설정 › 화면): token overrides in 21-palettes.css via html[data-palette]; 기본 = no attribute (the pre-palette look).
   // 'match' follows the overview fan theme (S.ovTheme). The red alert family is the same in every palette.
-  const PALETTES = [['default', '기본'], ['claude', 'Claude 풍'], ['chatgpt', 'ChatGPT 풍'], ['gemini', 'Gemini 풍'], ['grok', 'Grok 풍'], ['muse', 'Muse 풍'], ['match', '테마 맞춤', '오버뷰 테마와 맞추기 — 픽셀 오피스 테마의 색을 앱 전체에']];
+  const PALETTES = [['default', '기본'], ['claude', 'Claude 풍'], ['chatgpt', 'ChatGPT 풍'], ['gemini', 'Gemini 풍'], ['grok', 'Grok 풍'], ['muse', 'Muse 풍'], ['match', '테마 맞춤', '오버뷰 테마와 맞추기 — 픽셀 던전 테마의 색을 앱 전체에']];
   const FANS = ['claude', 'chatgpt', 'gemini', 'grok', 'muse'];
   const palette = () => S.palette === 'match' ? (FANS.includes(S.ovTheme) ? S.ovTheme : 'claude') : S.palette;   // the palette in effect
   let bgSig = '';
@@ -310,7 +317,7 @@ const R = (() => {
   const epOf = a => ({ s: epSig(a), t: waitT(a) });
   const sameEp = (a, m) => !!m && typeof m === 'object' && m.s === epSig(a) && waitT(a) <= (+m.t || 0) + EP_TOL;
   const isAcked = a => !!a && isWaiting(a) && sameEp(a, U.ack[a.key]);
-  const needsMe = a => !!a && isWaiting(a) && !isAcked(a);           // counts, badges, notifications, the office '!'
+  const needsMe = a => !!a && isWaiting(a) && !isAcked(a);           // counts, badges, notifications, the dungeon '!'
   const isApproval = a => !!a && raw(a).st === 'user' && /승인/.test(raw(a).why || '');
   const DONE_WHY = '사용자가 완료 처리';
   function applyMark(a) {   // 작업 완료: the view treats the episode as done; the raw collector state stays in a.raw
@@ -372,6 +379,13 @@ const R = (() => {
     }
     return out;
   }
+  // model (collector): what answered last, the different model before it, and whether that change is a safeguard reroute still in effect.
+  // Older snapshots carry it only inside `meta`.
+  const normModel = v => typeof v === 'string' ? str(v.replace(/[^\w.:\/\[\]-]/g, ''), 80) : '';
+  const metaModel = m => String(m || '').split(' · ').find(p => /^(gpt|claude|gemini|o\d|codex|sonnet|opus|haiku)/i.test(p)) || '';
+  const shortModel = m => String(m || '').replace(/^claude-/, '').replace(/-\d{8}$/, '').replace(/^((?:opus|sonnet|haiku|fable|mythos)-\d+)-(\d+)\b/, '$1.$2');
+  // end (collector): {ok, pid} when this session's host process can be stopped from here, {ok: false, reason} when it must not
+  const normEnd = e => !e || typeof e !== 'object' ? null : { ok: e.ok === true, pid: Number.isInteger(e.pid) ? e.pid : null, reason: str(e.reason, 40) };
   const normTalk = t => !t || typeof t !== 'object' ? null : { ok: t.ok === true, reason: str(t.reason, 40), hold: t.hold === true, max: Number.isInteger(t.max) && t.max > 0 && t.max <= 4000 ? t.max : 4000 };
   // project (OVERVIEW-CONTRACT §1): {name, branch, key, root} from the collector's git lookup; optional. Untrusted text: length caps here, textContent at render.
   const normProject = p => { if (!p || typeof p !== 'object' || typeof p.name !== 'string' || !p.name.trim()) return null; const name = str(p.name.trim(), 120); return { name, branch: typeof p.branch === 'string' ? str(p.branch, 120) : '', key: typeof p.key === 'string' && p.key ? str(p.key, 300) : 'name:' + name, root: typeof p.root === 'string' ? str(p.root, 300) : '' }; };
@@ -395,7 +409,8 @@ const R = (() => {
       procs: Array.isArray(n.procs) ? n.procs.map(p => ({ pid: num(p && p.pid), cmd: str(p && p.cmd, 400), age: num(p && p.age), cpu: num(p && p.cpu), state: /^[RDSZT]$/.test(p && p.state) ? p.state : 'S', kid: str(p && p.kid, 200), bg: !!(p && p.bg) })) : [],
       hidden: num(n.hidden), parent, depth, kids: [], node: n, recvMs,
       // acts: server clock -> client clock (skew), junk dropped, sorted by t BEFORE the 12-item cut (ACTIVITY-ENG "Clock skew")
-      acts: normActs(n.acts, skew), msgs: normMsgs(n.msgs, skew, ch), talk: normTalk(n.talk),
+      acts: normActs(n.acts, skew), msgs: normMsgs(n.msgs, skew, ch), talk: normTalk(n.talk), end: normEnd(n.end),
+      model: normModel(n.model) || normModel(metaModel(n.meta)), modelPrev: normModel(n.model_prev), modelFb: n.model_fb === true,
       project: normProject(n.project) || (parent && out.get(parent) ? out.get(parent).project : null),   // a subagent without its own repo inherits the parent's
     };
     if (a.st === 'user' && /^답변 끝남/.test(a.why)) { a.st = 'done'; a.why = '답변 완료'; }   // older collectors (remote servers): a finished answer is done, not waiting
@@ -410,7 +425,7 @@ const R = (() => {
   function merge(chans, states) {
     const prevCh = new Map(M.channels.map(c => [c.id, c.state])), recvMs = Date.now(), seen0 = new Set(Object.keys(M.states)), prev = M.agents, next = new Map(), roots = {}, events = [];
     M.channels = chans.map(c => ({ id: str(c.id, 64), name: str(c.name, 80) || str(c.id, 64), kind: ['ssh', 'local', 'argv'].includes(c.kind) ? c.kind : 'ssh', state: ['ok', 'connecting', 'error'].includes(c.state) ? c.state : 'error', error: c.error == null ? null : str(c.error, 300), t: c.t == null ? null : num(c.t) * 1000, stale: false,
-      port: Number.isInteger(c.port) && c.port >= 1 && c.port <= 65535 ? c.port : null, auth: str(c.auth, 20), session_pw: c.session_pw === true, ssh: str(c.ssh, 200), args: Array.isArray(c.ssh_args) ? c.ssh_args.map(x => str(x, 300)) : [] }));
+      port: Number.isInteger(c.port) && c.port >= 1 && c.port <= 65535 ? c.port : null, auth: str(c.auth, 20), session_pw: c.session_pw === true, retryAt: c.state === 'error' && Number.isFinite(+c.retry_at) && +c.retry_at > 1e9 ? +c.retry_at * 1000 : null, ssh: str(c.ssh, 200), args: Array.isArray(c.ssh_args) ? c.ssh_args.map(x => str(x, 300)) : [] }));
     for (const c of M.channels) {
       const s = states[c.id];
       if (!s || typeof s !== 'object' || !Array.isArray(s.agents) || (c.state === 'error' && M.states[c.id])) { if (M.states[c.id]) c.stale = true; roots[c.id] = M.roots[c.id] || []; continue; }
@@ -465,6 +480,26 @@ const R = (() => {
   const chan = id => M.channels.find(c => c.id === id);
   const chName = id => { const c = chan(id); return c ? c.name : (id || ''); };
   const isDead = id => { const c = chan(id); return !!c && (!!M.hubDown || c.state === 'error' || c.stale); };
+  // 세션 종료: stops the session's host process on its machine (POST api/end). Only ever from a click the user confirmed.
+  const END_WHY = { self: '에겐 톡이 이 세션 아래에서 실행 중이라 종료할 수 없습니다', owner: '다른 사용자의 프로세스입니다', shared: '한 codex 프로세스가 여러 세션을 맡고 있어 이 세션만 종료할 수 없습니다',
+    off: '이 허브에서는 세션 종료가 꺼져 있습니다', busy: '다른 요청을 처리하는 중입니다 — 잠시 뒤 다시 시도하세요', changed: '프로세스가 바뀌었습니다 — 다시 확인한 뒤 시도하세요', channel: '서버에 연결되어 있지 않습니다',
+    stale: '프로세스 목록을 새로 읽지 못해 종료하지 않았습니다 — 잠시 뒤 다시 시도하세요', active: '그사이 다시 일하기 시작해 종료하지 않았습니다',
+    perm: '종료할 권한이 없습니다', alive: '프로세스가 종료 신호에 응답하지 않습니다', os: '운영체제가 종료를 거부했습니다' };
+  const endWhy = a => !a || !a.end ? '' : a.end.ok ? '' : END_WHY[a.end.reason] || '';
+  const canEnd = a => !!(a && a.end && a.end.ok && !isDead(a.ch) && !(M.app && M.app.endOn === false));
+  // a rest session (쉬는 중 / 완료 / 중단됨) whose last signal is older than S.idleHours and whose process still runs: 유휴 세션 정리 offers it
+  const idleFor = a => a && a.lastAt != null ? Math.max(0, (Date.now() - a.lastAt) / 1000) : 0;
+  // judged on the collector's own state (raw): a wait the user marked 작업 완료 only looks done here, the session still waits
+  const isQuietLong = a => !!a && REST.has(raw(a).st) && !rawWaiting(a) && idleFor(a) >= S.idleHours * 3600;   // looks abandoned (던전의 버려진 야영), whether or not it can be ended from here
+  const isLongIdle = a => canEnd(a) && isQuietLong(a) && !a.kids.some(k => { const c = M.agents.get(k); return c && LIVE.has(c.st); });
+  // pid: the process this page showed when the user confirmed (the hub refuses another); idle: only if it is still resting (유휴 세션 정리)
+  async function endSession(a, idle) {
+    try {
+      const r = await apiPost('api/end', { ch: a.ch, id: a.id, pid: a.end.pid, idle: !!idle }), b = r.body || {};
+      if (b.outcome === 'ended' || b.outcome === 'gone') { refresh(); return { ok: true, text: b.reason === 'forced' ? '응답이 없어 강제로 종료했습니다' : b.outcome === 'gone' ? '세션이 이미 없습니다' : '세션을 종료했습니다' }; }
+      return { ok: false, text: END_WHY[b.reason] || (b.outcome === 'unreachable' ? END_WHY.channel : '') || str(b.error, 120) || '종료하지 못했습니다' + (b.reason ? ' (' + str(b.reason, 40) + ')' : '') };
+    } catch { return { ok: false, text: '허브에 연결할 수 없습니다' }; }
+  }
 
   // ---------- polling ----------
   let timer = 0, paused = false, inflight = false;
@@ -482,6 +517,8 @@ const R = (() => {
   }
   async function poll() {
     if (inflight) return; inflight = true;
+    const now = Date.now(), slept = lastPoll && now - lastPoll > 20000 + S.interval * 1000; lastPoll = now;
+    if (slept) setTimeout(retryAll, 0);   // after merge() has the current channel states
     try {
       const ch = await getJSON('api/channels');
       const chans = Array.isArray(ch.body) ? ch.body : [];
@@ -503,6 +540,26 @@ const R = (() => {
     const arc = $('#ring .arc'); if (arc) { arc.style.transition = 'none'; arc.style.strokeDashoffset = '37.7'; void arc.getBoundingClientRect(); arc.style.transition = 'stroke-dashoffset ' + S.interval + 's linear'; arc.style.strokeDashoffset = '0'; }
   }
   const refresh = () => { clearTimeout(timer); poll(); };
+  // 지금 확인 / 다시 시도 for an errored channel: the hub ends that channel's backoff wait now (POST api/channels/retry), then the page polls.
+  // A password-session channel without this run's password cannot reconnect by itself: waitsPw() says so and nothing is sent for it.
+  const waitsPw = c => !!c && c.kind === 'ssh' && c.auth === 'password-session' && !c.session_pw;
+  async function retryChan(id) {
+    let r; try { r = await apiPost('api/channels/retry', { id }); } catch { r = { ok: false, status: 0 }; }
+    const c = chan(id); if (c && r.ok && c.state === 'error') { c.retryAt = null; emit('retry', id); }   // '연결 중…' until the next poll says otherwise
+    setTimeout(refresh, 400); return r;
+  }
+  const retryAll = () => M.channels.filter(c => c.state === 'error' && !waitsPw(c)).map(c => retryChan(c.id));
+  // the next automatic attempt ('12초 뒤 다시 연결'), ticking locally from retry_at; '' when the channel is fine
+  const retryText = (c, now = Date.now()) => !c || c.state !== 'error' ? '' : waitsPw(c) ? '비밀번호를 기다리는 중' : c.retryAt && c.retryAt - now >= 1000 ? Math.ceil((c.retryAt - now) / 1000) + '초 뒤 다시 연결' : '연결 중…';
+  function setRetry(el, c) { if (c && c.state === 'error' && c.retryAt && !waitsPw(c)) { el.dataset.retry = c.retryAt; el.dataset.rch = c.id; } else { delete el.dataset.retry; delete el.dataset.rch; } text(el, retryText(c)); }
+  setInterval(() => { const now = Date.now(); for (const el of document.querySelectorAll('[data-retry]')) text(el, retryText(chan(el.dataset.rch), now)); }, 1000);
+  // auto-retry every errored channel once: the network came back, the window returns after >= 30 s away, or the machine slept (a poll gap > 20 s)
+  let awayAt = 0, lastPoll = 0;
+  addEventListener('online', () => retryAll());
+  addEventListener('blur', () => { awayAt = Date.now(); });
+  document.addEventListener('visibilitychange', () => { if (document.hidden) awayAt = awayAt || Date.now(); else back(); });
+  const back = () => { if (awayAt && Date.now() - awayAt >= 30000) retryAll(); awayAt = 0; };
+  addEventListener('focus', back);
   function setPaused(v) {
     paused = v; document.documentElement.classList.toggle('paused', v);
     attr($('#pause'), 'aria-pressed', v ? 'true' : 'false'); attr($('#pause'), 'aria-label', v ? '재개' : '일시정지'); attr($('#pause'), 'title', v ? '재개 (p)' : '일시정지 (p)');
@@ -578,7 +635,7 @@ const R = (() => {
 
   // ---------- first-load query overrides (screenshot checks only): ?theme=dark&motion=reduce ----------
   const qs = new URLSearchParams(location.search);
-  if (qs.get('theme')) S.theme = qs.get('theme');
+  if (['system', 'light', 'dark'].includes(qs.get('theme'))) S.theme = qs.get('theme');
   if (qs.get('motion')) S.motion = qs.get('motion');
   if (qs.get('fun')) S.fun = qs.get('fun') === '1';                                  // overview mode (재미 모드)
   if (qs.get('ovtheme')) S.ovTheme = qs.get('ovtheme');                               // overview fan theme (validated in 70-overview)
@@ -589,13 +646,13 @@ const R = (() => {
   async function loadPresets() {
     try {
       const r = await getJSON('api/presets');
-      M.presets = r.ok && Array.isArray(r.body) ? r.body.filter(p => p && typeof p === 'object' && /^[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?$/.test(String(p.host || ''))).slice(0, 50).map(p => ({ name: str(p.name, 40) || str(p.host, 253), host: str(p.host, 253), port: num(p.port, 22) >= 1 && num(p.port, 22) <= 65535 ? num(p.port, 22) : 22, added: !!p.added })) : [];
+      M.presets = r.ok && Array.isArray(r.body) ? r.body.filter(p => p && typeof p === 'object' && hostOk(p.host)).slice(0, 50).map(p => ({ name: str(p.name, 40) || str(p.host, 253), host: str(p.host, 253), port: num(p.port, 22) >= 1 && num(p.port, 22) <= 65535 ? num(p.port, 22) : 22, added: !!p.added })) : [];
     } catch { M.presets = []; }
     emit('presets');
   }
   // app facts (PACKAGING-ENG / APP-UX §4): {version, mode: webview|browser|cli, logdir}; the endpoint may be missing -> app-only rows stay hidden
   async function loadApp() {
-    try { const r = await getJSON('api/app'); M.app = r.ok && r.body && typeof r.body === 'object' ? { version: str(r.body.version, 40), mode: ['webview', 'browser', 'cli'].includes(r.body.mode) ? r.body.mode : 'cli', logdir: str(r.body.logdir, 300), talkMax: Number.isInteger(r.body.talk_max) && r.body.talk_max > 0 ? Math.min(r.body.talk_max, 4000) : 4000 } : null; if (M.app && typeof r.body.talk_on === 'boolean' && S.talkOn !== r.body.talk_on) { S.talkOn = r.body.talk_on; applySettings(); } } catch { M.app = null; }
+    try { const r = await getJSON('api/app'); M.app = r.ok && r.body && typeof r.body === 'object' ? { version: str(r.body.version, 40), mode: ['webview', 'browser', 'cli'].includes(r.body.mode) ? r.body.mode : 'cli', logdir: str(r.body.logdir, 300), talkMax: Number.isInteger(r.body.talk_max) && r.body.talk_max > 0 ? Math.min(r.body.talk_max, 4000) : 4000, endOn: r.body.end_on !== false, keyComment: /^agen-talk@[A-Za-z0-9._-]{1,64}$/.test(String(r.body.key_comment || '')) ? r.body.key_comment : '' } : null; if (M.app && typeof r.body.talk_on === 'boolean' && S.talkOn !== r.body.talk_on) { S.talkOn = r.body.talk_on; applySettings(); } } catch { M.app = null; }
     emit('app');
   }
   on('model', () => { const sg = M.channels.map(c => c.id + c.ssh).join('|'); if (sg !== presetSig) { presetSig = sg; loadPresets(); } });
@@ -609,6 +666,6 @@ const R = (() => {
     poll();
   }
   return { BADPERM, esc, num, str, koDur, normalize, h, svgUse, text, attr, cls, stClass, $, $$, keyed, keepScroll, isDead, setTimeFor, saveEvents, fmtDur, fmtLive, fmtAgo, sshHint, sshKind, sshFix, sshErr, fmtAbs, fmtHM, timeEl, setTime,
-           store, S, U, A, PALETTES, palette, acts, msgs, mergeMsgs, saveTalks, saveMsgs, loadMsgs, validMsg, setFlow, accumulate, toolBase, save, applySettings, on, emit, ST, LIVE, REST, OLD, isWaiting, needsMe, isAcked, isApproval, rawWaiting, ack, markDone, unmarkDone, DONE_WHY, canHide, isHidden, hideRooms, unhideAll, waitCmp, waitT, M, agentsOf, chan, chName,
-           refresh, loadPresets, apiPost, setPaused, isPaused: () => paused, view, go, openRoom, closeRoom, openChannel, route, params: () => params, key, keys, onEsc, updateTitle, boot };
+           store, S, U, A, PALETTES, palette, acts, msgs, mergeMsgs, saveTalks, saveMsgs, loadMsgs, validMsg, setFlow, accumulate, toolBase, save, applySettings, on, emit, ST, LIVE, REST, OLD, isWaiting, needsMe, isAcked, isApproval, rawWaiting, ack, markDone, unmarkDone, DONE_WHY, canHide, isHidden, hideRooms, unhideAll, waitCmp, waitT, M, agentsOf, chan, chName, shortModel, canEnd, endWhy, endSession, isLongIdle, isQuietLong, idleFor,
+           refresh, retryChan, retryAll, retryText, setRetry, waitsPw, hostOk, loadPresets, apiPost, setPaused, isPaused: () => paused, view, go, openRoom, closeRoom, openChannel, route, params: () => params, key, keys, onEsc, updateTitle, boot };
 })();

@@ -14,6 +14,8 @@ for p in parts:
 html = "".join(out)
 assert "<script src" not in html and "@import" not in html and "eval(" not in html, "no external scripts, no eval"
 assert not re.search(r"\.innerHTML\s*=\s*[^'\"`;]*\$\{", html), "innerHTML with interpolation is forbidden"
+if not DEV:   # the shipped page builds no HTML from strings at all (the dev selftest may)
+    assert not re.search(r"\.(?:innerHTML|outerHTML)\s*\+?=|\.insertAdjacentHTML\s*\(|document\.write\s*\(", html), "HTML-string sinks are forbidden: use h() / textContent"
 (HERE / "dist").mkdir(exist_ok=True)
 with open(HERE / "dist" / "index.html", "w", encoding="utf-8", newline="\n") as f:   # LF on Windows too: index.html is compared byte-for-byte
     f.write(html)

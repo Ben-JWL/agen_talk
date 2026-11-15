@@ -81,3 +81,6 @@ html[data-motion=reduce] .typing .dots { display: none; } html[data-motion=reduc
 .donecf { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 8px; padding: 8px 12px; border: 1px solid var(--line); border-radius: var(--r-card); background: var(--canvas); font-size: 12.5px; line-height: 18px; }
 .donecf[hidden] { display: none; }
 .donecf span { flex: 1 1 200px; min-width: 0; }
+/* 세션 종료 */
+.endbtn { white-space: nowrap; }
+.endcf { border-color: var(--signal); }

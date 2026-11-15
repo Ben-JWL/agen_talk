@@ -23,17 +23,18 @@ Every agent node that has a working directory gets an optional `project` field. 
 
 ## 2. Sprites (art pipeline → UI)
 
-- Sources live in `art/sprites/` (Python). `python art/sprites/build.py` writes `ui/src/72-sprites.js`.
-- `ui/src/72-sprites.js` must define `window.AT_SPRITES` in format **v2**, as specified in `art/sprites/README.md`, plus `window.atDecode2`, the decoder.
+- Sources live in `art/atlas/`. `python art/atlas/build.py` writes `ui/src/72-atlas.js` (`--check` verifies it is up to date).
+- `ui/src/72-atlas.js` defines `window.AT_ATLAS = { size: 16, alpha, sprites: { name: 'rrggbb…|256 chars' } }`.
+- Pixels come from the CC0 Pixel Art Atlas.
 - No other code may depend on build internals.
-- Size budget for the generated file: ≤ 150 KB.
+- Size budget for the generated file: ≤ 96 KB.
 
 ## 3. UI
 
 ### Overview modes
 - The overview replaces the empty right pane (no room open).
 - Default mode: **배선 지도** (wiring map).
-- **재미 모드** (픽셀 오피스) is a toggle in the overview header and in Settings → 화면. It is off by default and remembered per user.
+- **재미 모드** (픽셀 던전) is a toggle in the overview header and in Settings → 화면. It is off by default and remembered per user.
 
 ### Themes
 - The five fan themes (Claude 풍, ChatGPT 풍, Gemini 풍, Grok 풍, Muse 풍), crossed with light/dark/system, style the overview pane only. The rest of the app keeps its own tokens.
@@ -42,11 +43,12 @@ Every agent node that has a working directory gets an optional `project` field. 
 ### Project
 - Show it as a chip in room rows and the room header.
 - The wiring map groups by server → project → agent.
-- The office has one room per project.
+- The dungeon: server = floor, project = chamber, agent = hero, subagent = companion.
+- The hero's activity follows the node's state and `now` line: train (prose answer), explore (Read/Grep/search), forge (Edit/Write), fight (Bash: tests/build), scout (WebSearch/WebFetch), summon (starts a subagent), study (TodoWrite / plan tools), gate (waits for the user), stuck (stall), camp (idle), loot (done), down (stopped), grave (dead).
 
 ### Waiting cues
-- Only an unread wait (the UI's `R.needsMe`) is an alert: the red '!' bubble, the blinking screen and the room lamp in the office, the red card on the wiring map.
-- A wait the user already opened (`ack`) shows a calm grey '…' in the office and a plain card marked 읽음 on the map. A room marked 작업 완료 is drawn as done.
+- Only an unread wait (the UI's `R.needsMe`) is an alert: the red '!' over the hero and the `!N` chip on the chamber sign in the dungeon, the red card on the wiring map.
+- A wait the user already opened (`ack`) shows a calm grey '…' in the dungeon and a plain card marked 읽음 on the map. A room marked 작업 완료 is drawn as done.
 
 ### Hard constraints
 - One inline script (the CSP hash).

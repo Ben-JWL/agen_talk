@@ -78,6 +78,7 @@ const C = (() => {
 
   // ---------- clipboard ----------
   function copy(s, btn, label) {
+    s = String(s == null ? '' : s).replace(/[\u0000-\u001f\u007f‎‏‪-‮⁦-⁩]/g, '');   // agent text: one line, no control or bidi-override characters on the clipboard (a pasted newline runs the command)
     const ok = () => { if (!btn) return; clearTimeout(btn._ct); text(btn, '복사됨 ✓'); btn._ct = setTimeout(() => text(btn, label || '명령 복사'), 1500); };
     const fb = () => { const t = h('textarea', { style: 'position:fixed;opacity:0' }); t.value = s; document.body.append(t); t.select(); try { document.execCommand('copy'); } catch { } t.remove(); ok(); };
     try { navigator.clipboard.writeText(s).then(ok, fb); } catch { fb(); }

@@ -29,6 +29,27 @@ const Room = (() => {
   const cfGo = h('button.btn.sm.primary', { type: 'button', on: { click: () => finishDone(cfLeave) } }, '완료로 표시'), cfNo = h('button.btn.sm', { type: 'button', on: { click: () => { donecf.hidden = true; } } }, '취소');
   const donecf = h('div.donecf', { role: 'group', 'aria-label': '작업 완료 확인', hidden: true }, h('span', '정말 완료로 표시할까요? 에이전트는 계속 승인을 기다립니다'), cfGo, cfNo);
   let cfLeave = false;
+  // 세션 종료: stops this session's host process on its machine. Two steps (button, then 종료); the hub and the collector check it again.
+  const endMsg = h('span'), ecNo = h('button.btn.sm', { type: 'button', on: { click: () => { endcf.hidden = true; endBtn.focus(); } } }, '취소');
+  const ecGo = h('button.btn.sm.danger', { type: 'button', on: { click: () => doEnd() } }, '종료');
+  const endcf = h('div.donecf.endcf', { role: 'group', 'aria-label': '세션 종료 확인', hidden: true }, endMsg, ecGo, ecNo);
+  const endBtn = h('button.btn.sm.endbtn', { type: 'button', hidden: true, title: '이 세션의 프로세스를 종료합니다', on: { click: () => {
+    if (!a || !R.canEnd(a)) return;
+    donecf.hidden = true; ecGo.hidden = false; ecGo.disabled = false; text(ecGo, '종료'); text(ecNo, '취소');
+    text(endMsg, (R.LIVE.has(a.st) ? '지금 작업 중인 세션입니다. ' : '') + R.chName(a.ch) + '에서 이 세션의 프로세스' + (a.end.pid ? ' (pid ' + a.end.pid + ')' : '') + '를 종료할까요? 진행 중인 작업과 하위 에이전트도 함께 끝납니다');
+    endcf.hidden = false; ecNo.focus();
+  } } }, '세션 종료');
+  async function doEnd() {
+    const t = a; if (!t || !R.canEnd(t) || ecGo.disabled) return;
+    ecGo.disabled = true; text(ecGo, '종료 중…');
+    const r = await R.endSession(t);
+    ecGo.disabled = false; text(ecGo, '종료');
+    if (r.ok) {   // the session is gone: back to the overview (its room would only say the session cannot be read); the toast says what happened
+      R.emit('note', { key: t.key, text: t.name + ' — ' + r.text });
+      if (key === t.key) { endcf.hidden = true; R.closeRoom(); setTimeout(() => ChatList.focusRow(), 0); }
+    }
+    else if (key === t.key) { text(endMsg, r.text); ecGo.hidden = true; text(ecNo, '닫기'); }
+  }
   function doneAct(leave) {
     if (!a || !R.rawWaiting(a) || a.marked) return;
     if (R.isApproval(a)) { cfLeave = leave; donecf.hidden = false; cfGo.focus(); return; }   // a real blocker: one more step
@@ -40,7 +61,7 @@ const Room = (() => {
     if (leave) { R.hideRooms([k]); R.closeRoom(); }
     R.emit('undo', { key: k, text: leave ? '작업 완료로 표시하고 방을 나갔습니다' : '작업 완료로 표시했습니다', undo: () => { R.unmarkDone([k]); if (leave && R.U.hidden && R.U.hidden[k]) { delete R.U.hidden[k]; R.save(); R.emit('hidden'); } } });
   }
-  const phead = h('header.phead', back, crumb, h('div.hrow', av, h('div.htxt', ptitle, h('div.pmrow', pproj, pmeta)), h('div.hlinks', seg, lkKids, lkPar, doneBtn, leaveBtn, hideBtn, info)), donecf);
+  const phead = h('header.phead', back, crumb, h('div.hrow', av, h('div.htxt', ptitle, h('div.pmrow', pproj, pmeta)), h('div.hlinks', seg, lkKids, lkPar, doneBtn, leaveBtn, hideBtn, endBtn, info)), donecf, endcf);
   const tl = h('div#tl', { role: 'log', 'aria-live': 'polite', 'aria-relevant': 'additions', tabindex: '-1', 'aria-label': '대화' }), tlin = h('div.tlin');
   tl.append(tlin);
   const newmsg = h('button.newmsg', { type: 'button', hidden: true, on: { click: () => { tl.scrollTop = tl.scrollHeight; newmsg.hidden = true; } } }, '새 메시지 ↓');
@@ -48,7 +69,8 @@ const Room = (() => {
   const sGl = C.glyph('idle'), sLbl = h('b.slbl'), sTime = timeEl(Date.now(), 'live', 'rel'), sWhy = h('span.swhy'), sMsg = h('span.smsg'), sTalk = h('span.stalk');
   const bInfo = h('button.btn.binfo', { type: 'button', on: { click: () => setDrawer(!U.drawer) } }, '세션 정보');
   const bTerm = h('button.btn.primary.bterm', { type: 'button', 'aria-keyshortcuts': 'c', on: { click: () => copyTerm() } }, '터미널 명령 복사');
-  const bAgain = h('button.btn.bagain', { type: 'button', on: { click: () => R.refresh() } }, '다시 시도');
+  // 지금 확인 on a room whose server dropped really reconnects (the hub ends its backoff wait); otherwise it is a plain refresh
+  const bAgain = h('button.btn.bagain', { type: 'button', on: { click: () => { const c = key && R.chan(key.split(':')[0]); if (c && c.state === 'error' && !R.waitsPw(c)) R.retryChan(c.id); else R.refresh(); } } }, '다시 시도');
   sTime.setAttribute('aria-hidden', 'true');
   const sbar = h('footer#sbar', { role: 'status', 'aria-live': 'polite' }, h('div.sleft', sGl, ' ', sLbl, h('span.sdot', ' · '), sTime, sWhy, sTalk, sMsg), h('div.sright', bAgain, bInfo, bTerm));
   proom.append(phead, h('div.tlwrap', tl, newmsg, Flow.el), h('div#foot', sbar, Talk.el));   // footer = status row + composer row (one block)
@@ -191,13 +213,13 @@ const Room = (() => {
     if (c.kind === 'local') return cwd ? 'cd ' + cwd : '';
     const pi = (c.args || []).indexOf('-p'), pn = Number.isInteger(c.port) ? c.port : pi >= 0 && /^\d{1,5}$/.test(String(c.args[pi + 1])) ? +c.args[pi + 1] : 22;   // in-app servers carry `port`, not '-p' in args
     const port = pn !== 22 ? '-p ' + pn + ' ' : '', host = String(c.ssh || '');
-    return /^[\w.@%+-]+$/.test(host) ? 'ssh ' + port + host + " -t 'cd " + (cwd || '~') + "; exec $SHELL'" : '';
+    return /^[\w.@%+:-]+$/.test(host) && host[0] !== '-' /* ':' for IPv6 literals; never something ssh would read as an option */ ? 'ssh ' + port + host + " -t 'cd " + (cwd || '~') + "; exec $SHELL'" : '';
   };
   function copyTerm() { const c = a && termCmd(a); if (c) C.copy(c, bTerm, '터미널 명령 복사'); }
   function renderHead(a) {
     const md = C.meta(a), par = a.parent && M.agents.get(a.parent), subs = Detail.subtree(a);
     C.setAvatar(av, a); text(ptitle, a.name); attr(ptitle, 'title', a.name); C.setProj(pproj, a);
-    const mtxt = [a.tool, md.model, R.chName(a.ch), md.pid && (/^\d+$/.test(md.pid) ? 'pid ' + md.pid : md.pid), md.cwd].filter(Boolean).join(' · '); text(pmeta, mtxt); attr(pmeta, 'title', a.meta || null);
+    const mtxt = [a.tool, a.model ? (a.modelPrev ? '⇄ ' : '') + a.model : md.model, R.chName(a.ch), md.pid && (/^\d+$/.test(md.pid) ? 'pid ' + md.pid : md.pid), md.cwd].filter(Boolean).join(' · '); text(pmeta, mtxt); attr(pmeta, 'title', a.meta || null);
     crumb.hidden = !par; if (par) { text(crumb, '‹ ' + par.name); attr(crumb, 'href', '#/chat/' + encodeURIComponent(par.ch) + '/' + encodeURIComponent(par.id)); }
     lkKids.hidden = !subs.length; text(lkKids, '하위 ' + subs.length + ' ›');
     lkPar.hidden = !par; text(lkPar, '부모 ›'); lkPar.onclick = () => par && R.openRoom(par.ch, par.id);
@@ -238,7 +260,8 @@ const Room = (() => {
     text(D.start, a.t0 != null ? fmtHM(a.t0) + ' (' : ''); D.start.parentNode.parentNode.hidden = a.t0 == null; R.setTime(D.startRel, a.t0, 'ago');
     const live = R.LIVE.has(a.st) || a.st === 'stall' || a.st === 'user'; D.turn.parentNode.parentNode.hidden = !(live && a.t0 != null); R.setTime(D.turn, a.t0, 'dur');
     D.last.parentNode.parentNode.hidden = a.lastAt == null; R.setTime(D.last, a.lastAt, 'ago');
-    for (const [n, v] of [['rm', md.model], ['rf', md.cwd], ['rp', md.pid]]) { text(D[n], v || ''); D[n].parentNode.hidden = !v; }
+    const mdl = a.modelPrev ? a.modelPrev + ' → ' + a.model + (a.modelFb ? ' (안전장치 재라우팅)' : ' (세션 중 바뀜)') : a.model || md.model;
+    for (const [n, v] of [['rm', mdl], ['rf', md.cwd], ['rp', md.pid]]) { text(D[n], v || ''); D[n].parentNode.hidden = !v; }
     D.rpa.parentNode.hidden = !par; if (par) { const b = D.rpa.firstChild; text(b, par.name); b.onclick = () => R.openRoom(par.ch, par.id); }
     const subs = Detail.subtree(a), np = [a, ...subs].reduce((n, x) => n + x.procs.length, 0);
     text(D.hk.lastChild, subs.length); text(D.hsum, Detail.sumKids(subs)); text(D.hp.lastChild, np); D.tree.parentNode.hidden = !subs.length && !a.hidden;
@@ -251,7 +274,7 @@ const Room = (() => {
   const eGl = C.glyph('done'), eT = h('h2.t-title'), eS = h('p.meta'), eH = h('p.meta.hint', '↑↓로 방을 고르고 Enter로 엽니다');
   pempty.append(h('div.pe', eGl, eT, eS, eH));
   function renderEmpty() {
-    if (Overview.render()) return;   // 70-overview: 배선 지도 / 픽셀 오피스 takes the pane once the model is loaded
+    if (Overview.render()) return;   // 70-overview: 배선 지도 / 픽셀 던전 takes the pane once the model is loaded
     const w = M.waiting.length;
     if (!M.loaded) { text(eT, '불러오는 중…'); text(eS, ''); eGl.style.display = 'none'; eH.hidden = true; return; }
     eGl.style.display = ''; eH.hidden = false;
@@ -268,7 +291,7 @@ const Room = (() => {
     if (k !== key) {
       key = k; opening = true; prevIds = new Set(); sawAgent = false; newmsg.hidden = true; tlin.replaceChildren();
       if (k) { R.U.seen[k] = Date.now(); R.save(); }
-      ackOpen = !!k; donecf.hidden = true;
+      ackOpen = !!k; donecf.hidden = true; endcf.hidden = true;
       chat.dataset.room = k ? 'open' : 'none';
     }
     applyDrawer();
@@ -276,11 +299,13 @@ const Room = (() => {
   function update() {
     if (R.params().view !== 'chat') { document.body.classList.remove('room-composer'); return; }
     if (!key) { proom.hidden = true; pempty.hidden = false; document.body.classList.remove('room-composer'); renderEmpty(); applyDrawer(); return; }
+    if (M.loaded && M.channels.length && !R.chan(key.split(':')[0])) { R.closeRoom(); return; }   // its server was removed (설정 › 삭제): nothing left to show
     a = M.agents.get(key) || null; if (a) { cache.set(key, a); sawAgent = true; }
     const ghost = !a && cache.get(key);
     if (!M.loaded) { proom.hidden = true; pempty.hidden = false; document.body.classList.remove('room-composer'); renderEmpty(); return; }
     pempty.hidden = true; proom.hidden = false;
     text(back, small() ? '‹ 목록' : '‹ 오버뷰'); hideBtn.hidden = !(a && R.canHide(a));
+    endBtn.hidden = !(a && R.canEnd(a)); if (endBtn.hidden && !ecGo.hidden) endcf.hidden = true;
     const canDone = !!a && R.rawWaiting(a) && !a.marked; doneBtn.hidden = leaveBtn.hidden = !canDone; if (!canDone) donecf.hidden = true;
     // 읽음: opening a waiting room (or watching it while a new wait starts) acknowledges that episode — after this pass, not inside it
     if (a && R.needsMe(a) && (ackOpen || document.hasFocus())) { const k = key; setTimeout(() => { if (key === k && R.params().view === 'chat') R.ack([k]); }, 0); }

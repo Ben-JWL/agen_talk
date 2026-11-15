@@ -75,3 +75,40 @@ code.nw, .nw { white-space: nowrap; }
 .dlg .finds li[data-lv=admin] .lv { border-color: var(--ink); color: var(--ink); }
 .dlg .fixcmd { display: block; margin: 0; padding: 6px 10px; border-radius: var(--r-btn); background: var(--surface); font-size: 12.5px; white-space: pre-wrap; overflow-wrap: anywhere; user-select: all; }
 .dlg .bn-err .finds { margin: 8px 0 2px; }
+/* 유휴 세션 정리 (69-reap.js) */
+.dlg.reap { width: min(600px, calc(100vw - 32px)); }
+.reap-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 8px; font-size: 12.5px; }
+.reap-list { list-style: none; margin: 0; padding: 0; max-height: 46vh; overflow: auto; border: 1px solid var(--line); border-radius: var(--r-card); }
+.reap-list:empty { display: none; }
+.reap-row { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--line); font-size: 12.5px; }
+.reap-row:last-child { border-bottom: 0; }
+.reap-row label { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; cursor: pointer; }
+.reap-row .rmain { display: flex; flex-direction: column; min-width: 0; }
+.reap-row .rn, .reap-row .rd { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.reap-row .rago { flex: none; color: var(--ink-2); }
+.reap-row .rres { flex: none; font-weight: 600; }
+.reap-row .rres.bad { color: var(--signal); }
+.reap-row .rres[hidden] { display: none; }
+.reap-msg { min-height: 18px; margin: 10px 0 0; }
+/* 내 SSH 설정에서 고르기 (prefill only) and the manual key route for key-only servers */
+.dlg .scrow { margin: -4px 0 10px; }
+.dlg .scrow[hidden], .dlg .sshc[hidden], .dlg .manual[hidden] { display: none; }
+.dlg .sshc { display: grid; gap: 4px; max-height: 220px; overflow: auto; margin: 0 0 12px; padding: 4px; border: 1px solid var(--line); border-radius: var(--r-card); }
+.dlg .sshc > .meta { margin: 4px 6px; }
+.dlg .scb { display: grid; grid-template-columns: minmax(0, auto) minmax(0, 1fr); column-gap: 8px; align-items: baseline; width: 100%; min-width: 0; padding: 6px 8px; border: 0; border-radius: var(--r-btn); background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.dlg .scb b, .dlg .scb .meta { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dlg .scb b { font-weight: 600; }
+.dlg .scb:hover:not(:disabled), .dlg .scb:focus-visible { background: var(--canvas); outline: none; }
+.dlg .scb:focus-visible { box-shadow: inset 0 0 0 2px var(--focus); }
+.dlg .scb:disabled { cursor: default; color: var(--ink-2); }
+.dlg .scb .scw { grid-column: 1 / -1; font-size: 12px; line-height: 16px; color: var(--ink-2); }
+.dlg .scb[data-st=added] .scw::before { content: "✓ "; }
+.dlg .manw { margin: 8px 0 0; }
+.dlg .manual { display: grid; gap: 4px; margin: 8px 0 0; padding: 10px 12px; border-radius: var(--r-btn); background: var(--canvas); min-width: 0; }
+.dlg .manual p { margin: 0; }
+.dlg .manual .fixcmd { font-size: 12px; max-height: 120px; overflow: auto; word-break: break-all; }
+.dlg .manual .mact { display: flex; justify-content: flex-end; }
+.dlg .manual .kmsg[hidden] { display: none; }
+.dlg .bn-err .manual { margin: 6px 0 0; background: var(--surface); }
+.dlg .scrow .btn.link, .dlg .manw .btn.link { color: var(--ink-2); text-decoration: underline; text-underline-offset: 2px; padding: 0; }
+.dlg .scrow .btn.link:hover, .dlg .manw .btn.link:hover { color: var(--ink); }

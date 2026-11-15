@@ -67,8 +67,94 @@
   function chanRow(c) {
     const el = h('li.crow', h('svg.cic', { 'aria-hidden': 'true' }, h('use')), h('div.cmain', h('div.cname', h('b', h('a', { href: '#/chat' })), ' ', h('span.meta.tgt')), h('div.verdict', h('span.vs'), R.timeEl(Date.now(), 'live', 'vt'), h('span.ve')), h('div.meta.cwarn', { hidden: true }), h('div.cbp', { hidden: true }, h('b.bpt', R.BADPERM.title), h('p.meta.bpb'), States.badperm())), h('div.cacts', h('button.btn.sm.primary.fix', { type: 'button', hidden: true, on: { click: () => AddServer.open({ ch: el.dataset.key }) } }, '이 서버에 키 등록하기'),
       h('button.btn.sm.rekey', { type: 'button', hidden: true, title: '이 서버는 키 로그인이 거절되어 실행할 때마다 비밀번호를 묻습니다. 키를 다시 등록하고, 거절되면 원인(폴더 권한 등)을 찾아 고칩니다.', on: { click: () => AddServer.open({ ch: el.dataset.key, rekey: true }) } }, '키 로그인 다시 설정'),
-      h('button.btn.sm.retry', { type: 'button', title: '허브가 자동으로 다시 연결합니다 (최대 1분 간격). 이 버튼은 지금 한 번 확인합니다.', on: { click: () => R.refresh() } }, '지금 확인')));
+      h('button.btn.sm.retry', { type: 'button', title: '허브가 자동으로 다시 연결합니다 (최대 1분 간격). 이 버튼은 지금 바로 다시 연결합니다.', on: { click: () => R.retryChan(el.dataset.key) } }, '지금 확인')));
+    el.querySelector('.cacts').append(menuBtn(el));
+    el.querySelector('.cname').after(h('div.cren', { hidden: true }), h('div.meta.cerr', { role: 'alert', hidden: true }));
+    el.querySelector('.verdict').after(h('div.meta.cnext', { hidden: true }));   // '12초 뒤 다시 연결' / '연결 중…' / '비밀번호를 기다리는 중'
+    el.querySelector('.cmain').append(h('div.cdel', { role: 'alert', hidden: true }));
     return el;
+  }
+  // ---------- per-row ⋯ menu: 이름 바꾸기 / 주소·계정·포트 수정 / 위로 / 아래로 / 삭제 (button + role=menu, arrow keys, Esc returns focus) ----------
+  const ITEMS = [['rename', '이름 바꾸기'], ['edit', '주소·계정·포트 수정'], ['up', '위로'], ['down', '아래로'], ['remove', '삭제']];
+  function menuBtn(el) {
+    const btn = h('button.btn.sm.cmore', { type: 'button', 'aria-haspopup': 'menu', 'aria-expanded': 'false', 'aria-label': '채널 메뉴', title: '이름 바꾸기 · 수정 · 순서 · 삭제' }, '⋯');
+    const items = ITEMS.map(([k, l]) => h('button.cmi', { type: 'button', role: 'menuitem', tabindex: '-1', data: { k }, on: { click: () => { close(true); act(el, k); } } }, l));
+    const menu = h('div.cmenu', { role: 'menu', 'aria-label': '채널 메뉴', hidden: true }, items);
+    const open_ = () => { const c = R.chan(el.dataset.key); if (!c) return; paintMenu(items, c); menu.hidden = false; attr(btn, 'aria-expanded', 'true'); (items.find(b => !b.hidden && !b.disabled) || items[0]).focus(); };
+    const close = back => { if (menu.hidden) return; menu.hidden = true; attr(btn, 'aria-expanded', 'false'); if (back) btn.focus(); };
+    btn.addEventListener('click', () => menu.hidden ? open_() : close(true));
+    btn.addEventListener('keydown', e => { if (e.key === 'ArrowDown') { e.preventDefault(); open_(); } });
+    menu.addEventListener('keydown', e => {
+      const vis = items.filter(b => !b.hidden && !b.disabled), i = vis.indexOf(document.activeElement);
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(true); }
+      else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); vis[(i + (e.key === 'ArrowDown' ? 1 : -1) + vis.length) % vis.length].focus(); }
+      else if (e.key === 'Home' || e.key === 'End') { e.preventDefault(); vis[e.key === 'Home' ? 0 : vis.length - 1].focus(); }
+      else if (e.key === 'Tab') close(false);
+    });
+    menu.addEventListener('focusout', e => { if (!menu.contains(e.relatedTarget) && e.relatedTarget !== btn) close(false); });
+    return h('span.cmw', btn, menu);
+  }
+  // hand-written ssh_args the in-app client does not speak (anything but -i / -p / -o IdentitiesOnly=…): rename / move / remove only
+  const argX = c => { const a = c.args || []; for (let i = 0; i < a.length; i++) { if ((a[i] === '-i' || a[i] === '-p') && i + 1 < a.length) i++; else if (a[i] === '-o' && /^IdentitiesOnly=/.test(a[i + 1] || '')) i++; else return a[i] === '-o' ? '-o ' + (a[i + 1] || '') : a[i]; } return ''; };
+  function paintMenu(items, c) {
+    const ids = R.M.channels.map(x => x.id), i = ids.indexOf(c.id), local = c.kind !== 'ssh', x = c.kind === 'ssh' ? argX(c) : '';
+    for (const b of items) {
+      const k = b.dataset.k;
+      b.hidden = (k === 'edit' || k === 'remove') && local;   // 내 PC is not a server: nothing to edit or remove
+      b.disabled = k === 'up' ? i <= 0 : k === 'down' ? i < 0 || i >= ids.length - 1 : k === 'edit' && !!x;
+      attr(b, 'title', k === 'edit' && x ? '이 서버는 channels.json 의 ssh_args (' + x.slice(0, 60) + ') 로 연결합니다 — 앱에서는 수정할 수 없으니 channels.json 에서 고치세요' : null);
+    }
+  }
+  const rowErr = (el, msg) => { const e = el.querySelector('.cerr'); text(e, msg || ''); e.hidden = !msg; };
+  async function act(el, k) {
+    const id = el.dataset.key, c = R.chan(id); if (!c) return;
+    rowErr(el, '');
+    if (k === 'edit') return AddServer.open({ ch: id, edit: true });
+    if (k === 'rename') return renameStart(el, c);
+    if (k === 'remove') return removeAsk(el, c);
+    let r; try { r = await R.apiPost('api/servers/move', { id, dir: k }); } catch { r = { ok: false }; }
+    if (!r.ok) return rowErr(el, '순서를 바꾸지 못했습니다' + (r.body && r.body.error ? ' — ' + R.str(r.body.error, 120) : ''));
+    R.refresh(); setTimeout(() => { const b = el.querySelector('.cmore'); if (el.isConnected) b.focus(); }, 0);
+  }
+  // 이름 바꾸기: inline, Enter saves, Esc cancels; the hub applies the creation rules (1~40 characters, no duplicate)
+  function renameStart(el, c) {
+    const box = el.querySelector('.cren'), nm = el.querySelector('.cname');
+    const input = h('input.cin', { type: 'text', maxlength: 40, value: c.name, 'aria-label': c.name + ' 새 이름', spellcheck: 'false', autocomplete: 'off' });
+    const done = () => { box.hidden = true; box.replaceChildren(); nm.hidden = false; };
+    const save = async () => {
+      const v = input.value.trim(); if (v === c.name) { done(); return el.querySelector('.cmore').focus(); }
+      if (!v) return rowErr(el, '이름을 입력하세요');
+      if (R.M.channels.some(x => x.id !== c.id && x.name === v)) return rowErr(el, '같은 이름의 채널이 이미 있습니다 — 다른 이름을 쓰세요');
+      ok.disabled = true; let r; try { r = await R.apiPost('api/servers/rename', { id: c.id, name: v }); } catch { r = { ok: false }; } ok.disabled = false;
+      if (!r.ok) return rowErr(el, r.body && r.body.error ? R.str(r.body.error, 120) : '이름을 바꾸지 못했습니다');
+      const cc = R.chan(c.id); if (cc) cc.name = r.body && r.body.name || v;
+      rowErr(el, ''); done(); setChanRow(el, cc || c); R.refresh(); el.querySelector('.cmore').focus();
+    };
+    const ok = h('button.btn.sm.primary', { type: 'button', on: { click: save } }, '저장');
+    input.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); save(); } else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); rowErr(el, ''); done(); el.querySelector('.cmore').focus(); } });
+    input.addEventListener('input', () => rowErr(el, ''));
+    box.replaceChildren(input, ok, h('button.btn.sm', { type: 'button', on: { click: () => { rowErr(el, ''); done(); el.querySelector('.cmore').focus(); } } }, '취소'));
+    nm.hidden = true; box.hidden = false; input.focus(); input.select();
+  }
+  // 삭제: a second, explicit step. The app's key line stays on the server: say which line to remove there.
+  function removeAsk(el, c) {
+    const box = el.querySelector('.cdel'), cm = (R.M.app && R.M.app.keyComment) || 'agen-talk@PC이름';
+    const fg = h('input', { type: 'checkbox' });
+    const no = h('button.btn.sm', { type: 'button', on: { click: () => { box.hidden = true; box.replaceChildren(); el.querySelector('.cmore').focus(); } } }, '취소');
+    const yes = h('button.btn.sm.danger', { type: 'button', on: { click: async () => {
+      yes.disabled = no.disabled = true; text(yes, '삭제하는 중…');
+      let r; try { r = await R.apiPost('api/servers/remove', { id: c.id, forget_hostkey: fg.checked }); } catch { r = { ok: false }; }
+      if (!r.ok) { yes.disabled = no.disabled = false; text(yes, '삭제'); return rowErr(el, r.body && r.body.error ? R.str(r.body.error, 160) : '삭제하지 못했습니다'); }
+      box.hidden = true;
+      const nb = [...el.parentNode.querySelectorAll('.crow')].find(x => x !== el && !x.classList.contains('gone'));
+      if (nb) nb.querySelector('.cmore').focus(); else document.getElementById('h-chan').closest('section').querySelector('button').focus();   // focus leaves the row first, so the next poll can drop it
+      R.refresh(); R.emit('removed', c.id);
+    } } }, '삭제');
+    box.replaceChildren(h('b', "'" + c.name + "' 채널을 삭제할까요?"),
+      h('p.meta', '이 PC의 채널 목록과 설정 파일(channels.json)에서 지우고 연결을 끊습니다. ' + (c.kind === 'ssh' ? '서버의 ~/.ssh/authorized_keys 에는 이 앱의 키 줄이 남아 있습니다 — 접속을 완전히 막으려면 서버에서 ' : ''), c.kind === 'ssh' ? h('code.mono', cm) : null, c.kind === 'ssh' ? ' 로 끝나는 줄을 지우세요.' : ''),
+      c.kind === 'ssh' ? h('label.sess', fg, h('span', '이 서버의 지문 기록(known_hosts)도 지우기 — 다시 추가하면 지문을 처음부터 확인합니다')) : null,
+      h('div.acts', no, yes));
+    box.hidden = false; yes.focus();
   }
   function setChanRow(el, c) {
     const tgt = KIND[c.kind] || KIND.ssh, st = R.M.states[c.id], warns = st ? st.warnings : [];
@@ -84,7 +170,8 @@
     if (bpm) { text(bx.querySelector('.bpb'), R.sshHint(c.error)); bx.querySelector('.bperm').hidden = bk !== 'badperm'; }   // the copy-paste fix only fits %USERPROFILE%\.ssh\config
     const fx = R.sshFix(c), rb = el.querySelector('.retry');
     const pws = c.kind === 'ssh' && c.auth === 'password-session', fb = el.querySelector('.fix');   // password-session: the key was refused once; offer the key again
-    fb.hidden = !fx; text(fb, pws ? '비밀번호로 연결' : '이 서버에 키 등록하기'); rb.hidden = c.state !== 'error'; cls(rb, 'link', fx); cls(rb, 'sm', !fx);
+    fb.hidden = !fx; text(fb, pws ? '비밀번호로 연결' : '이 서버에 키 등록하기'); rb.hidden = c.state !== 'error' || R.waitsPw(c); cls(rb, 'link', fx); cls(rb, 'sm', !fx);
+    const nx = el.querySelector('.cnext'); R.setRetry(nx, c.state === 'error' ? c : null); nx.hidden = c.state !== 'error';
     el.querySelector('.rekey').hidden = !pws;
   }
 
@@ -105,9 +192,9 @@
       const imp = Importer.make({ block: false }); this.imp = imp;
       const th = radios('테마', [['system', '시스템'], ['light', '라이트'], ['dark', '다크']], () => S.theme, v => S.theme = v);
       const mo = radios('움직임', [['system', '시스템'], ['reduce', '줄이기']], () => S.motion === 'reduce' ? 'reduce' : 'system', v => S.motion = v);
-      const oz = radios('픽셀 오피스 크기', [['s', '작게'], ['m', '보통'], ['l', '크게']], () => S.ofcSize, v => S.ofcSize = v);
+      const oz = radios('픽셀 던전 크기', [['s', '작게'], ['m', '보통'], ['l', '크게']], () => S.ofcSize, v => S.ofcSize = v);
       const pa = palettes();
-      const ot = radios('오버뷰 테마', Overview.themes, () => S.ovTheme, v => S.ovTheme = v);   // fan themes style the 픽셀 오피스 (and the 배선 지도 under 기본) (OVERVIEW-CONTRACT §3)
+      const ot = radios('오버뷰 테마', Overview.themes, () => S.ovTheme, v => S.ovTheme = v);   // fan themes style the 픽셀 던전 pane (and the 배선 지도 under 기본) (OVERVIEW-CONTRACT §3)
       const prow = row('palette', '색 팔레트', pa.g, '앱 전체의 색입니다. 라이트/다크는 위의 테마를 따르고, 안읽음·승인 요청 같은 빨간 표시는 모든 팔레트에서 같은 빨강입니다'); prow.classList.add('stack'); attr(pa.g, 'aria-describedby', 'n-palette');
       const chList = h('ul.clist'), keyList = h('ul.klist'), preList = h('ul.plist'); this.preList = preList;
       chList.append(this.noSsh = h('li.meta', { hidden: true }, '아직 서버가 없습니다 — 서버 추가로 첫 서버를 등록하세요'));   // unkeyed: R.keyed leaves it alone
@@ -118,9 +205,9 @@
           row('theme', '테마', th.g, '시스템을 고르면 Windows의 라이트/다크 설정을 따릅니다'),
           prow,
           row('motion', '움직임', mo.g, '입력 중 점의 움직임과 패널·서랍 전환 애니메이션을 끕니다'),
-          row('fun', '재미 모드 (픽셀 오피스)', toggle('fun', '재미 모드 (픽셀 오피스)', 'fun'), '방을 열지 않았을 때 오른쪽 칸을 배선 지도 대신 픽셀 사무실로 보여 줍니다'),
-          row('ofcsize', '픽셀 오피스 크기', oz.g, '픽셀 사무실의 도트 크기입니다 (오버뷰 위쪽 − / + 와 같음). 고해상도 화면에서는 작게와 보통이 같게 보일 수 있습니다'),
-          row('ovtheme', '오버뷰 테마', ot.g, '픽셀 오피스의 테마입니다 (색 팔레트가 기본이면 배선 지도에도 적용) — 라이트/다크는 위의 테마를 따릅니다. 팬 테마이며 로고·상표는 쓰지 않습니다')),
+          row('fun', '재미 모드 (픽셀 던전)', toggle('fun', '재미 모드 (픽셀 던전)', 'fun'), '방을 열지 않았을 때 오른쪽 칸을 배선 지도 대신 픽셀 던전으로 보여 줍니다 — 에이전트가 하는 일에 따라 탐험·수련·제작·전투를 합니다'),
+          row('ofcsize', '픽셀 던전 크기', oz.g, '픽셀 던전의 도트 크기입니다 (오버뷰 위쪽 − / + 와 같음). 고해상도 화면에서는 작게와 보통이 같게 보일 수 있습니다'),
+          row('ovtheme', '오버뷰 테마', ot.g, '오버뷰 칸의 테마입니다 (색 팔레트가 기본이면 배선 지도에도 적용) — 라이트/다크는 위의 테마를 따릅니다. 팬 테마이며 로고·상표는 쓰지 않습니다')),
         sec('notify', '알림',
           row('notify', 'Windows 알림', toggle('notify', 'Windows 알림', 'notify', setNotify), '입력 대기·응답 없음·중단됨·끊김으로 바뀔 때, 긴 프로세스가 끝날 때'),
           denied,

@@ -7,7 +7,7 @@
 window.AddServer = (() => {
   const { h, svgUse, text, attr, cls, M } = R;
   const TOKEN = (document.querySelector('meta[name=at-token]') || {}).content || '';
-  const RE = { host: /^[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?$/, user: /^[A-Za-z_][A-Za-z0-9._-]{0,31}$/ };
+  const RE = { user: /^[A-Za-z_][A-Za-z0-9._-]{0,31}$/ };   // hosts: R.hostOk (names with . _ -, IPv4, bare IPv6)
   const STEPS = ['연결', '서버 확인', '키 등록', '접속 확인', '채널 등록'], GL = { pending: 'g-idle', active: 'g-work', user: 'g-user', done: 'g-done', error: 'g-dead' };
   const PH = { connecting: 0, confirm_hostkey: 1, installing_key: 2, verifying: 3, diagnosing: 3, confirm_fix: 3, fixing: 3 };
   const LIVE = ['connecting', 'confirm_hostkey', 'installing_key', 'verifying', 'diagnosing', 'confirm_fix', 'fixing'];
@@ -22,11 +22,12 @@ window.AddServer = (() => {
     host_key_changed: ['서버의 신원이 바뀌었습니다 — 등록을 중단했습니다', '이 서버의 호스트 키가 이 PC에 기록된 것과 다릅니다. 서버를 다시 설치했거나 주소가 다른 장비로 옮겨진 경우라면 정상입니다. 그렇지 않다면 중간에 다른 장비가 끼어들었을 수 있으니, 서버 관리자에게 확인하기 전에는 비밀번호를 입력하지 마세요.', () => 1, [['관리자에게 확인했습니다 — 기록을 지우고 다시 시도', 'b', 'forget'], ['닫기', 'p', 'close']]],
     no_python3: ['서버에 python3 가 없습니다', '키는 등록되어 접속은 되지만, 에겐 톡이 이 서버의 에이전트를 읽으려면 python3 가 필요합니다. 서버 관리자에게 설치를 요청하거나, python 명령 이름이 다르면 그 이름을 적고 다시 시도하세요.', () => 3, [['python 명령 바꾸기', 'p', 'py'], ['닫기', 'b', 'close']]],
     key_rejected: ['서버가 키 로그인을 허용하지 않습니다', '키는 서버에 등록됐지만 키로는 접속되지 않습니다. 서버가 키 로그인을 막고 있거나 ~/.ssh 폴더 권한이 맞지 않을 수 있습니다. 서버 관리자에게 확인하거나, 이 세션 동안만 비밀번호로 연결할 수 있습니다 (비밀번호는 디스크에 저장되지 않고, 에겐 톡을 닫으면 사라집니다).', () => 3, [['이 세션 동안만 비밀번호로 연결', 'p', 'session'], ['닫기', 'b', 'close']]],
+    password_disabled: ['이 서버는 비밀번호 로그인이 꺼져 있습니다', '키로만 접속되는 서버라 비밀번호로는 키를 등록할 수 없습니다. 이미 접속할 수 있는 방법(다른 SSH 프로그램, 서버 관리자)으로 아래 명령을 서버에서 한 번 실행해 이 PC의 공개키를 등록한 뒤 다시 연결하세요.', () => 2, [['주소 수정', 'l', 'host'], ['닫기', 'b', 'close'], ['키를 등록했습니다 — 다시 연결', 'p', 'rekeyed']]],
     cancelled: ['취소했습니다', '등록을 취소했습니다. 서버에는 아무것도 바뀌지 않았습니다.', (p, j) => PH[j.phase || p.phase] || 0, [['다시 입력', 'p', 'retry'], ['닫기', 'b', 'close']]],
     hub_lost: ['허브가 응답하지 않습니다', '허브와의 연결이 끊겨 등록이 어디까지 진행됐는지 알 수 없습니다. 에겐 톡을 다시 시작한 뒤 다시 시도하세요. 이미 비밀번호를 보냈다면 서버에 키가 등록됐을 수 있습니다 — 서버의 ~/.ssh/authorized_keys 에서 \'agen-talk@PC이름\' 줄로 확인하세요.', (p, j) => PH[j.phase || p.phase] || 0, [['다시 입력', 'p', 'retry'], ['닫기', 'b', 'close']]],
     other: ['등록하지 못했습니다', '아래 로그를 확인하세요. 같은 내용이 반복되면 에겐 톡 로그 폴더의 로그와 함께 알려 주세요.', (p, j) => PH[j.phase || p.phase] || 0, [['다시 입력', 'p', 'retry'], ['계정 수정', 'l', 'user'], ['닫기', 'b', 'close']]],
   };
-  let dlg, E = {}, job = null, timer = 0, flashT = 0, opener = null, fix = null, fixName = '', rekey = false, pwConn = false, reusePw = false, sub0 = SUB;
+  let dlg, E = {}, job = null, timer = 0, flashT = 0, opener = null, fix = null, fixName = '', rekey = false, pwConn = false, reusePw = false, editing = false, sub0 = SUB, keyP = null;
 
   const api = (path, body) => fetch(path, body === undefined ? { cache: 'no-store' } : { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-AT-Token': TOKEN }, body: JSON.stringify(body) })
     .then(async r => ({ status: r.status, body: await r.json().catch(() => null) }));   // relative paths: the page lives under /<secret>/
@@ -34,7 +35,100 @@ window.AddServer = (() => {
   const flash = (msg, ms) => { clearTimeout(flashT); text(E.flash, msg); E.flash.hidden = !msg; if (msg && ms) flashT = setTimeout(() => flash(''), ms); };
   const err = (k, msg, link) => { E[k + 'Err'].replaceChildren(...[msg, link].filter(Boolean)); E[k + 'Err'].hidden = !msg; attr(E[k], 'aria-invalid', msg ? 'true' : null); };
   const running = () => !!job && job.running;
-  const pane = (n, sub) => { for (const k of ['form', 'prog', 'done']) E[k].hidden = k !== n; if (E.presets) E.presets.hidden = n !== 'form' || E.presets.children.length < 2; text(E.sub, sub || sub0); text(E.title, fix ? (rekey ? '키 로그인 다시 설정' : pwConn ? '비밀번호로 연결' : '이 서버에 키 등록하기') + (fixName ? ' — ' + fixName : '') : '서버 추가'); };
+  const pane = (n, sub) => { for (const k of ['form', 'prog', 'done']) E[k].hidden = k !== n; if (E.presets) E.presets.hidden = n !== 'form' || E.presets.children.length < 2; text(E.sub, sub || sub0); text(E.title, fix ? (rekey ? '키 로그인 다시 설정' : pwConn ? '비밀번호로 연결' : editing ? '서버 정보 수정' : '이 서버에 키 등록하기') + (fixName ? ' — ' + fixName : '') : '서버 추가'); };
+
+  // ---------- the address field: what a pasted / typed address says ----------
+  // user@host, user@host:2222, host:2222, [2001:db8::1]:2222, bare IPv6, ssh://user@host:2222, and ssh command lines
+  // (ssh [-p N] [-l user] [-o Port=N|User=x] [harmless flags] [user@]host). -> {host, user, port} ('' = not said) | {bad: the part not understood} | null
+  const NOARG = /^-[46CqtTvVxXyYaAkKnNgsfG]+$/, WITHARG = /^-[bBcDeEFiIJLmOQRSwW]$/;
+  function parseDest(d) {
+    let user = '', m;
+    if ((m = /^ssh:\/\/([^/?#]+)(?:[/?#].*)?$/i.exec(d))) d = m[1];
+    const at = d.lastIndexOf('@'); if (at >= 0) { user = d.slice(0, at); d = d.slice(at + 1); }
+    if ((m = /^\[([^\]]+)\](?::(\d{1,5}))?$/.exec(d))) return { user, host: m[1], port: m[2] || '' };
+    if (d.split(':').length === 2) { m = /^([^:]+):(\d{1,5})$/.exec(d); return m ? { user, host: m[1], port: m[2] } : null; }
+    return d ? { user, host: d, port: '' } : null;   // a name, IPv4, or a bare IPv6 (several ':')
+  }
+  function parseHost(raw) {
+    const s = String(raw || '').trim().replace(/^(["'])(.*)\1$/, '$2');
+    if (!s) return null;
+    if (!/^ssh(?:\s|$)/i.test(s)) return /\s/.test(s) ? null : parseDest(s);   // plain text with spaces: validate() says what is wrong
+    const t = s.split(/\s+/).slice(1).map(x => x.replace(/^(["'])(.*)\1$/, '$2'));
+    let user = '', port = '', dest = '', m;
+    const opt = v => { const o = /^(port|user)\s*=?\s*(\S+)$/i.exec(v); if (!o) return false; if (/^p/i.test(o[1])) { if (!/^\d{1,5}$/.test(o[2])) return false; port = o[2]; } else user = o[2]; return true; };
+    for (let i = 0; i < t.length; i++) {
+      const a = t[i];
+      if (a === '-p' || a === '-l' || a === '-o') {
+        const v = t[++i]; if (v == null) return { bad: a };
+        if (a === '-p') { if (!/^\d{1,5}$/.test(v)) return { bad: a + ' ' + v }; port = v; } else if (a === '-l') user = v; else if (!opt(v)) return { bad: '-o ' + v };
+      } else if ((m = /^-p(\d{1,5})$/.exec(a))) port = m[1];
+      else if ((m = /^-l(\S+)$/.exec(a))) user = m[1];
+      else if ((m = /^-o(\S+)$/.exec(a))) { if (!opt(m[1])) return { bad: a }; }
+      else if (NOARG.test(a)) continue;   // -v, -4, -C …: change nothing the app needs
+      else if (a[0] === '-') return { bad: a + (WITHARG.test(a) && t[i + 1] ? ' ' + t[i + 1] : '') };
+      else if (!dest) dest = a;
+      else return { bad: t.slice(i).join(' ') };   // a remote command: the app runs only its own collector
+    }
+    const d = dest && parseDest(dest);
+    if (!d) return { bad: dest || 'ssh' };
+    return { host: d.host, user: d.user || user, port: port || d.port };
+  }
+  const badMsg = part => "'" + part.slice(0, 40) + (part.length > 40 ? '…' : '') + "' 부분을 이해하지 못했습니다 — 에겐 톡은 주소·계정·포트만 씁니다 (경유 서버·키 파일 같은 ssh 옵션은 지원하지 않습니다)";
+  function applyHost() {
+    const v = E.host.value, p = parseHost(v);
+    if (p && p.bad) { err('host', badMsg(p.bad)); return; }
+    if (p) {
+      const moved = [];
+      if (p.host !== v) E.host.value = p.host;   // only when the text changes: no caret jump while typing a plain name
+      if (p.user && p.user !== E.user.value.trim()) { if (E.user.value.trim() && E.user.value.trim() !== (R.U.lastUser || '')) moved.push('계정'); E.user.value = p.user; err('user', ''); }
+      if (p.port && String(+p.port) !== E.port.value.trim()) { if (E.port.value.trim() && E.port.value.trim() !== '22') moved.push('포트'); E.port.value = String(+p.port); err('port', ''); }
+      if (moved.length) flash(moved.join('·') + '을(를) 붙여 넣은 주소에 적힌 값으로 바꿨습니다', 4000);
+    }
+    E.name.placeholder = E.host.value.trim() || '서버 이름';
+  }
+
+  // ---------- key-only servers: the app's public key line and the one command that appends it (the user runs it, the app never does) ----------
+  const loadKey = () => keyP || (keyP = api('api/key').then(r => r.status === 200 && r.body && /^ssh-ed25519 [A-Za-z0-9+/=]+ \S+$/.test(String(r.body.pub || '')) ? r.body : Promise.reject(r)).catch(e => { keyP = null; throw e; }));
+  function manualBox(id, note) {
+    const pub = h('code.mono.fixcmd.kpub'), cmd = h('code.mono.fixcmd.kcmd'), msg = h('p.meta.kmsg', '공개키를 불러오는 중…');
+    const cp1 = h('button.btn.sm', { type: 'button', disabled: true, on: { click: e => C.copy(pub.textContent, e.currentTarget, '공개키 복사') } }, '공개키 복사');
+    const cp2 = h('button.btn.sm', { type: 'button', disabled: true, on: { click: e => C.copy(cmd.textContent, e.currentTarget, '명령 복사') } }, '명령 복사');
+    const el = h('div.manual', { id }, h('p.meta', '이 PC의 공개키 (비밀 정보가 아닙니다):'), pub, h('div.mact', cp1),
+      h('p.meta', '서버에서 한 번 실행할 명령 — 이미 접속할 수 있는 터미널에 붙여 넣으세요 (에겐 톡은 이 명령을 실행하지 않습니다):'), cmd, h('div.mact', cp2), note ? h('p.meta', note) : null, msg);
+    el.load = () => loadKey().then(k => { text(pub, R.str(k.pub, 400)); text(cmd, R.str(k.cmd, 1200)); cp1.disabled = false; cp2.disabled = !k.cmd; msg.hidden = true; },
+      () => { text(msg, '공개키를 불러오지 못했습니다 — 에겐 톡을 다시 시작한 뒤 다시 여세요'); msg.hidden = false; });
+    return el;
+  }
+
+  // ---------- 내 SSH 설정에서 고르기: GET api/sshconfig only when asked; picking an entry fills the form, nothing is saved ----------
+  const SKIP = { host: '주소 형식을 쓸 수 없습니다', user: '계정 형식을 쓸 수 없습니다', port: '포트가 올바르지 않습니다', token: '%h 같은 치환 표기는 지원하지 않습니다' };
+  const hostTxt = (host, port) => (host.includes(':') ? '[' + host + ']' : host) + (port !== 22 ? ':' + port : '');
+  async function loadSc() {
+    if (!E.scBox.hidden) { E.scBox.hidden = true; attr(E.scBtn, 'aria-expanded', 'false'); return; }
+    E.scBox.hidden = false; attr(E.scBtn, 'aria-expanded', 'true'); E.scBox.replaceChildren(h('p.meta', '불러오는 중…'));
+    let r; try { r = await api('api/sshconfig'); } catch { r = { status: 0 }; }
+    const b = r.body || {}, es = r.status === 200 && Array.isArray(b.entries) ? b.entries.filter(e => e && typeof e === 'object' && typeof e.alias === 'string').slice(0, 100) : null;
+    const quiet = m => E.scBox.replaceChildren(h('p.meta', m));
+    if (!es) return quiet('SSH 설정 파일을 읽지 못했습니다');
+    if (b.missing) return quiet('SSH 설정 파일이 없습니다');
+    if (b.too_big) return quiet('SSH 설정 파일이 256KB 보다 커서 읽지 않았습니다');
+    if (b.unreadable) return quiet('SSH 설정 파일을 읽을 수 없습니다');
+    if (!es.length) return quiet('고를 수 있는 Host 항목이 없습니다 (와일드카드 항목은 건너뜁니다)');
+    const have = M.channels.filter(c => c.kind === 'ssh').map(parse);
+    E.scBox.replaceChildren(...es.map(e => {
+      const alias = R.str(e.alias, 64), host = R.str(e.host, 253), user = R.str(e.user, 64), port = Number.isInteger(e.port) && e.port > 0 && e.port < 65536 ? e.port : 22;
+      const added = have.some(q => q.host === host && q.port === port && (!user || q.user === user));
+      const why = e.jump ? '경유 서버(ProxyJump)는 아직 지원하지 않습니다' : e.skipped ? SKIP[e.skipped] || '이 항목은 쓸 수 없습니다' : added ? '이미 등록된 서버' : '';
+      return h('button.scb', { type: 'button', disabled: !!why, title: why || null, data: { alias, st: e.jump || e.skipped ? 'off' : added ? 'added' : '' }, on: { click: () => pickSc({ alias, host, user, port }) } },
+        h('b', alias), h('span.meta', (user ? user + '@' : '') + hostTxt(host, port)), why ? h('span.scw', why) : null);
+    }));
+  }
+  function pickSc(e) {
+    E.host.value = e.host; if (e.user) E.user.value = e.user; E.port.value = e.port; E.name.value = e.alias.slice(0, 40); E.name.placeholder = e.host;
+    for (const k of ['host', 'user', 'port', 'name']) err(k, '');
+    E.scBox.hidden = true; attr(E.scBtn, 'aria-expanded', 'false'); flash(e.alias + ' 의 주소·계정·포트를 채웠습니다', 3000);
+    (E.user.value ? E.pw : E.user).focus();
+  }
 
   function fld(k, label, attrs, extra) {
     const input = E[k] = h('input', Object.assign({ id: 'as-' + k, autocomplete: 'off', spellcheck: 'false', 'aria-describedby': 'as-' + k + '-err' }, attrs));
@@ -50,24 +144,27 @@ window.AddServer = (() => {
     const eye = h('button.ibtn.eye', { type: 'button', 'aria-pressed': 'false', 'aria-label': '비밀번호 보기', title: '비밀번호 보기', tabindex: '0', on: { click: () => { const on = E.pw.type === 'password'; E.pw.type = on ? 'text' : 'password'; attr(eye, 'aria-pressed', on ? 'true' : 'false'); attr(eye, 'aria-label', on ? '비밀번호 숨기기' : '비밀번호 보기'); attr(eye, 'title', on ? '비밀번호 숨기기' : '비밀번호 보기'); attr(eye.querySelector('use'), 'href', on ? '#i-eye-off' : '#i-eye'); } } }, svgUse('i-eye'));
     E.py = null;
     E.form = h('form', { id: 'as-form', novalidate: true, autocomplete: 'off', on: { submit: e => { e.preventDefault(); const rq = validate(); if (rq) start(rq); } } },
-      h('div.frow', ...fld('host', '서버 주소', { placeholder: '203.0.113.10 또는 gpu-1' })),
+      E.scrow = h('div.scrow', E.scBtn = h('button.btn.link.sm', { type: 'button', 'aria-expanded': 'false', 'aria-controls': 'as-sc', on: { click: () => loadSc() } }, '내 SSH 설정에서 고르기')),
+      E.scBox = h('div.sshc', { id: 'as-sc', role: 'group', 'aria-label': '내 SSH 설정의 서버', hidden: true }),
+      h('div.frow', ...fld('host', '서버 주소', { placeholder: '203.0.113.10, gpu-1 또는 user@host:2222' })),
       h('div.frow', ...fld('user', '계정', { placeholder: '서버 로그인 계정' })),
       h('div.frow', ...fld('pw', '비밀번호', { type: 'password', maxlength: 256, autocomplete: 'off', placeholder: '서버 로그인 비밀번호' }, eye)),
       h('div.frow.pair', ...fld('port', '포트', { type: 'text', inputmode: 'numeric', pattern: '\\d*', maxlength: 5 }), ...fld('name', '이름 (선택)', { maxlength: 40 })),
       E.pyrow = h('div.frow', { hidden: true }, ...fld('py', 'python 명령', { maxlength: 64, value: 'python3' })),
       E.sessrow = h('label.sess', { hidden: true }, E.sess = h('input', { type: 'checkbox' }), h('span', '이 세션 동안만 비밀번호로 연결 (키를 쓰지 않고, 에겐 톡을 닫으면 사라집니다)')),
       h('p.meta.priv', svgUse('i-lock'), E.priv = h('span', '비밀번호는 저장하지 않습니다. 이 PC 전용 키가 ', h('code.mono.nw', '%APPDATA%\\AgenTalk'), ' 에 만들어지고 서버의 authorized_keys 에 한 줄 추가됩니다 (agen-talk@PC이름).')),
+      h('div.manw', E.manLink = h('button.btn.link.sm', { type: 'button', 'aria-expanded': 'false', 'aria-controls': 'as-man', on: { click: () => { const on = E.manForm.hidden; E.manForm.hidden = !on; attr(E.manLink, 'aria-expanded', on ? 'true' : 'false'); if (on) E.manForm.load(); } } }, '내 키 직접 등록 (비밀번호 로그인이 꺼진 서버)'),
+        E.manForm = manualBox('as-man', '등록한 뒤에는 비밀번호 칸을 비워 두고 [연결]을 누르세요 — 이 PC의 키로 접속합니다.')),
       h('div.acts.rev', E.go = h('button.btn.primary', { type: 'submit' }, '연결'), h('button.btn', { type: 'button', on: { click: () => tryClose() } }, '취소')));   // DOM order 등록 시작 → 취소 → × , shown reversed
     E.sess.addEventListener('change', () => { E.priv.hidden = false; if (E.sess.checked) { E.privAlt = E.privAlt || h('span', PRIV_S); E.priv.hidden = true; E.priv.after(E.privAlt); E.privAlt.hidden = false; } else if (E.privAlt) { E.privAlt.hidden = true; E.priv.hidden = false; } });
-    E.host.addEventListener('input', e => {   // paste user@host or host:2222
-      const m = /^\s*(?:([^@\s:]+)@)?([^@\s:]+)(?::(\d{1,5}))?\s*$/.exec(E.host.value);
-      if ((!e.inputType || e.inputType === 'insertFromPaste') && m && (m[1] || m[3])) { E.host.value = m[2]; if (m[1]) { E.user.value = m[1]; err('user', ''); } if (m[3]) { E.port.value = m[3]; err('port', ''); } }
-      E.name.placeholder = E.host.value.trim() || '서버 이름';
-    });
+    // the address field splits what it is given (paste, leaving the field, Enter): user@host[:port], [v6]:port, ssh://…, an ssh command line
+    E.host.addEventListener('input', e => { if (!e.inputType || e.inputType === 'insertFromPaste') applyHost(); else E.name.placeholder = E.host.value.trim() || '서버 이름'; });
+    E.host.addEventListener('blur', () => applyHost());
+    E.host.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.isComposing) applyHost(); });   // before the form's submit runs validate()
     E.steps = h('ol.steps', { role: 'status', 'aria-live': 'polite' }, STEPS.map(l => h('li', { data: { st: 'pending' } }, svgUse('g-idle', 'gl'), h('b', l), h('span.d'))));
     E.logBtn = h('button.btn.link', { type: 'button', 'aria-expanded': 'false', 'aria-controls': 'as-log', on: { click: () => { E.log.hidden = !E.log.hidden; attr(E.logBtn, 'aria-expanded', E.log.hidden ? 'false' : 'true'); } } }, '로그 보기');
     E.log = h('pre.inset', { id: 'as-log', hidden: true });
-    E.band = h('div.bn-err', { role: 'alert', hidden: true }, h('div.ttl', svgUse('g-dead', 'gl'), h('span.t')), h('div.sub', h('span.why'), ' ', h('code.mono.msg')), h('div.meta.kh', { hidden: true }), E.bfinds = h('ul.finds', { hidden: true }), E.acts = h('div.acts'), E.log);
+    E.band = h('div.bn-err', { role: 'alert', hidden: true }, h('div.ttl', svgUse('g-dead', 'gl'), h('span.t')), h('div.sub', h('span.why'), ' ', h('code.mono.msg')), h('div.meta.kh', { hidden: true }), E.bfinds = h('ul.finds', { hidden: true }), E.bman = manualBox('as-bman'), E.acts = h('div.acts'), E.log);
     // key_rejected with the password session still open: what the diagnosis found, the exact fix commands, the user's choice
     E.fixT = h('b.ah'); E.fixWhy = h('p'); E.finds = h('ul.finds'); E.fixCmdL = h('p.meta', '실행할 명령 (이 계정 권한으로만 실행하고, 다른 것은 바꾸지 않습니다):'); E.fixCmd = h('code.mono.fixcmd');
     E.fixGo = h('button.btn.primary', { type: 'button', on: { click: () => answerFix('fix') } }, '권한 고치고 다시 시도');
@@ -83,7 +180,7 @@ window.AddServer = (() => {
     E.okTitle = h('h3.t-section'); E.okLine = h('p'); E.okNote = h('p.meta');
     E.open = h('button.btn.primary', { type: 'button' }, '채널 열기');
     E.done = h('div', h('div.ttl', svgUse('g-done', 'gl lg'), E.okTitle), E.okLine, E.okNote,
-      h('div.acts', h('button.btn.link', { type: 'button', on: { click: () => { fix = null; fixName = ''; rekey = pwConn = reusePw = false; sub0 = SUB; reset(); E.pw.placeholder = '서버 로그인 비밀번호'; pane('form'); paintPresets(); E.host.focus(); } } }, '서버 하나 더 추가'), h('button.btn', { type: 'button', on: { click: () => tryClose(true) } }, '닫기'), E.open));
+      h('div.acts', h('button.btn.link', { type: 'button', on: { click: () => { fix = null; fixName = ''; rekey = pwConn = reusePw = editing = false; sub0 = SUB; reset(); E.scrow.hidden = false; E.pw.placeholder = '서버 로그인 비밀번호'; pane('form'); paintPresets(); E.host.focus(); } } }, '서버 하나 더 추가'), h('button.btn', { type: 'button', on: { click: () => tryClose(true) } }, '닫기'), E.open));
     dlg = h('dialog.dlg.addsrv', { 'aria-labelledby': 'as-title', 'aria-describedby': 'as-sub' }, h('div.hd', E.title), E.sub, E.presets, E.form, E.prog, E.done, E.flash, close);
     dlg.addEventListener('cancel', e => { if (running()) { e.preventDefault(); flash('진행 중입니다 — 중단하려면 취소를 누르세요', 3000); } });   // Esc
     dlg.addEventListener('close', () => { E.pw.value = ''; if (running()) cancel(); if (opener && opener.isConnected) opener.focus(); });
@@ -97,18 +194,21 @@ window.AddServer = (() => {
     E.host.value = o.host || ''; E.user.value = o.user || R.U.lastUser || ''; E.pw.value = ''; E.pw.type = 'password'; E.port.value = o.port || 22; E.name.value = o.name || '';
     E.name.placeholder = o.host || '서버 이름'; for (const k of ['host', 'user', 'pw', 'port', 'name']) err(k, ''); flash(''); job = null; clearTimeout(timer);
     E.pyrow.hidden = true; E.py.value = 'python3'; E.sessrow.hidden = true; E.sess.checked = false;
+    E.name.disabled = false; E.scBox.hidden = true; attr(E.scBtn, 'aria-expanded', 'false'); E.manForm.hidden = true; attr(E.manLink, 'aria-expanded', 'false');
   }
 
   function open(o = {}) {
     if (!dlg) mount();
     opener = document.activeElement;
     if (!running()) {
-      const c = o.ch && R.chan(o.ch), sessCh = !!c && c.kind === 'ssh' && c.auth === 'password-session';
-      fix = c ? c.id : null; fixName = c ? c.name : '';
+      const c = o.ch && R.chan(o.ch), edit = !!c && !!o.edit, sessCh = !!c && c.kind === 'ssh' && c.auth === 'password-session' && !edit;
+      fix = c ? c.id : null; fixName = c ? c.name : ''; editing = edit;   // edit: 주소·계정·포트 수정 from 설정 › 채널 (any ssh channel)
       rekey = sessCh && !!o.rekey; pwConn = sessCh && !rekey; reusePw = rekey && !!c.session_pw;   // 키 로그인 다시 설정: the hub may still hold this run's password
       sub0 = rekey ? '이 서버는 키 로그인이 거절되어 비밀번호로 연결해 왔습니다. 키를 다시 등록하고, 또 거절되면 원인(폴더 권한 등)을 찾아 고칠 수 있게 안내합니다.' + (reusePw ? ' 이번 실행에서 입력한 비밀번호를 다시 쓰므로 비워 두어도 됩니다.' : '')
-        : sessCh ? '이 서버는 키 로그인이 안 돼서, 이번 실행 동안만 비밀번호로 연결합니다. 매번 묻지 않게 하려면 아래 체크를 끄거나 키 로그인 설정을 쓰세요.' : SUB;
-      reset(c ? Object.assign(parse(c), { name: '' }) : o);
+        : sessCh ? '이 서버는 키 로그인이 안 돼서, 이번 실행 동안만 비밀번호로 연결합니다. 매번 묻지 않게 하려면 아래 체크를 끄거나 키 로그인 설정을 쓰세요.'
+        : edit ? '주소·계정·포트를 고친 뒤 비밀번호를 입력하면 그 주소에 이 PC의 키를 등록하고 채널을 다시 연결합니다. 주소가 바뀌면 서버 지문을 처음부터 확인합니다.' : SUB;
+      reset(c ? Object.assign(parse(c), { name: edit ? c.name : '' }) : o);
+      E.name.disabled = edit; E.scrow.hidden = !!c;   // the name has its own 이름 바꾸기; 내 SSH 설정 is for adding
       if (sessCh) { E.sessrow.hidden = false; E.sess.checked = !rekey; }
       E.sess.dispatchEvent(new Event('change'));
       E.pw.placeholder = reusePw ? '비워 두면 이번 실행에서 입력한 비밀번호를 씁니다' : '서버 로그인 비밀번호';
@@ -125,16 +225,17 @@ window.AddServer = (() => {
     E.presets.hidden = !ps.length || !E.form || E.form.hidden;
   }
   function validate() {
+    applyHost();   // a typed (not pasted) user@host:port is split here too
     const v = { host: E.host.value.trim(), user: E.user.value.trim(), port: E.port.value.trim(), name: E.name.value.trim() }, bad = [], no = (k, m, l) => { err(k, m, l); bad.push(k); };
     const port = /^\d+$/.test(v.port) ? +v.port : 0;
-    if (!v.host) no('host', '서버 주소를 입력하세요'); else if (!RE.host.test(v.host)) no('host', '주소에는 공백이나 특수문자를 쓸 수 없습니다');
+    if (!v.host) no('host', '서버 주소를 입력하세요'); else if (parseHost(v.host) && parseHost(v.host).bad) no('host', badMsg(parseHost(v.host).bad)); else if (!R.hostOk(v.host)) no('host', '주소에는 공백이나 특수문자를 쓸 수 없습니다 (IPv6 는 대괄호 없이 2001:db8::1 처럼)');
     if (!v.user) no('user', '계정을 입력하세요'); else if (!RE.user.test(v.user)) no('user', '계정에는 공백이나 특수문자를 쓸 수 없습니다');
     if (!(port >= 1 && port <= 65535)) no('port', '포트는 1~65535 사이의 숫자입니다');
     if (v.name.length > 40) no('name', '이름은 40자까지입니다');
-    if (!fix && !bad.length) {
-      const dup = M.channels.find(c => { const q = parse(c); return c.kind === 'ssh' && q.host === v.host && q.user === v.user && q.port === port; });
+    if (!bad.length) {   // fix / edit mode: another channel with the same address is still a duplicate; the name stays the channel's own
+      const dup = M.channels.find(c => { const q = parse(c); return c.kind === 'ssh' && c.id !== fix && q.host === v.host && q.user === v.user && q.port === port; });
       if (dup) no('host', '이미 등록된 서버입니다 (' + dup.name + ')', h('button.btn.link', { type: 'button', on: { click: () => { dlg.close(); R.openChannel(dup.id); } } }, '그 채널 열기'));
-      else if (M.channels.some(c => c.name === (v.name || v.host))) no('name', '같은 이름의 채널이 이미 있습니다 — 다른 이름을 쓰세요');
+      else if (!fix && M.channels.some(c => c.name === (v.name || v.host))) no('name', '같은 이름의 채널이 이미 있습니다 — 다른 이름을 쓰세요');
     }
     if (bad.length) { E[bad[0]].focus(); return null; }
     return { host: v.host, user: v.user, port, name: v.name };
@@ -259,11 +360,12 @@ window.AddServer = (() => {
     text(E.band.querySelector('.t'), k === 'wrong_password' && !p.rq.hadPw ? '비밀번호를 입력하세요' : title);
     const nf = paintFinds(E.bfinds, k === 'key_rejected' ? j.findings : null);
     text(E.band.querySelector('.why'), late ? "취소했지만 공개키는 이미 서버에 등록됐을 수 있습니다. 서버의 ~/.ssh/authorized_keys 에서 '" + cm + "' 줄을 지우면 접속이 끊깁니다." : j.kind === 'cancelled' && j.message ? j.message : nf ? (j.session_ok === false ? '서버에서 찾은 원인은 아래와 같습니다. 이 내용을 서버 관리자에게 전달하세요.' : WHY_KR) : why.replace("'agen-talk@PC이름'", "'" + cm + "'"));
-    text(E.band.querySelector('.msg'), k === 'cancelled' || !j.message ? '' : R.sshErr(j.message));
+    text(E.band.querySelector('.msg'), k === 'cancelled' || k === 'password_disabled' || !j.message ? '' : R.sshErr(j.message));   // password_disabled: the title already says it
     E.band.dataset.kind = k; E.band.hidden = false; E.confirm.hidden = true; E.fixbox.hidden = true; E.pacts.hidden = true;
+    E.bman.hidden = k !== 'password_disabled'; if (!E.bman.hidden) E.bman.load();   // the manual route: the key line and the command to run on the server
     const kh = E.band.querySelector('.kh'); kh.hidden = k !== 'host_key_changed' || !j.known_hosts; text(kh, kh.hidden ? '' : 'known_hosts: ' + String(j.known_hosts).slice(0, 200));
     text(E.log, R.str(j.log || j.message || '허브가 로그를 보내지 않았습니다', 4000)); E.log.hidden = k !== 'other'; attr(E.logBtn, 'aria-expanded', E.log.hidden ? 'false' : 'true');
-    const fn = { retry: () => back('pw'), user: () => back('user'), host: () => back('host'), py: () => { E.pyrow.hidden = false; back('py'); }, session: () => { E.sessrow.hidden = false; E.sess.checked = true; back('pw'); }, close: () => tryClose(), forget };
+    const fn = { rekeyed, retry: () => back('pw'), user: () => back('user'), host: () => back('host'), py: () => { E.pyrow.hidden = false; back('py'); }, session: () => { E.sessrow.hidden = false; E.sess.checked = true; back('pw'); }, close: () => tryClose(), forget };
     const mk = ([l, t, f]) => h('button' + (t === 'l' ? '.btn.link' : t === 'p' ? '.btn.primary' : '.btn'), { type: 'button', on: { click: fn[f] } }, l);
     const acts_ = acts.filter(a => !(a[2] === 'session' && j.session_ok === false));   // the OpenSSH fallback has no password-for-this-session mode
     E.acts.replaceChildren(...acts_.filter(a => a[1] === 'l').map(mk), E.logBtn, ...acts_.filter(a => a[1] !== 'l').map(mk));
@@ -271,10 +373,12 @@ window.AddServer = (() => {
   }
   // back to the form with the same address; the password field is empty again (it was cleared at submit)
   function back(k) { const rq = job.rq; E.host.value = rq.host; E.user.value = rq.user; E.port.value = rq.port; E.name.value = rq.name; E.pw.value = ''; job = null; pane('form'); paintPresets(); E[k].focus(); }
+  // 키를 등록했습니다 — 다시 연결: the same address again, without a password (the hub logs in with the app's key, which the user just authorized)
+  function rekeyed() { const rq = { host: job.rq.host, user: job.rq.user, port: job.rq.port, name: job.rq.name }; E.host.value = rq.host; E.user.value = rq.user; E.port.value = rq.port; E.name.value = rq.name; E.pw.value = ''; job = null; start(rq); }
   async function forget() {
     const rq = job.rq; flash('');
     let r; try { r = await api('api/servers/forget-hostkey', { host: rq.host, port: rq.port }); } catch { r = { status: 0 }; }
     if (r.status === 200 && r.body && r.body.ok) back('pw'); else flash('기록을 지우지 못했습니다 — 에겐 톡을 다시 시작한 뒤 다시 시도하세요');
   }
-  return { open };
+  return { open, parseHost };
 })();

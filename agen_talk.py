@@ -17,7 +17,8 @@
                                  Test-only env: AT_SSH, AT_SSH_KEYGEN, AT_KEYINSTALL_TIMEOUT, AT_NO_PARAMIKO, AT_TALK_ROOT, AT_CODEX.
   agen_talk.py keyinstall RESULT_FILE user@host PORT [NAME]   internal: the password console the hub opens
   agen_talk.py pipe             collector over stdin/stdout, one JSON line per input line (the hub runs this remotely);
-                                 a line starting with { is a talk request (톡: a message into a claude / codex session), anything else is a poll
+                                 a line starting with { is a request (톡: a message into a claude / codex session; end: stop one
+                                 session's process, only ever on the user's click), anything else is a poll
   agen_talk.py --selftest
   watch -c -n3 'agen_talk.py -c'
 
@@ -184,6 +185,44 @@ def node(nid, tool, name, st, why, ts, sub=False, since=None, **kw):
             n[k] = CTRL.sub("", redact(n[k][:65536])[:8000])   # redact, then cut: a cut must never leave half a key behind
     NODES[nid] = n
     return n
+
+
+# ---------- model of a node: what answered last, and what it replaced ----------
+MODEL_BAD = re.compile(r"[^A-Za-z0-9._:/\[\]-]")
+
+
+def model_name(v):
+    """A model id as plain text ('claude-opus-5-5'), '' for anything else ('<synthetic>', a non-string)."""
+    v = v.strip() if isinstance(v, str) else ""
+    return "" if v[:1] == "<" else MODEL_BAD.sub("", v)[:80]
+
+
+def model_change(seq):
+    """(model, model_prev, fallback) from newest-first ('m', name) answers and ('fb', original, fallback) safeguard reroutes.
+    model = what answered last; model_prev = the different model before it; fallback = the newest change was a safeguard reroute
+    that still holds. Only what the transcript tail shows: an older switch is not reported."""
+    cur = None
+    for e in seq:
+        if e[0] == "fb":
+            o, f = model_name(e[1]), model_name(e[2])
+            if not f or not o or o == f:
+                continue
+            if cur is None or cur == f:
+                return f, o, True
+            return cur, f, False   # answered by another model since: the reroute is over
+        m = model_name(e[1])
+        if not m:
+            continue
+        if cur is None:
+            cur = m
+        elif m != cur:
+            return cur, m, False
+    return cur, None, False
+
+
+def model_kw(seq):
+    m, prev, fb = model_change(seq)
+    return {"model": m, "model_prev": prev, "model_fb": fb}
 
 
 # ---------- project (git) of an agent's working directory: files only, never `git` ----------
@@ -405,6 +444,7 @@ PS = ("Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,N
 
 
 PS_AT = [0.0]   # when ps_json last ran (Windows)
+PS_OK = [True]  # the last ps_json produced a list (False: PROC is an older snapshot kept so the page does not blank)
 
 
 def procs():
@@ -417,6 +457,7 @@ def procs():
     PTS = NOW
     if WIN:
         snap = win_procs(ps_json())
+        PS_OK[0] = bool(snap)
         if not snap and PROC:   # PowerShell failed or timed out: keep the last snapshot instead of showing every agent dead
             WARN.append("프로세스 목록을 읽지 못함 (PowerShell 실패/시간 초과)")
             return PROC
@@ -891,9 +932,12 @@ def codex_node(t):
         rec(), pid, PROC[pid]["started"] if pid in PROC else None, tagged, source, sub,
         any(k in CX_HELD and CX_TURN.get(k, ("inProgress",))[0] == "inProgress" for k in kids), CX_TURN.get(t, (0, None))[1])
     lines = seen + list(g)   # ponytail: the whole 256 KB tail is parsed every poll now (3-5 ms per thread); stop codex_msgs early if that shows in collect time
+    mk = model_kw(chain((("m", (d.get("payload") or {}).get("model")) for d in lines if d.get("type") == "turn_context" and isinstance(d.get("payload"), dict)),
+                        [("m", model)]))   # each turn records its model; the thread row is the fallback (and the oldest known)
+    model = mk["model"] or model
     n = node(t, "codex", apath.rsplit("/", 1)[-1] if sub and apath else line1(title or first), st, why, ts or mtime(path),
              sub=sub or source == "exec", since=since, now=now, last=last, acts=acts_fin(codex_acts(lines)), msgs=codex_msgs(t, lines),
-             meta=" · ".join(filter(None, ["pid %d" % pid if pid else "", short(cwd_), model, role if sub else ""])), project=git_project(cwd_))
+             meta=" · ".join(filter(None, ["pid %d" % pid if pid else "", short(cwd_), model, role if sub else ""])), project=git_project(cwd_), **mk)
     c0 = (c0 or [NOW])[0] or NOW  # oldest pending call; processes that predate it are leftovers, not the call
     n["procs"] = [proc_entry(p, bg=st != "tool" or PROC[p]["started"] < c0 - 5) for p in tagged]
     for k in kids:
@@ -1457,14 +1501,15 @@ def claude_agent(tr, kind, nid, name, sess, shells, notes, meta, started, par=No
     st, why, now, last, ts, since, procs = claude_state(lines, kind, sess, shells, notes, nid, t0)
     if kind != "main" and st in CL_RUN and (mtime(tr) or 0) < started:  # transcript older than the host: its agent is gone
         st, why, since = "dead", "이전 프로세스의 고아", None
-    model = next((d["message"]["model"] for d in lines if d.get("type") == "assistant"
-                  and str((d.get("message") or {}).get("model", "<")).strip()[:1] != "<"), None)
+    mk = model_kw(("fb", d.get("originalModel"), d.get("fallbackModel")) if d.get("type") == "system" else ("m", (d.get("message") or {}).get("model"))
+                  for d in lines if d.get("type") == "assistant" or d.get("type") == "system" and d.get("subtype") == "model_refusal_fallback")
+    model = mk["model"]
     acts = claude_acts(lines, kind == "main")
     if kind == "main" and sess.get("status") == "waiting" and sess.get("statusUpdatedAt"):   # a permission prompt leaves no transcript line
         acts[:0] = [{"t": sess["statusUpdatedAt"] / 1000, "k": "ask", "x": why}]
     msg_lines = claude_talk_lines(tr, lines) if kind == "main" else lines
     return node(nid, "claude", name, st, why, ts or mtime(tr), kind != "main", since, acts=acts_fin(acts), msgs=claude_msgs(msg_lines, kind, nid, par, prompt, st),
-                now=now, last=last, procs=procs, meta=" · ".join(filter(None, [meta, model])))
+                now=now, last=last, procs=procs, meta=" · ".join(filter(None, [meta, model])), **mk)
 
 
 def claude_workflow(j, shells, notes, started):
@@ -1642,10 +1687,35 @@ def claude_walk(ns):
 
 
 CL_SESS = {}   # session id -> its sessions/<pid>.json of this collect (talk_fill reads the inbox facts from it)
+CL_ODD = set()  # session ids whose session file is not trustworthy enough to stop a process by (end_fill)
+
+
+def claude_live(p, s):
+    """True when PROC entry p is the running claude process of sessions/<pid>.json s (name, not a zombie, same start: no pid reuse)."""
+    comm = p and p["comm"]
+    return bool(p and (comm.startswith("claude") or comm == "node" if WIN else comm == "claude") and p["state"] not in "ZX"
+                and same_proc_start(p, s.get("procStart")))
+
+
+def claude_end_ok(p, s):
+    """Stricter than claude_live, for 세션 종료: the session file must name its process start and it must match (a missing or
+    odd procStart is fine for showing a session, never for stopping a process); on Windows a `node` host must be running claude."""
+    ps = s.get("procStart")
+    if not ps or not claude_live(p, s):
+        return False
+    if not WIN:
+        return str(p["start"]) == str(ps)
+    try:
+        if abs(p["started"] - (int(ps) / 1e7 - 11644473600)) >= 2:
+            return False
+    except (TypeError, ValueError):
+        return False
+    return p["comm"].startswith("claude") or "claude" in (p.get("cmd") or "").lower()
 
 
 def claude_collect(roots):
     CL_SESS.clear()
+    CL_ODD.clear()
     for f in (HOME / ".claude/sessions").glob("*.json"):
         try:
             s = json.loads(f.read_text(encoding="utf-8"))
@@ -1655,11 +1725,11 @@ def claude_collect(roots):
             sid = s["sessionId"]
         except (OSError, ValueError, KeyError, TypeError, AttributeError):
             continue
+        if sid in CL_SESS or f.stem != str(pid):   # two files claim one session, or a file that is not its pid's own: shown, never stoppable
+            CL_ODD.add(sid)
         CL_SESS[sid] = s
         su = (s.get("statusUpdatedAt") or 0) / 1000
-        comm = p and p["comm"]
-        if (p and (comm.startswith("claude") or comm == "node" if WIN else comm == "claude") and p["state"] not in "ZX"
-                and same_proc_start(p, s.get("procStart"))):
+        if claude_live(p, s):
             roots[pid] = [claude_node(s, proc_shells(pid))]
             pj = git_project(s.get("cwd"))
             if pj:
@@ -2422,7 +2492,7 @@ def talk_codex(tid, text, by, mid):
 
 
 def talk_req(raw):
-    """One talk request line (bytes) of the pipe protocol -> its reply dict. Never raises."""
+    """One request line (bytes) of the pipe protocol -> its reply dict: a talk, or op "end" (end_req). Never raises."""
     def rep(mid, outcome, reason=None, detail=None):
         return dict(dict(re=mid, outcome=outcome), **{k: v for k, v in (("reason", reason), ("detail", detail and str(detail)[:200])) if v})
     if len(raw) > 1 << 16:
@@ -2434,6 +2504,8 @@ def talk_req(raw):
     d = d if isinstance(d, dict) else {}
     mid, by, text, tool, tid = d.get("msg_id"), d.get("by"), d.get("text"), d.get("tool"), d.get("id")
     mid = mid if isinstance(mid, str) and re.fullmatch(r"at-[0-9a-f]{8}", mid) else None
+    if d.get("op") == "end":
+        return end_req(d, mid, rep)
     if d.get("op") != "talk" and d:
         return rep(mid, "refused", "bad-op")
     if not mid or tool not in ("claude", "codex") or not isinstance(tid, str) or not 0 < len(tid) <= 200 or not isinstance(text, str) or CTRL.search(text):
@@ -2463,6 +2535,148 @@ def talk_enqueue(slot, job, rate, key, target, now):
     return True
 
 
+# ---------- end: stop an agent's host process. Only when the user asks for that one session; nothing here runs by itself ----------
+END_WAIT = 5   # seconds a process gets after SIGTERM before SIGKILL (a test lowers it)
+
+
+def pid_chain(pid):
+    """pid and its ancestors in the PROC snapshot."""
+    out = set()
+    while pid in PROC and pid not in out:
+        out.add(pid)
+        pid = PROC[pid]["ppid"]
+    return out
+
+
+def end_fill(forest):
+    """A session whose host process this user can stop gets `end`: {ok: true, pid}, or {ok: false, reason} when it has a process that
+    must not be stopped from here (self: this collector runs under it; owner: another user's; shared: one codex process hosts several
+    sessions). Subagents run inside their parent's process and sessions without a process have nothing to stop: no field."""
+    me, held = pid_chain(os.getpid()), defaultdict(set)
+    for t, p in CX_HELD.items():
+        held[p].add(top(CX_PARENT, t))
+    many = WIN and sum(1 for v in PROC.values() if codex_host(v)) > 1   # Windows guesses the holder: only one codex process makes it certain
+
+    def cap(pid, shared=False):
+        p = PROC.get(pid)
+        if not p or p["state"] in "ZX":
+            return None
+        if pid in me:
+            return {"ok": False, "reason": "self"}
+        if not WIN and p["uid"] != os.getuid():
+            return {"ok": False, "reason": "owner"}
+        return {"ok": False, "reason": "shared"} if shared else {"ok": True, "pid": pid}
+    for n in claude_walk(forest):
+        c, i = None, n["id"]
+        if n["tool"] == "claude" and i in CL_SESS and i not in CL_ODD and n["st"] != "dead" and claude_end_ok(PROC.get(CL_SESS[i].get("pid")), CL_SESS[i]):
+            c = cap(CL_SESS[i]["pid"])
+        elif n["tool"] == "codex" and i in CX_HELD and i not in CX_PARENT and i not in CX_SUB:
+            # Windows guesses the holder (no fd listing): only a process whose command line names this thread is certainly its host
+            c = cap(CX_HELD[i], many or len(held[CX_HELD[i]]) > 1 or WIN and i not in (PROC.get(CX_HELD[i], {}).get("cmd") or ""))
+        if c:
+            n["end"] = c
+
+
+def win_proc_started(pid):
+    """Creation time (epoch) of a live Windows process, None when it cannot be opened."""
+    import ctypes
+    from ctypes import wintypes
+    k = ctypes.WinDLL("kernel32", use_last_error=True)
+    k.OpenProcess.restype, k.OpenProcess.argtypes = wintypes.HANDLE, [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+    k.GetProcessTimes.argtypes = [wintypes.HANDLE] + [ctypes.POINTER(wintypes.FILETIME)] * 4
+    k.CloseHandle.argtypes = [wintypes.HANDLE]
+    h = k.OpenProcess(0x1000, False, pid)   # PROCESS_QUERY_LIMITED_INFORMATION
+    if not h:
+        return None
+    try:
+        c, e, kt, ut = wintypes.FILETIME(), wintypes.FILETIME(), wintypes.FILETIME(), wintypes.FILETIME()
+        if not k.GetProcessTimes(h, ctypes.byref(c), ctypes.byref(e), ctypes.byref(kt), ctypes.byref(ut)):
+            return None
+        return ((c.dwHighDateTime << 32) | c.dwLowDateTime) / 1e7 - 11644473600
+    finally:
+        k.CloseHandle(h)
+
+
+def end_proc(pid):
+    """Stop pid; once it is gone, also what it left running under it. -> (outcome, reason, detail). The caller has just verified pid."""
+    import signal, subprocess
+    if WIN:   # console processes take no polite signal on Windows: the tree is ended at once
+        born = win_proc_started(pid)   # asked of the live process now: the snapshot's pid may have been reused since
+        if born is None:
+            return "gone", None, None
+        if abs(born - PROC[pid]["started"]) >= 2:
+            return "refused", "changed", None
+        try:
+            r = subprocess.run([sys32("taskkill.exe"), "/PID", str(pid), "/T", "/F"], **popen_kw(capture_output=True, timeout=20))
+        except (OSError, subprocess.SubprocessError) as e:
+            return "failed", "os", type(e).__name__
+        return ("ended", None, None) if r.returncode == 0 else ("failed", "os", "taskkill %d" % r.returncode)
+
+    def alive(p, start):
+        try:
+            st = open("/proc/%d/stat" % p).read()
+            r = st[st.rindex(")") + 2:].split()
+            return r[0] not in "ZX" and r[19] == start
+        except (OSError, ValueError, IndexError):
+            return False
+
+    def gone(sec):
+        end = time.time() + sec
+        while alive(pid, start) and time.time() < end:
+            time.sleep(0.1)
+        return not alive(pid, start)
+    start, kids = PROC[pid]["start"], [(k, PROC[k]["start"]) for k in proc_kids(pid)]
+    if not alive(pid, start):
+        return "gone", None, None
+    try:
+        os.kill(pid, signal.SIGTERM)
+    except ProcessLookupError:
+        pass
+    except OSError:
+        return "failed", "perm", None
+    forced = not gone(END_WAIT)
+    if forced:
+        try:
+            os.kill(pid, signal.SIGKILL)
+        except OSError:
+            pass
+        if not gone(2):
+            return "failed", "alive", None
+    for k, ks in kids:   # tool shells and helpers the session started: they have no owner now
+        if alive(k, ks):
+            try:
+                os.kill(k, signal.SIGTERM)
+            except OSError:
+                pass
+    return "ended", "forced" if forced else None, None
+
+
+def end_req(d, mid, rep):
+    """One end request ({op: end, msg_id, tool, id, pid[, idle]}) -> its reply dict. The state is collected again first: the session
+    must still be there, still stoppable, still the process the user saw (pid; the hub checked it against the page's), and with
+    idle = true still resting. The caller holds COLLECT_LOCK where threads exist."""
+    tool, tid, pid = d.get("tool"), d.get("id"), d.get("pid")
+    if not mid or tool not in ("claude", "codex") or not isinstance(tid, str) or not 0 < len(tid) <= 200 or type(pid) is not int:
+        return rep(mid, "refused", "bad-request")
+    try:
+        PS_AT[0], PS_OK[0] = 0.0, True   # Windows: a fresh process list, not the 5 s cache
+        n = next((x for x in claude_walk(collect_unlocked()["agents"]) if x["id"] == tid and x["tool"] == tool), None)
+        if not PS_OK[0]:
+            return rep(mid, "refused", "stale")   # the process list could not be read: nothing is stopped on an old one
+        cap = n.get("end") if n else None
+        if not cap:
+            return rep(mid, "gone")
+        if not cap.get("ok"):
+            return rep(mid, "refused", cap.get("reason"))
+        if d.get("idle") is True and n["st"] not in REST:
+            return rep(mid, "refused", "active")   # 유휴 세션 정리 only stops what is still resting
+        if cap.get("pid") != pid:
+            return rep(mid, "refused", "changed")
+        return rep(mid, *end_proc(pid))
+    except Exception as e:   # the pipe must outlive any one request
+        return rep(mid, "unknown", "internal", type(e).__name__)
+
+
 # ---------- collect everything into one forest ----------
 import threading
 COLLECT_LOCK = threading.Lock()   # collect() rebuilds module globals (NOW, PROC, CX…, NODES): two local channels must not interleave
@@ -2490,7 +2704,7 @@ def collect_unlocked():
     except Exception as e:
         WARN.append("프로세스 연결 오류: %s: %s" % (type(e).__name__, line1(str(e), 120)))
         forest = [n for v in roots.values() for n in v]
-    for name, f in (("talk", talk_fill), ("msgs", msgs_post), ("project", project_fill)):
+    for name, f in (("talk", talk_fill), ("end", end_fill), ("msgs", msgs_post), ("project", project_fill)):
         try:
             f(forest)
         except Exception as e:
@@ -2619,13 +2833,13 @@ def pipe():
     """Remote side: one JSON line per input line, ends at EOF so the collector dies with the ssh session."""
     for ln in sys.stdin.buffer:
         s = ln.strip()
-        out = talk_req(s) if s[:1] == b"{" else collect()   # a line starting with { is a talk request, anything else is a poll
+        out = talk_req(s) if s[:1] == b"{" else collect()   # a line starting with { is a request (talk / end), anything else is a poll
         sys.stdout.buffer.write(json.dumps(out, ensure_ascii=False).encode("utf-8", "replace") + b"\n")   # a lone surrogate (a cut emoji) must not kill the channel
         sys.stdout.buffer.flush()
 
 
 # ---- 서버 추가: the password is typed once into ssh in its own console; a dedicated key gets installed (other keys are never touched)
-SRV_HOST = r"(?=.{1,253}\Z)[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?"
+SRV_HOST = r"(?=.{1,253}\Z)(?:[A-Za-z0-9_](?:[A-Za-z0-9._-]*[A-Za-z0-9_])?|[0-9A-Fa-f.]*:[0-9A-Fa-f:.]*)"   # a name (underscores allowed) or an IPv6 literal (host_ok parses it)
 SRV_USER = r"[A-Za-z_][A-Za-z0-9._-]{0,31}"
 SRV_PY = r"[A-Za-z0-9._/-]{1,64}"
 PUBKEY = r"ssh-ed25519 [A-Za-z0-9+/=]+( [A-Za-z0-9@._-]+)?"   # embedded in a remote command: this regex is what makes that safe
@@ -2652,6 +2866,20 @@ def ssh_bin(name):
     return shutil.which(name)
 
 
+def host_ok(h):
+    """A server address the app accepts: a host name / IPv4 (letters, digits, . _ -; never a leading '-') or a bare IPv6 literal (no brackets,
+    no zone id). Everything that builds an ssh target, a known_hosts spec or a socket address goes through this first."""
+    if not isinstance(h, str) or not re.fullmatch(SRV_HOST, h):
+        return False
+    if ":" in h:
+        import ipaddress
+        try:
+            return ipaddress.ip_address(h).version == 6
+        except ValueError:
+            return False
+    return True
+
+
 def srv_check(d, ids):
     """Validate a POST /api/servers body (ids = {existing ssh channel id: its python}); returns the clean request or raises ValueError(field)."""
     d = d if isinstance(d, dict) else {}
@@ -2661,7 +2889,7 @@ def srv_check(d, ids):
         auth = "password-session"
     strip = lambda t: re.sub(r"[\x00-\x1f\x7f\ud800-\udfff]", "", t).strip()   # control characters and lone surrogates (they cannot be encoded)
     py = py or (ids.get(cid) if isinstance(cid, str) else None)   # fix mode: the channel's own python unless the retry names one
-    for k, ok in (("host", isinstance(host, str) and re.fullmatch(SRV_HOST, host)),
+    for k, ok in (("host", host_ok(host)),
                   ("user", isinstance(user, str) and re.fullmatch(SRV_USER, user)),
                   ("port", type(port) is int and 0 < port < 65536),
                   ("name", isinstance(name, str) and len(strip(name)) <= 40),
@@ -2678,6 +2906,7 @@ def srv_check(d, ids):
 def ssh_kind(err):
     """Error kind of an ssh stderr text (order matters: a changed key prints the WARNING block and 'Host key verification failed')."""
     return ("host_key_changed" if re.search(r"REMOTE HOST IDENTIFICATION HAS CHANGED|Host key verification failed", err) else
+            "password_disabled" if re.search(r"Permission denied \(([a-z-]+,)*[a-z-]+\)", err) and not re.search(r"Permission denied \([^)]*(password|keyboard-interactive)", err) else
             "wrong_password" if "Permission denied" in err else
             "unreachable" if re.search(r"Could not resolve|Connection refused|timed out|No route", err) else "other")
 
@@ -2711,7 +2940,7 @@ def presets_check(raw):
     for e in raw if isinstance(raw, list) else ([] if raw is None else [raw]):
         h, port, name = (e.get(k) for k in ("host", "port", "name")) if isinstance(e, dict) else (None,) * 3
         port, name = 22 if port is None else port, h if name is None else name
-        if not (isinstance(h, str) and re.fullmatch(SRV_HOST, h) and type(port) is int and 0 < port < 65536 and isinstance(name, str) and 0 < len(name) <= 40):
+        if not (host_ok(h) and type(port) is int and 0 < port < 65536 and isinstance(name, str) and 0 < len(name) <= 40):
             bad.append(str(e)[:80])
         else:
             out.append({"name": CTRL.sub("", name), "host": h, "port": port})
@@ -2722,6 +2951,134 @@ def presets_view(presets, chans):
     """What GET /api/presets serves: each preset plus `added` = a channel with that host and port exists."""
     have = {(str(c.get("ssh", "")).rpartition("@")[2], str(chan_port(c))) for c in chans if c.get("kind") == "ssh"}
     return [dict(p, added=(p["host"], str(p["port"])) in have) for p in presets]
+
+
+# ---- 내 SSH 설정에서 고르기: prefill only. Reads ONLY ~/.ssh/config (never Include'd files, IdentityFile contents, keys or known_hosts) and
+# returns per plain `Host <alias>`: alias, host, user, port and whether it needs a jump host. Nothing from it is ever run or saved.
+SSHCONF_MAX, SSHCONF_KEYS = 256 * 1024, ("hostname", "user", "port", "proxyjump", "proxycommand")
+
+
+def sshconf_words(v):
+    """ssh_config argument splitting: whitespace-separated words, double quotes group (OpenSSH has no escapes inside them)."""
+    out, cur, quoted, q = [], "", False, False
+    for ch in v:
+        if ch == '"':
+            q, quoted = not q, True
+        elif ch.isspace() and not q:
+            if cur or quoted:
+                out.append(cur)
+            cur, quoted = "", False
+        else:
+            cur += ch
+    if cur or quoted:
+        out.append(cur)
+    return out
+
+
+def glob_match(p, s):
+    """* and ? matching with two pointers and one backtrack point: O(len(p) * len(s)) at worst. No regex is built from the file's
+    text: a pattern like *a*a*a*b would make re backtrack for minutes while holding the GIL (every hub thread would stall)."""
+    i = j = mark = 0
+    star = -1
+    while j < len(s):
+        if i < len(p) and (p[i] == "?" or p[i] == s[j]):
+            i, j = i + 1, j + 1
+        elif i < len(p) and p[i] == "*":
+            star, mark, i = i, j, i + 1
+        elif star >= 0:
+            mark += 1
+            i, j = star + 1, mark
+        else:
+            return False
+    while i < len(p) and p[i] == "*":
+        i += 1
+    return i == len(p)
+
+
+def sshconf_match(pats, name):
+    """OpenSSH Host matching: * and ? wildcards, !negation wins, case-insensitive."""
+    hit, name = False, name.lower()
+    for p in pats:
+        neg = p.startswith("!")
+        if glob_match((p[1:] if neg else p).lower(), name):
+            if neg:
+                return False
+            hit = True
+    return hit
+
+
+def sshconf_parse(text, cap=100):
+    """~/.ssh/config text -> [{alias, host, user, port, jump, skipped?}] for the plain aliases of its Host lines (wildcard and !negated
+    patterns are not entries). Values come first-match-wins from every Host block that matches the alias, like ssh (the lines before the
+    first Host apply to all); Match blocks are skipped (conditional), Include is not followed. skipped: why the app cannot use it as is."""
+    blocks, aliases, seen, npat = [(["*"], {})], [], set(), 0
+    cur = blocks[0][1]
+    deadline = time.monotonic() + 1.0   # the file may be written by something hostile: bounded work, whatever it contains
+    for raw in text.lstrip("﻿").splitlines():
+        ln = raw.strip()
+        if not ln or ln.startswith("#"):
+            continue
+        m = re.match(r"([A-Za-z][A-Za-z0-9]*)(?:\s*=\s*|\s+)(.*)$", ln)
+        if not m:
+            continue
+        k, v = m.group(1).lower(), m.group(2).strip()
+        if k == "host":
+            pats = [p for p in sshconf_words(v) if p and len(p) <= SSHCONF_PAT][:SSHCONF_PATS]
+            npat += len(pats)
+            if npat > SSHCONF_TOTAL:   # more patterns than any real config has: the rest of the file is not read
+                break
+            blocks.append((pats, {}))
+            cur = blocks[-1][1]
+            for a in pats:
+                if len(aliases) < cap and a not in seen and not re.search(r"[*?!]", a):
+                    seen.add(a)
+                    aliases.append(a)
+        elif k == "match":
+            cur = None   # its lines apply only under conditions the app does not evaluate
+        elif cur is not None and k in SSHCONF_KEYS and k not in cur:
+            w = sshconf_words(v)
+            if w:
+                cur[k] = w[0]
+    out = []
+    for a in aliases[:cap]:
+        if time.monotonic() > deadline:
+            break
+        got = {}
+        for pats, st in blocks:
+            if sshconf_match(pats, a):
+                for k, v in st.items():
+                    got.setdefault(k, v)
+        host, user, ps = got.get("hostname", a).replace("%h", a), got.get("user", ""), got.get("port", "22")
+        if host.startswith("[") and host.endswith("]"):
+            host = host[1:-1]
+        port = int(ps) if ps.isdigit() and len(ps) <= 5 else 0
+        jump = any(got.get(k, "none").lower() != "none" for k in ("proxyjump", "proxycommand"))
+        e = {"alias": CTRL.sub("", a)[:64], "host": CTRL.sub("", host)[:253], "user": CTRL.sub("", user)[:64], "port": port if 0 < port < 65536 else 22, "jump": jump}
+        why = ("token" if "%" in host + user else "host" if not host_ok(host) else "user" if user and not re.fullmatch(SRV_USER, user)
+               else "port" if not 0 < port < 65536 else None)
+        if why:
+            e["skipped"] = why
+        out.append(e)
+    return out
+
+
+SSHCONF_PAT, SSHCONF_PATS, SSHCONF_TOTAL = 128, 64, 2000   # longest pattern, patterns per Host line, patterns in the whole file
+
+
+def sshconf_read(path=None):
+    """GET api/sshconfig: {"entries": [...]} from %USERPROFILE%\\.ssh\\config (POSIX ~/.ssh/config); {"missing": true} / {"too_big": true} /
+    {"unreadable": true} otherwise. Reads at most SSHCONF_MAX bytes and nothing else."""
+    p = Path(path) if path else HOME / ".ssh" / "config"
+    try:
+        with open(str(p), "rb") as f:
+            b = f.read(SSHCONF_MAX + 1)
+    except FileNotFoundError:
+        return {"entries": [], "missing": True}
+    except OSError:
+        return {"entries": [], "unreadable": True}
+    if len(b) > SSHCONF_MAX:
+        return {"entries": [], "too_big": True}
+    return {"entries": sshconf_parse(b.decode("utf-8", "replace"))}
 
 
 def sys32(*parts):
@@ -2772,10 +3129,18 @@ def replace_retry(src, dst, tries=10):
 
 def write_conf(cfg, conf):
     """Atomic channels.json write (temp file in the same folder, fsync, os.replace on the resolved path); keeps the old file's mode, new files 0644."""
-    import tempfile
+    import secrets, tempfile
     cfg = Path(cfg)
     cfg.parent.mkdir(parents=True, exist_ok=True)
-    fd, tmp = tempfile.mkstemp(dir=str(cfg.resolve().parent), prefix=".channels-", suffix=".tmp")
+    fd = None
+    if WIN:   # private from its first byte: the profile folder can hand inherited read access to other principals (a sandbox group)
+        tmp = str(cfg.resolve().parent / (".channels-%s.tmp" % secrets.token_hex(8)))
+        try:
+            fd = private_fd(tmp)
+        except OSError:
+            pass   # still saved (with the folder's permissions): a server must not be lost over it
+    if fd is None:
+        fd, tmp = tempfile.mkstemp(dir=str(cfg.resolve().parent), prefix=".channels-", suffix=".tmp")
     try:
         try:
             mode = os.stat(cfg).st_mode & 0o7777
@@ -2995,13 +3360,13 @@ def srv_job(j, rq, save):
             raise SrvErr("ssh_missing", NOSSH)
         key_ensure()
         kind, err = srv_verify(tgt, rq)   # the key may already log in (a retry): then no password window
-        if kind in ("unreachable", "ssh_missing") or kind == "host_key_changed" and "CHANGED" in err:   # first contact only says 'verification failed'
-            raise SrvErr(kind, last(err))
+        if kind in ("unreachable", "ssh_missing", "password_disabled") or kind == "host_key_changed" and "CHANGED" in err:   # first contact only says 'verification failed'
+            raise SrvErr(kind, last(err))   # password_disabled: a password console could never log in
         if kind not in ("ok", "no_python3"):
             res = srv_install(j, rq, tgt)
             jset(j, state="verifying")
             kind, err = srv_verify(tgt, rq)
-            if kind == "wrong_password":   # the key went in, sshd ignores it: keyinstall's session also ran the diagnosis
+            if kind in ("wrong_password", "password_disabled"):   # the key went in, sshd ignores it: keyinstall's session also ran the diagnosis
                 jset(j, state="diagnosing")
                 dg = diag_report(res.get("stdout", ""))
                 diag_log("%s:%s" % (tgt, rq["port"]), dg)
@@ -3011,7 +3376,7 @@ def srv_job(j, rq, save):
                 res = srv_install(j, rq, tgt, dg["fixes"])   # a second console: the password is asked once more
                 jset(j, state="verifying")
                 kind, err = srv_verify(tgt, rq)
-                if kind == "wrong_password":
+                if kind in ("wrong_password", "password_disabled"):
                     dg = diag_report(res.get("stdout", ""))
                     diag_log("%s:%s after fix" % (tgt, rq["port"]), dg)
                     jset(j, findings=dg["findings"], fix_cmds=None)
@@ -3431,21 +3796,62 @@ def win_set_dacl(path, sddl):
         raise OSError("DACL did not stick: %s (wanted %s)" % (got, want))
 
 
+WIN_SID = []   # this user's SID, asked once per process
+
+
+def win_sid():
+    """The current user's SID (`whoami /user`), so domain / Entra account names never matter. OSError when it cannot be learned."""
+    import subprocess
+    if not WIN_SID:
+        try:   # errors=replace: the account name may not decode in this codepage, and only the SID (ASCII) is read
+            out = subprocess.run([sys32("whoami.exe"), "/user", "/fo", "csv", "/nh"], **popen_kw(capture_output=True, text=True, errors="replace", timeout=10))
+            sid = (out.stdout or "").strip().split(",")[-1].strip().strip('"')
+        except Exception as e:   # launch, logging and saving settings call this: whatever goes wrong is "no SID", never a crash
+            raise OSError("whoami /user: %s" % type(e).__name__)
+        if out.returncode or not re.fullmatch(r"S-1-[0-9-]+", sid):
+            raise OSError("whoami /user: %r" % (out.stdout or "")[:80])
+        WIN_SID.append(sid)
+    return WIN_SID[0]
+
+
 def pm_acl(path):
-    """Windows: only the current user may touch the file. Granted by SID (`whoami /user`), so domain / Entra account names never matter.
-    A failure aborts key use; inherited permissions could expose the unencrypted key."""
+    """Windows: only the current user may touch the file (an existing file: for a new one use private_fd, which never lets
+    anyone else open it). A failure aborts key use; inherited permissions could expose the unencrypted key."""
     if not WIN:
         return
     path = str(Path(path).resolve())
-    import subprocess
     try:
-        out = subprocess.run([sys32("whoami.exe"), "/user", "/fo", "csv", "/nh"], **popen_kw(capture_output=True, text=True, timeout=10))
-        sid = out.stdout.strip().split(",")[-1].strip().strip('"')
-        if out.returncode or not re.fullmatch(r"S-1-[0-9-]+", sid):
-            raise OSError("whoami /user: %r" % out.stdout[:80])
-        win_set_dacl(path, "D:P(A;;FA;;;%s)" % sid)   # the whole DACL: protected, one entry. icacls /grant:r kept any other explicit entry
-    except (OSError, subprocess.SubprocessError) as e:
+        win_set_dacl(path, "D:P(A;;FA;;;%s)" % win_sid())   # the whole DACL: protected, one entry. icacls /grant:r kept any other explicit entry
+    except OSError as e:
         raise SrvErr("other", "개인 키 파일 권한을 제한하지 못했습니다 (%s)" % e)
+
+
+def private_fd(path):
+    """A NEW file open for writing (fd) that only this user can open, from its creation on. Windows: the protected DACL is part of
+    CreateFile, so there is no moment in which a principal with inherited access to the folder (a sandbox group) can get a handle
+    that later reads the contents. POSIX: mode 0600. OSError when the file exists or cannot be made."""
+    if not WIN:
+        return os.open(str(path), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    import ctypes, msvcrt
+    from ctypes import wintypes
+
+    class SA(ctypes.Structure):
+        _fields_ = [("n", wintypes.DWORD), ("sd", ctypes.c_void_p), ("inherit", wintypes.BOOL)]
+    adv, k32 = ctypes.WinDLL("advapi32", use_last_error=True), ctypes.WinDLL("kernel32", use_last_error=True)
+    k32.CreateFileW.restype = wintypes.HANDLE
+    k32.CreateFileW.argtypes = [wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, ctypes.c_void_p, wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE]
+    k32.LocalFree.argtypes = [ctypes.c_void_p]
+    sd = ctypes.c_void_p()
+    if not adv.ConvertStringSecurityDescriptorToSecurityDescriptorW(ctypes.c_wchar_p("D:P(A;;FA;;;%s)" % win_sid()), 1, ctypes.byref(sd), None):
+        raise ctypes.WinError(ctypes.get_last_error())
+    try:
+        sa = SA(ctypes.sizeof(SA), sd, False)
+        h = k32.CreateFileW(str(path), 0x40000000, 0, ctypes.byref(sa), 1, 0x80, None)   # GENERIC_WRITE, no sharing, CREATE_NEW, NORMAL
+        if h is None or h == wintypes.HANDLE(-1).value:
+            raise ctypes.WinError(ctypes.get_last_error())
+    finally:
+        k32.LocalFree(sd)
+    return msvcrt.open_osfhandle(h, os.O_WRONLY)
 
 
 def app_key(path=None):
@@ -3615,12 +4021,17 @@ def pm_open(host, port, trust=None, reg=None):
                     pass
         if isinstance(e, SrvErr) or not isinstance(e, Exception):
             raise
+        if known and "no acceptable host key" in str(e).lower():   # the server no longer has a key of the recorded type (a reinstall): that is a changed key too
+            raise SrvErr("host_key_changed", "REMOTE HOST IDENTIFICATION HAS CHANGED: 서버의 호스트 키가 이 PC에 기록된 것과 다릅니다 (키 종류가 바뀜)")
         raise pm_neterr(e, host)
 
 
-def pm_auth(t, user, key=None, password=None):
-    """Authenticate; returns "key" or "password". Raises SrvErr wrong_password. Key first, then the password (keyboard-interactive when the
-    server offers only that)."""
+PW_OFF ="Permission denied (publickey): 이 서버는 비밀번호 로그인이 꺼져 있어 키로만 접속됩니다 — 이 PC의 키를 서버에 직접 등록하세요"
+
+
+def pm_auth(t, user, key=None, password=None, probe=True):
+    """Authenticate; returns "key" or "password". Raises SrvErr wrong_password, or password_disabled when the server offers neither password
+    nor keyboard-interactive (a key-only server). Key first, then the password (keyboard-interactive when the server offers only that)."""
     paramiko = pm_mod()
     if key is not None:
         try:
@@ -3628,7 +4039,18 @@ def pm_auth(t, user, key=None, password=None):
             return "key"
         except paramiko.AuthenticationException:
             pass
+    if password is None and not probe:   # a channel reconnect: one attempt per connect, nothing that counts toward MaxAuthTries / fail2ban
+        raise SrvErr("wrong_password", "Permission denied (publickey): 키 로그인이 거절되었습니다")
     if password is None:
+        try:   # which methods does the server offer? ("none" auth: the standard way to ask; no secret is sent)
+            t.auth_none(user)
+            allowed = None
+        except paramiko.BadAuthenticationType as e:
+            allowed = list(e.allowed_types or [])
+        except Exception:
+            allowed = None
+        if allowed is not None and not {"password", "keyboard-interactive"} & set(allowed):
+            raise SrvErr("password_disabled", PW_OFF)
         raise SrvErr("wrong_password", "Permission denied (publickey): 이 PC의 키로는 로그인되지 않습니다 — 비밀번호가 필요합니다")
     box = [password]   # the interactive handler reads it from here; emptied below so no closure keeps the password alive
     try:
@@ -3636,7 +4058,7 @@ def pm_auth(t, user, key=None, password=None):
             t.auth_password(user, password)
         except paramiko.BadAuthenticationType as e:
             if "keyboard-interactive" not in (e.allowed_types or []):
-                raise
+                raise SrvErr("password_disabled", PW_OFF)   # key-only server: no password could ever work here
             t.auth_interactive(user, lambda title, instr, prompts: [box[0]] * len(prompts))
         return "password"
     except paramiko.AuthenticationException as e:
@@ -3735,7 +4157,7 @@ def srv_job_pm(j, rq, save):
             return tk
         except SrvErr as e:
             tk.close()
-            if e.args[0] != "wrong_password":
+            if e.args[0] not in ("wrong_password", "password_disabled"):
                 raise
             return None
 
@@ -3919,7 +4341,7 @@ def pm_channel(ch):
                         break
                     except Exception:
                         pass
-            pm_auth(t, user, key or app_key()[0], None)
+            pm_auth(t, user, key or app_key()[0], None, probe=False)
         c = t.open_session(timeout=10)
         c.exec_command('%s -I -c "%s"' % (ch.get("python", "python3"), BOOT))
         return PmProc(t, c)
@@ -4129,6 +4551,8 @@ def hub_chan(ch, slot):
             p = slot["p"] = None
         except Exception as e:
             if slot.get("stop"):
+                if p:   # removed / stopped mid-read: nothing may stay open behind it
+                    close_hub_proc(p)
                 return
             if p and isinstance(e, OSError):   # the transport died before we wrote: its stderr says why
                 time.sleep(0.3)
@@ -4136,11 +4560,15 @@ def hub_chan(ch, slot):
             slot.update(state="error", error=str(e) or type(e).__name__)
             if p:
                 close_hub_proc(p)
-            if wake.wait(backoff):
+            slot["retry_at"] = time.time() + backoff   # GET api/channels: when the next automatic attempt is due
+            woke = wake.wait(backoff)   # POST api/channels/retry (지금 확인), a patched channel or a stop sets it
+            slot["retry_at"] = None
+            if woke:
                 wake.clear()
-                backoff = 2
+            if woke and not slot.pop("retry_now", False):
+                backoff = 2   # a patched channel (new address or key): start over
             else:
-                backoff = min(backoff * 2, 60)
+                backoff = min(backoff * 2, 60)   # the wait ran out, or 지금 확인 ended it early: either way the next wait is longer (no hammering a server that refuses us)
 
 
 def open_app(url, quiet=False):
@@ -4204,6 +4632,11 @@ def hub_start(cfg=None, port=None, secret="", on_show=None, token=None, fallback
                 print(f"에겐 톡: {e.args[1]}", file=sys.stderr)
     except (OSError, ValueError) as e:
         sys.exit(f"channels.json 오류: {e} — 메모장 등으로 고친 뒤 다시 실행하세요")
+    if WIN and not explicit and cfg.exists():   # a file written before write_conf set its DACL: server names and accounts are the user's alone
+        try:
+            pm_acl(cfg)
+        except SrvErr:
+            pass
     cport = conf.get("port", 8765) if isinstance(conf, dict) else None
     if not isinstance(conf, dict) or not isinstance(conf.get("channels", []), list) or type(cport) is not int or not 0 < cport < 65536:
         sys.exit('channels.json 오류: 최상위는 {"port": 1~65535 숫자, "channels": [...]} 형태여야 합니다 — 메모장 등으로 고친 뒤 다시 실행하세요')
@@ -4227,6 +4660,7 @@ def hub_start(cfg=None, port=None, secret="", on_show=None, token=None, fallback
     token = token or secrets.token_urlsafe(24)   # per hub start; the page gets it in <meta name="at-token">, POSTs must send it back
     lock, jobs = threading.Lock(), [None]   # jobs[0]: the one 서버 추가 job (running or last)
     tk, talk_lock = {"on": conf.get("talk") is not False, "dup": {}, "last": {}, "win": deque()}, threading.Lock()   # the talk switch (channels.json "talk") and the rate limits
+    end_on = conf.get("end") is not False   # channels.json "end": false removes 세션 종료 from this hub
     page = bundle("index.html")
     prefix = "/" + secret if secret else ""
     sess = {"cookie": None}   # the page's session cookie (see session_ok); one per launch
@@ -4234,7 +4668,7 @@ def hub_start(cfg=None, port=None, secret="", on_show=None, token=None, fallback
     def save(rq, j):
         """channels.json (re-read; atomic write) + the live channel, for a verified job; None when cancelled meanwhile."""
         with lock:
-            if j["cancel"]:
+            if j["cancel"] or rq.get("id") and rq["id"] not in slots:   # cancelled, or the channel it was fixing was removed meanwhile
                 return None
             cur = read_cur()
             ent = chan_upsert(cur, rq, slots)
@@ -4243,7 +4677,8 @@ def hub_start(cfg=None, port=None, secret="", on_show=None, token=None, fallback
             if live is None:
                 slots[ent["id"]] = {"state": "connecting", "error": None, "data": None, "t": None, "wake": threading.Event()}
                 chans.append(dict(ent))
-                threading.Thread(target=hub_chan, args=(chans[-1], slots[ent["id"]]), daemon=True).start()
+                th = slots[ent["id"]]["thread"] = threading.Thread(target=hub_chan, args=(chans[-1], slots[ent["id"]]), daemon=True)
+                th.start()
             else:   # patched in place: reconnect now with the new args
                 live.update({k: ent[k] for k in ("ssh", "ssh_args", "python", "port", "auth") if k in ent})
                 if "ssh_args" not in ent:
@@ -4267,6 +4702,87 @@ def hub_start(cfg=None, port=None, secret="", on_show=None, token=None, fallback
             raise SrvErr("other", "channels.json 형식이 올바르지 않습니다")
         return cur
 
+    retry_t = {}   # channel id -> monotonic time of its last POST api/channels/retry (one per 2 s)
+
+    def srv_manage(path, d):
+        """POST api/servers/rename {id, name} | move {id, dir: up|down} | remove {id, forget_hostkey} -> (http code, body).
+        channels.json is re-read and written under `lock` (like save()); the live list follows the file."""
+        d = d if isinstance(d, dict) else {}
+        cid = d.get("id")
+        if not (isinstance(cid, str) and cid in slots):
+            return 404, {"error": "알 수 없는 채널", "field": "id"}
+        with lock:
+            cur = read_cur()
+            chs = cur.setdefault("channels", [])
+            idx = [i for i, c in enumerate(chs) if isinstance(c, dict) and c.get("id") in slots]   # entries the hub runs, in file order
+            at = next((i for i in idx if chs[i]["id"] == cid), None)
+            live = next((c for c in chans if c["id"] == cid), None)
+            if at is None or live is None:
+                return 409, {"error": "channels.json 에서 이 채널을 찾을 수 없습니다 — 에겐 톡을 다시 시작하세요"}
+            if path == "/api/servers/rename":
+                nm = d.get("name")
+                nm = re.sub(r"[\x00-\x1f\x7f\ud800-\udfff]", "", nm).strip() if isinstance(nm, str) else ""
+                if not 0 < len(nm) <= 40:
+                    return 400, {"error": "이름은 1~40자입니다", "field": "name"}
+                if any(c is not live and c.get("name", c["id"]) == nm for c in chans):
+                    return 409, {"error": "같은 이름의 채널이 이미 있습니다", "field": "name"}
+                chs[at]["name"] = nm
+                write_conf(cfg, cur)
+                live["name"] = nm
+                return 200, {"ok": True, "id": cid, "name": nm}
+            if path == "/api/servers/move":
+                if d.get("dir") not in ("up", "down"):
+                    return 400, {"error": "입력이 올바르지 않습니다", "field": "dir"}
+                k = idx.index(at) + (-1 if d["dir"] == "up" else 1)
+                if 0 <= k < len(idx):
+                    chs[at], chs[idx[k]] = chs[idx[k]], chs[at]
+                    write_conf(cfg, cur)
+                    order = {c.get("id"): i for i, c in enumerate(chs) if isinstance(c, dict)}
+                    chans.sort(key=lambda c: order.get(c["id"], len(order)))
+                return 200, {"ok": True, "order": [c["id"] for c in chans]}
+            # remove
+            if live["kind"] == "local":
+                return 400, {"error": "내 PC 채널은 지울 수 없습니다", "field": "id"}
+            del chs[at]
+            write_conf(cfg, cur)
+            chans.remove(live)
+            sl = slots.pop(cid)
+            sl["stop"] = True
+            sl["wake"].set()
+            try:   # a talk / end still queued for it holds the hub-wide send lock until it is answered
+                while sl.get("tq") is not None:
+                    job = sl["tq"].get_nowait()
+                    job["box"].update(outcome="unreachable", reason="channel")
+                    job["ev"].set()
+            except queue.Empty:
+                pass
+            p = sl.get("p")
+            if p is not None:   # closing stdin ends the remote collector; terminate covers a transport stuck before that
+                for f in (lambda: p.stdin.close(), lambda: p.terminate()):
+                    try:
+                        f()
+                    except (OSError, ValueError, AttributeError):
+                        pass
+            key_ = chan_key(live) if live["kind"] == "ssh" else None
+            if key_:
+                SESSION_PW.pop(key_, None)
+            still_used = {(c.get("ssh", "").rpartition("@")[2], chan_port(c)) for c in chans if c["kind"] == "ssh"}
+        forgot = False
+        if d.get("forget_hostkey") is True and key_ and host_ok(key_[1]) and (key_[1], str(key_[2])) not in still_used and pm_mod():
+            with KNOWN_LOCK:   # only the app's own trust store, and only when no other channel still uses that host and port
+                hk = known_load()
+                spec = hostspec(key_[1], key_[2])
+                if hk.lookup(spec):
+                    del hk[spec]
+                    known_save(hk)
+                    forgot = True
+        logging.getLogger("agen-talk").info("channel %s removed (host key forgotten: %s)", logsafe(cid), forgot)
+        return 200, {"ok": True, "forgot": forgot, "comment": "agen-talk@" + PC}
+
+    def logsafe(v):
+        """A value from a page or a server as one short log token: no control characters (a newline would forge a log line)."""
+        return re.sub(r"[\x00-\x1f\x7f]", "?", str(v))[:200]
+
     def talk_post(d):
         """POST api/talk {ch, id, text, client_id} -> (http code, body). TALK-ENG 2.5: one send at a time, never a retry."""
         d = d if isinstance(d, dict) else {}
@@ -4282,7 +4798,7 @@ def hub_start(cfg=None, port=None, secret="", on_show=None, token=None, fallback
             return 200, dict(out, outcome="refused", reason="empty" if not text else "too-long" if len(text) > TALK_MAX else "bad-text")
 
         def done(outcome, reason=None, detail=None, tool="-", code=200, **kw):
-            logging.getLogger("agen-talk").info("talk ch=%s tool=%s target=%s len=%d msg_id=%s outcome=%s reason=%s", ch, tool, tid, len(text), mid, outcome, reason)
+            logging.getLogger("agen-talk").info("talk ch=%s tool=%s target=%s len=%d msg_id=%s outcome=%s reason=%s", ch, logsafe(tool), logsafe(tid), len(text), mid, logsafe(outcome), logsafe(reason))
             return code, dict(out, outcome=outcome, **dict({k: v for k, v in (("reason", reason), ("detail", detail)) if v}, **kw))
 
         if not tk["on"]:
@@ -4319,6 +4835,55 @@ def hub_start(cfg=None, port=None, secret="", on_show=None, token=None, fallback
         finally:
             talk_lock.release()
         return done(box.get("outcome") or "unknown", box.get("reason"), box.get("detail"), tool=tool)
+
+    def end_post(d):
+        """POST api/end {ch, id} -> (http code, body): stop that session's host process. One request at a time (it shares the talk lock
+        and the channel's one-slot queue); the collector checks the session again before it signals anything."""
+        d = d if isinstance(d, dict) else {}
+        ch, tid, seen = d.get("ch"), d.get("id"), d.get("pid")   # pid: the process the page showed when the user confirmed
+        if not (isinstance(ch, str) and ch in slots and isinstance(tid, str) and 0 < len(tid) <= 200 and type(seen) is int):
+            return 400, {"error": "입력이 올바르지 않습니다"}
+        HUB_SEEN[0] = time.time()
+        mid = "at-" + secrets.token_hex(4)
+
+        def done(outcome, reason=None, detail=None, tool="-", pid=None):
+            reason, detail = (logsafe(x) if x else None for x in (reason, detail))   # a server's reply: text only, one line
+            logging.getLogger("agen-talk").info("end ch=%s tool=%s target=%s pid=%s msg_id=%s outcome=%s reason=%s", ch, logsafe(tool), logsafe(tid), pid, mid, logsafe(outcome), reason)
+            return 200, dict({"msg_id": mid, "outcome": logsafe(outcome)}, **{k: v for k, v in (("reason", reason), ("detail", detail)) if v})
+
+        if not end_on:
+            return done("refused", "off")
+        sl = slots[ch]
+        if sl["state"] != "ok" or not sl["data"] or sl.get("tq") is None:
+            return done("unreachable", "channel")
+        def nodes(ns, depth=0):
+            for x in ns if isinstance(ns, list) and depth < 32 else ():
+                if isinstance(x, dict):
+                    yield x
+                    yield from nodes(x.get("kids"), depth + 1)
+        n = next((x for x in nodes(sl["data"].get("agents")) if x.get("id") == tid), None)
+        cap = n.get("end") if n else None
+        if not isinstance(cap, dict):
+            return done("gone")
+        tool, pid = n.get("tool"), cap.get("pid")
+        if not cap.get("ok") or tool not in ("claude", "codex") or type(pid) is not int:
+            return done("refused", cap.get("reason") or "unsupported", tool=tool)
+        if pid != seen:
+            return done("refused", "changed", tool=tool, pid=pid)   # another process holds the session now: the user confirmed a different one
+        if not talk_lock.acquire(False):
+            return done("refused", "busy", tool=tool, pid=pid)
+        try:
+            job = {"req": {"op": "end", "msg_id": mid, "id": tid, "tool": tool, "pid": pid, "idle": d.get("idle") is True}, "ev": threading.Event(), "box": {"outcome": "unknown"}, "t": time.time()}
+            try:
+                sl["tq"].put_nowait(job)
+            except queue.Full:
+                return done("refused", "busy", tool=tool, pid=pid)
+            sl["wake"].set()
+            job["ev"].wait(50)
+            box = dict(job["box"])
+        finally:
+            talk_lock.release()
+        return done(box.get("outcome") or "unknown", box.get("reason"), box.get("detail"), tool=tool, pid=pid)
 
     class Handler(http.server.BaseHTTPRequestHandler):
         timeout = 30   # a client that stalls mid-request frees its thread
@@ -4391,13 +4956,31 @@ def hub_start(cfg=None, port=None, secret="", on_show=None, token=None, fallback
             if path == "/api/presets":
                 return self.send(200, presets_view(presets, chans))
             if path == "/api/app":
-                return self.send(200, dict(APP_INFO, logdir=str(state_dir()), talk_on=tk["on"], talk_max=TALK_MAX))
+                return self.send(200, dict(APP_INFO, logdir=str(state_dir()), talk_on=tk["on"], talk_max=TALK_MAX, end_on=end_on,
+                                         key_comment="agen-talk@" + PC))   # the line to look for in a server's authorized_keys (삭제)
             if path == "/api/channels":
-                return self.send(200, [{"id": c["id"], "name": c.get("name", c["id"]), "kind": c["kind"],
-                                        "ssh": c.get("ssh"), "ssh_args": c.get("ssh_args", []), "port": c.get("port"), "auth": c.get("auth"),
-                                        "session_pw": c.get("auth") == "password-session" and chan_key(c) in SESSION_PW,   # the hub holds this run's password (never the value)
-                                        "state": slots[c["id"]]["state"], "error": slots[c["id"]]["error"],
-                                        "t": slots[c["id"]]["t"]} for c in chans])
+                out = []
+                for c in list(chans):   # a copy: api/servers/remove may drop a channel meanwhile
+                    sl = slots.get(c["id"])
+                    if sl is None:
+                        continue
+                    spw = c.get("auth") == "password-session" and chan_key(c) in SESSION_PW   # the hub holds this run's password (never the value)
+                    wait_pw = c.get("auth") == "password-session" and not spw   # it will not reconnect on its own: no countdown
+                    out.append({"id": c["id"], "name": c.get("name", c["id"]), "kind": c["kind"],
+                                "ssh": c.get("ssh"), "ssh_args": c.get("ssh_args", []), "port": c.get("port"), "auth": c.get("auth"),
+                                "session_pw": spw, "state": sl["state"], "error": sl["error"], "t": sl["t"],
+                                "retry_at": sl.get("retry_at") if sl["state"] == "error" and not wait_pw else None})
+                return self.send(200, out)
+            if path in ("/api/key", "/api/sshconfig") and not secret:
+                return self.send(403, {"error": "forbidden"})   # --insecure is read-only for every account on the box: no host inventory, no key creation
+            if path == "/api/key":   # the app's PUBLIC key line, for the manual route on a key-only server; secret path + session cookie like every GET
+                try:
+                    pub = app_key()[1] if pm_mod() else key_ensure()
+                except Exception as e:   # SrvErr (ACL, ssh-keygen) or a broken key file: a reason, not a dropped connection
+                    return self.send(500, {"error": e.args[1] if isinstance(e, SrvErr) and len(e.args) > 1 else last(e) or type(e).__name__})
+                return self.send(200, {"pub": pub, "comment": "agen-talk@" + PC, "cmd": install_cmd(pub)})
+            if path == "/api/sshconfig":   # prefill only: alias / host / user / port / jump of plain Host blocks, nothing else from the file
+                return self.send(200, sshconf_read())
             if path == "/api/state":
                 sl = slots.get((parse_qs(u.query).get("ch") or [""])[0])
                 if sl is None:
@@ -4419,7 +5002,7 @@ def hub_start(cfg=None, port=None, secret="", on_show=None, token=None, fallback
                 return self.send(404, {"error": "not found"})   # wrong secret: nothing to learn, not even that the token exists
             if path != "/api/show" and not self.session_ok():   # show: a second launch proves itself with run.json's token alone
                 return self.send(403, {"error": "forbidden"})
-            talking = path in ("/api/talk", "/api/talk/setting")   # these must name their Origin: a missing one is not the page
+            talking = path in ("/api/talk", "/api/talk/setting", "/api/end")   # these must name their Origin: a missing one is not the page
             if (not hmac.compare_digest(h.get("X-AT-Token", "").encode(), token.encode())
                     or h.get("Origin", None if talking else "http://127.0.0.1:%d" % port) not in ("http://127.0.0.1:%d" % port, "http://localhost:%d" % port)):
                 return self.send(403, {"error": "forbidden"})   # no CORS headers anywhere: other sites cannot even read the answer
@@ -4451,6 +5034,8 @@ def hub_start(cfg=None, port=None, secret="", on_show=None, token=None, fallback
                     return self.send(200, {"ok": True})
                 if path == "/api/talk":
                     return self.send(*talk_post(d))
+                if path == "/api/end":
+                    return self.send(*end_post(d))
                 if path == "/api/talk/setting":
                     if not isinstance(d, dict) or type(d.get("on")) is not bool:
                         return self.send(400, {"error": "입력이 올바르지 않습니다"})
@@ -4538,6 +5123,21 @@ def hub_start(cfg=None, port=None, secret="", on_show=None, token=None, fallback
                     if j.get("thread"):
                         j["thread"].join(5)   # answer only once the job thread is gone: then nothing it does can happen after the 200
                     return self.send(200, {"ok": True})
+                if path == "/api/channels/retry":   # 지금 확인: end the channel's backoff wait now (one per channel per 2 s)
+                    cid = d.get("id") if isinstance(d, dict) else None
+                    sl = slots.get(cid) if isinstance(cid, str) else None
+                    if sl is None:
+                        return self.send(404, {"error": "알 수 없는 채널", "field": "id"})
+                    now = time.monotonic()
+                    if now - retry_t.get(cid, -9.0) < 2:
+                        return self.send(429, {"error": "잠시 뒤 다시 시도하세요", "retry_after": 2})
+                    retry_t[cid] = now
+                    sl["retry_at"] = None
+                    sl["retry_now"] = True
+                    sl["wake"].set()   # hub_chan: the backoff wait ends now; the backoff itself keeps growing until a connect succeeds
+                    return self.send(200, {"ok": True, "state": sl["state"]})
+                if path in ("/api/servers/rename", "/api/servers/move", "/api/servers/remove"):
+                    return self.send(*srv_manage(path, d))
                 if path == "/api/servers/forget-hostkey":
                     d = d if isinstance(d, dict) else {}
                     rq = srv_check({"host": d.get("host"), "port": d.get("port"), "user": "x"}, {})
@@ -4580,9 +5180,10 @@ def hub_start(cfg=None, port=None, secret="", on_show=None, token=None, fallback
             except OSError:
                 pass
         srv = srv or Server(("127.0.0.1", 0), Handler)   # the whole range is taken: any free one
-    srv.token, srv.secret, srv.cfg = token, secret, cfg
+    srv.token, srv.secret, srv.cfg, srv.slots = token, secret, cfg, slots   # slots: tests look at a channel's thread
     for ch in chans:   # only after the bind: a failed launch must not leave ssh children behind
-        threading.Thread(target=hub_chan, args=(ch, slots[ch["id"]]), daemon=True).start()
+        th = slots[ch["id"]]["thread"] = threading.Thread(target=hub_chan, args=(ch, slots[ch["id"]]), daemon=True)
+        th.start()
     url = f"http://127.0.0.1:{srv.server_address[1]}{prefix}/"
 
     def stop():
@@ -5115,6 +5716,7 @@ def selftest_pm():
             acl_calls.append(path)
         try:
             subprocess.run, WIN, conf_dir, win_set_dacl = fake_run, True, lambda: Path(t) / "acl-conf", fake_dacl
+            del WIN_SID[:]   # the SID is asked once per process: this block's fake whoami must be the one that answers
             app_key(acl_key)
             assert len(acl_calls) == 1
             acl_key.unlink(); acl_key.with_name(acl_key.name + ".pub").unlink()
@@ -5124,6 +5726,7 @@ def selftest_pm():
             assert len(acl_calls) == 4
         finally:
             subprocess.run, WIN, conf_dir, win_set_dacl = old_run, old_win, old_conf_dir, old_dacl
+            del WIN_SID[:]
             _PM_ACL_VALIDATED.discard(str(acl_key))
         if os.name == "nt":   # the real API: a file with an extra explicit grant ends with exactly the user's entry
             import subprocess as sp
@@ -5409,7 +6012,7 @@ def selftest_http():
             assert req("GET", "/")[0] == 404 and req("GET", "/api/channels")[0] == 404 and req("GET", "/wrong/api/channels")[0] == 404
             assert req("GET", "/s3cr3t/api/channels", hdr={"Host": "evil.example:%d" % port})[0] == 403   # DNS rebinding
             assert req("GET", "/s3cr3t/api/channels")[0] == 200
-            for path in ("/api/talk/setting", "/api/servers", "/api/servers/job/confirm", "/api/servers/job/cancel", "/api/servers/forget-hostkey", "/api/presets/import"):
+            for path in ("/api/talk/setting", "/api/end", "/api/servers", "/api/servers/job/confirm", "/api/servers/job/cancel", "/api/servers/forget-hostkey", "/api/presets/import"):
                 assert req("POST", "/s3cr3t" + path, {}, hdr={"X-AT-Token": None})[0] == 403, path
                 assert req("POST", "/s3cr3t" + path, {}, hdr={"X-AT-Token": "bad"})[0] == 403, path
                 assert req("POST", "/s3cr3t" + path, {}, hdr={"Origin": "http://evil.example"})[0] == 403, path
@@ -5417,6 +6020,12 @@ def selftest_http():
             assert req("POST", "/s3cr3t/api/talk/setting", {"on": "yes"})[0] == 400
             assert req("POST", "/s3cr3t/api/talk/setting", {"on": False}) == (200, {"on": False}) and json.loads(cfg.read_text(encoding="utf-8"))["talk"] is False
             assert req("POST", "/s3cr3t/api/nope", {})[0] == 404
+            assert req("POST", "/s3cr3t/api/end", {"ch": "pc", "id": "x", "pid": 1}, hdr={"Origin": None})[0] == 403   # like a talk: the page must name itself
+            assert req("POST", "/s3cr3t/api/end", {"ch": "nope", "id": "x", "pid": 1})[0] == 400 and req("POST", "/s3cr3t/api/end", {"ch": "pc", "pid": 1})[0] == 400
+            assert req("POST", "/s3cr3t/api/end", {"ch": "pc", "id": "x"})[0] == 400 and req("POST", "/s3cr3t/api/end", {"ch": "pc", "id": "x", "pid": True})[0] == 400   # the pid the user saw is required
+            code, body = req("POST", "/s3cr3t/api/end", {"ch": "pc", "id": "no-such-session", "pid": 1})
+            assert code == 200 and body["outcome"] in ("gone", "unreachable") and re.fullmatch(r"at-[0-9a-f]{8}", body["msg_id"]), body
+            assert req("GET", "/s3cr3t/api/app")[1]["end_on"] is True
             mode0 = APP_INFO.get("mode")
             try:   # a second launch (token only) in browser/cli mode re-arms the session: the reopened window loads the page again
                 APP_INFO["mode"] = "cli"
@@ -5428,7 +6037,205 @@ def selftest_http():
                 APP_INFO["mode"] = mode0
         finally:
             stop()
+        # --insecure (no secret: every account on the box can read the page): read-only, and never the SSH host list or the app key
+        srv, url, stop = hub_start(cfg, port=0, secret="", fallback=False)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        try:
+            def get(path):
+                c = http.client.HTTPConnection("127.0.0.1", srv.server_address[1], timeout=30)
+                c.request("GET", path, headers={"Host": "127.0.0.1:%d" % srv.server_address[1]})
+                r = c.getresponse()
+                r.read()
+                c.close()
+                return r.status
+            assert get("/api/channels") == 200 and get("/api/key") == 403 and get("/api/sshconfig") == 403
+        finally:
+            stop()
     print("http ok")
+
+
+def selftest_sshux():
+    """SSH convenience: host parsing (IPv6 / underscores), key-only servers (password_disabled), the ~/.ssh/config importer, and the
+    retry / rename / move / remove routes with their gates. Temp dirs only: conf_dir and HOME point into one for the whole test."""
+    import http.client, tempfile, threading
+    global conf_dir, HOME, pm_open, app_key
+    # addresses: IPv6 literals and underscores end-to-end; never brackets, zone ids or a leading '-'
+    for h in ("2001:db8::1", "::1", "fe80::1:2", "my_host", "gpu_1.lab", "203.0.113.9", "a"):
+        assert host_ok(h) and srv_check({"host": h, "user": "u"}, {})["host"] == h, h
+    for h in ("[::1]", "fe80::1%eth0", ":::", "a:b", "1:2", "-x", "_x-", "a b", "", "h\n", None, 5):
+        assert not host_ok(h), h
+    assert hostspec("2001:db8::1", 22) == "2001:db8::1" and hostspec("2001:db8::1", 2222) == "[2001:db8::1]:2222"
+    a = hub_argv({"kind": "ssh", "ssh": "u@2001:db8::1", "port": 2222, "auth": "appkey"})   # the OpenSSH fallback: target after --, port as -p
+    assert a[a.index("--") + 1] == "u@2001:db8::1" and a[a.index("-p") + 1] == "2222"
+    assert presets_check([{"host": "::1", "port": 2222}, {"host": "my_box"}])[0] == [{"name": "::1", "host": "::1", "port": 2222}, {"name": "my_box", "host": "my_box", "port": 22}]
+    assert chan_key({"ssh": "u@2001:db8::1", "port": 2200}) == ("u", "2001:db8::1", 2200)
+    # key-only servers: ssh's own list of methods, and paramiko's
+    g = glob_match   # Host patterns are matched without a regex: a hostile ~/.ssh/config cannot stall the hub
+    assert g("*", "x") and g("a*b", "ab") and g("a*b", "axxb") and not g("a*b", "axxc") and g("?b", "ab") and not g("?", "") and g("", "") and not g("a", "ab")
+    assert sshconf_match(["*.Ex", "!bad.ex"], "good.ex") and not sshconf_match(["*.ex", "!bad.ex"], "bad.ex")
+    t0 = time.monotonic()
+    evil = sshconf_parse("Host " + "*a" * 16 + "*b\n User x\nHost " + "a" * 100 + "\n HostName h.example\n" + "".join("Host h%d %s\n" % (i, " ".join("*x%d*y" % k for k in range(80))) for i in range(300)))
+    assert time.monotonic() - t0 < 3 and evil[0]["host"] == "h.example" and len(evil) < 100, (time.monotonic() - t0, len(evil))
+    assert ssh_kind("u@h: Permission denied (publickey).") == "password_disabled" and ssh_kind("Permission denied (publickey,gssapi-with-mic).") == "password_disabled"
+    assert ssh_kind("Permission denied (publickey,password).") == "wrong_password" and ssh_kind("Permission denied (publickey,keyboard-interactive).") == "wrong_password"
+    assert ssh_kind("Permission denied, please try again.") == "wrong_password"
+    # ~/.ssh/config: first match wins, wildcards are defaults not entries, Match is skipped, Include is not followed, quotes / = / CRLF / BOM
+    cfg_text = ("﻿# mine\r\nUser globaluser\r\nInclude ~/.ssh/other.conf\r\n"
+                "Host gpu1 gpu1-alias\r\n  HostName gpu1.example.com\r\n  Port 2222\r\n  IdentityFile ~/.ssh/secret_key\r\n"
+                "Host \"lab box\" !nope\r\n  HostName=203.0.113.5\r\n  User = \"alice\"\r\n"
+                "Host *.corp\r\n  User corpuser\r\n"
+                "Host jumpy\r\n  ProxyJump bastion\r\nHost cmdy\r\n  ProxyCommand ssh -W %h:%p bastion\r\nHost nojump\r\n  ProxyJump none\r\n"
+                "Match host gpu1\r\n  User matched\r\n  Port 9999\r\n"
+                "Host v6\r\n  HostName [2001:db8::7]\r\nHost tok\r\n  HostName %h.example.com\r\nHost badport\r\n  Port 70000\r\nHost tokhost\r\n  HostName box%n\r\n"
+                "Host *\r\n  Port 2200\r\n  User fallback\r\n")
+    es = {e["alias"]: e for e in sshconf_parse(cfg_text)}
+    assert list(es)[:3] == ["gpu1", "gpu1-alias", "lab box"] and "*.corp" not in es and "*" not in es and "nope" not in es, list(es)
+    assert es["gpu1"] == {"alias": "gpu1", "host": "gpu1.example.com", "user": "globaluser", "port": 2222, "jump": False}, es["gpu1"]   # Match ignored, global User first
+    assert es["lab box"]["host"] == "203.0.113.5" and es["lab box"]["user"] == "globaluser" and es["lab box"]["port"] == 2200   # the global User came first
+    assert es["jumpy"]["jump"] and es["cmdy"]["jump"] and not es["nojump"]["jump"]
+    assert es["v6"]["host"] == "2001:db8::7" and "skipped" not in es["v6"] and es["tok"]["host"] == "tok.example.com" and "skipped" not in es["tok"]
+    assert es["badport"]["skipped"] == "port" and es["tokhost"]["skipped"] == "token"
+    assert all(set(e) <= {"alias", "host", "user", "port", "jump", "skipped"} for e in es.values()) and "secret_key" not in json.dumps(list(es.values()))
+    es2 = {e["alias"]: e for e in sshconf_parse("Host a\n User bob\nHost b\n HostName -oProxyCommand=x\nHost c\n User 'x;y'\n")}
+    assert es2["a"] == {"alias": "a", "host": "a", "user": "bob", "port": 22, "jump": False} and es2["b"]["skipped"] == "host" and es2["c"]["skipped"] == "user"
+    assert len(sshconf_parse("".join("Host h%d\n" % i for i in range(150)))) == 100 and sshconf_parse("") == [] and sshconf_parse("Host *\n User x\n") == []
+    old = (conf_dir, HOME, pm_open, app_key)
+    with tempfile.TemporaryDirectory() as d:
+        try:
+            conf_dir, HOME = (lambda win=None: Path(d) / "conf"), Path(d) / "home"
+            assert sshconf_read() == {"entries": [], "missing": True}
+            (HOME / ".ssh").mkdir(parents=True)
+            (HOME / ".ssh" / "config").write_bytes(b"Host x" + b" " * SSHCONF_MAX + b"\n")
+            assert sshconf_read() == {"entries": [], "too_big": True}
+            (HOME / ".ssh" / "config").write_bytes(cfg_text.encode("utf-8"))
+            assert [e["alias"] for e in sshconf_read()["entries"]][:2] == ["gpu1", "gpu1-alias"]
+            paramiko = pm_mod()
+            if paramiko:   # pm_auth on a key-only server (fake transport): password_disabled, with or without a typed password
+                class FT:
+                    def __init__(s, allowed): s.allowed, s.calls = allowed, []
+                    def auth_publickey(s, u, k): s.calls.append("key"); raise paramiko.AuthenticationException("no")
+                    def auth_none(s, u): s.calls.append("none"); raise paramiko.BadAuthenticationType("bad", s.allowed)
+                    def auth_password(s, u, p):
+                        s.calls.append("password")
+                        if "password" not in s.allowed:
+                            raise paramiko.BadAuthenticationType("bad", s.allowed)
+                        raise paramiko.AuthenticationException("wrong")
+                    def auth_interactive(s, u, h): s.calls.append("kbd"); raise paramiko.AuthenticationException("wrong")
+                    def close(s): pass
+                for allowed, pw, kind in ((["publickey"], "pw", "password_disabled"), (["publickey"], None, "password_disabled"), (["publickey", "password"], None, "wrong_password"),
+                                          (["publickey", "password"], "pw", "wrong_password"), (["publickey", "keyboard-interactive"], "pw", "wrong_password"), (["publickey", "keyboard-interactive"], None, "wrong_password")):
+                    t = FT(allowed)
+                    try:
+                        pm_auth(t, "u", object(), pw)
+                        raise AssertionError("no error")
+                    except SrvErr as e:
+                        assert e.args[0] == kind, (allowed, pw, e.args)
+                assert pm_auth.__doc__ and "Permission denied" in PW_OFF   # the UI's sshKind reads it as a key problem
+                key0, pub0 = app_key(Path(d) / "k" / "id_ed25519")
+                pm_open, app_key = (lambda *a_, **k_: FT(["publickey"])), (lambda path=None: (key0, pub0))
+                j = {"cancel": False, "ev": threading.Event(), "accept": None}
+                srv_job_pm(j, {"host": "h", "port": 22, "user": "u", "auth": "appkey", "password": "pw", "python": None, "name": "", "id": None}, lambda rq: None)
+                assert j["state"] == "error" and j["kind"] == "password_disabled" and "pw" not in j["message"], j
+                j = {"cancel": False, "ev": threading.Event(), "accept": None}   # 키를 등록했습니다 — 다시 연결: no password, the key still refused
+                srv_job_pm(j, {"host": "h", "port": 22, "user": "u", "auth": "appkey", "password": None, "python": None, "name": "", "id": None}, lambda rq: None)
+                assert j["kind"] == "password_disabled", j
+                pm_open, app_key = old[2], old[3]
+            # the routes: auth gates, retry, rename, move, remove (two ssh channels pointed at closed local ports: they fail and back off)
+            cfg = Path(d) / "channels.json"
+            cfg.write_text(json.dumps({"port": 8765, "presets": [{"host": "keep.me"}], "channels": [{"id": "pc", "name": "내 PC", "kind": "local"},
+                           {"id": "s1", "name": "one", "kind": "ssh", "ssh": "u@127.0.0.1", "port": 1, "auth": "appkey"},
+                           {"id": "s2", "name": "two", "kind": "ssh", "ssh": "u@127.0.0.1", "port": 2, "auth": "appkey"},
+                           {"id": "s3", "name": "pwonly", "kind": "ssh", "ssh": "u@127.0.0.1", "port": 3, "auth": "password-session"}]}), encoding="utf-8")
+            if paramiko:   # a recorded host key for s2: remove {forget_hostkey} drops it from the app's own store
+                hk = paramiko.HostKeys()
+                hk.add(hostspec("127.0.0.1", 2), key0.get_name(), key0)
+                hk.add(hostspec("127.0.0.1", 1), key0.get_name(), key0)
+                known_save(hk)
+            srv, url, stop = hub_start(cfg, port=0, secret="sx", token="tok-x", fallback=False)
+            threading.Thread(target=srv.serve_forever, daemon=True).start()
+            port, jar = srv.server_address[1], {}
+
+            def req(method, path, body=None, hdr=None):
+                c = http.client.HTTPConnection("127.0.0.1", port, timeout=30)
+                hd = {"Host": "127.0.0.1:%d" % port, "Content-Type": "application/json", "X-AT-Token": "tok-x", "Origin": "http://127.0.0.1:%d" % port,
+                      "Cookie": "at=" + jar["at"] if "at" in jar else None}
+                hd.update(hdr or {})
+                c.request(method, "/sx" + path, json.dumps(body) if body is not None else None, {k: v for k, v in hd.items() if v is not None})
+                r = c.getresponse()
+                data = r.read()
+                sc = r.getheader("Set-Cookie") or ""
+                if sc.startswith("at="):
+                    jar["at"] = sc[3:].split(";")[0]
+                c.close()
+                return r.status, (json.loads(data) if data[:1] in (b"{", b"[") else data)
+            try:
+                assert req("GET", "/api/key")[0] == 403 and req("GET", "/api/sshconfig")[0] == 403   # no session cookie yet
+                assert req("GET", "/")[0] == 200
+                for path in ("/api/channels/retry", "/api/servers/rename", "/api/servers/move", "/api/servers/remove"):
+                    body = {"id": "s1", "name": "x", "dir": "up"}
+                    assert req("POST", path, body, hdr={"X-AT-Token": None})[0] == 403, path
+                    assert req("POST", path, body, hdr={"X-AT-Token": "bad"})[0] == 403, path
+                    assert req("POST", path, body, hdr={"Origin": "http://evil.example"})[0] == 403, path
+                    assert req("POST", path, body, hdr={"Cookie": None})[0] == 403, path
+                    assert req("POST", path, {"id": "nope"})[0] == 404, path
+                code, sc_ = req("GET", "/api/sshconfig")
+                assert code == 200 and [e["alias"] for e in sc_["entries"]][:2] == ["gpu1", "gpu1-alias"], sc_
+                if paramiko:
+                    code, k = req("GET", "/api/key")
+                    assert code == 200 and k["pub"] == app_key()[1] and (Path(d) / "conf" / "id_ed25519").exists() and k["comment"] == "agen-talk@" + PC and AUTH_OPTS in k["cmd"] and k["pub"] in k["cmd"], k
+                end = time.time() + 20
+                while time.time() < end and not all(srv.slots[i]["state"] == "error" for i in ("s1", "s2", "s3")):
+                    time.sleep(0.05)
+                chs = {c["id"]: c for c in req("GET", "/api/channels")[1]}
+                assert chs["s1"]["state"] == "error" and chs["s3"]["state"] == "error", chs
+                end = time.time() + 10
+                while time.time() < end and not chs["s1"]["retry_at"]:
+                    time.sleep(0.05)
+                    chs = {c["id"]: c for c in req("GET", "/api/channels")[1]}
+                assert isinstance(chs["s1"]["retry_at"], float) and chs["s1"]["retry_at"] > time.time() - 1 and chs["s3"]["retry_at"] is None and chs["pc"]["retry_at"] is None, chs
+                ev, calls = srv.slots["s1"]["wake"], []
+                ev_set = ev.set
+                ev.set = lambda: (calls.append(1), ev_set())
+                try:
+                    assert req("POST", "/api/channels/retry", {"id": "s1"})[0] == 200 and calls == [1], calls
+                    assert req("POST", "/api/channels/retry", {"id": "s1"})[0] == 429 and calls == [1]   # one per channel per 2 s
+                finally:
+                    del ev.set
+                assert req("POST", "/api/channels/retry", {"id": "s2"})[0] == 200   # the limit is per channel
+                # rename: same rules as creation; duplicates refused; the file and the live list follow
+                assert req("POST", "/api/servers/rename", {"id": "s1", "name": " 새 \x1b이름 "}) == (200, {"ok": True, "id": "s1", "name": "새 이름"})
+                assert req("POST", "/api/servers/rename", {"id": "s1", "name": "two"})[0] == 409 and req("POST", "/api/servers/rename", {"id": "s1", "name": "   "})[0] == 400
+                assert req("POST", "/api/servers/rename", {"id": "s1", "name": "x" * 41})[0] == 400 and req("POST", "/api/servers/rename", {"id": "s1", "name": 5})[0] == 400
+                f = json.loads(cfg.read_text(encoding="utf-8"))
+                assert [c["name"] for c in f["channels"]] == ["내 PC", "새 이름", "two", "pwonly"] and f["presets"] == [{"host": "keep.me"}], f
+                assert {c["id"]: c["name"] for c in req("GET", "/api/channels")[1]}["s1"] == "새 이름"
+                # move
+                assert req("POST", "/api/servers/move", {"id": "s2", "dir": "up"})[1]["order"] == ["pc", "s2", "s1", "s3"]
+                assert req("POST", "/api/servers/move", {"id": "pc", "dir": "up"})[1]["order"] == ["pc", "s2", "s1", "s3"]   # already first
+                assert req("POST", "/api/servers/move", {"id": "s3", "dir": "down"})[1]["order"] == ["pc", "s2", "s1", "s3"]
+                assert req("POST", "/api/servers/move", {"id": "s1", "dir": "sideways"})[0] == 400
+                assert [c["id"] for c in json.loads(cfg.read_text(encoding="utf-8"))["channels"]] == ["pc", "s2", "s1", "s3"]
+                assert [c["id"] for c in req("GET", "/api/channels")[1]] == ["pc", "s2", "s1", "s3"]
+                # remove: the local channel stays; an ssh channel's thread ends, it leaves the file, the live list and (asked) the app's known_hosts
+                assert req("POST", "/api/servers/remove", {"id": "pc"})[0] == 400
+                SESSION_PW[("u", "127.0.0.1", 2)] = "secret"
+                th, sl2 = srv.slots["s2"]["thread"], srv.slots["s2"]
+                code, body = req("POST", "/api/servers/remove", {"id": "s2", "forget_hostkey": True})
+                assert code == 200 and body["ok"] and body["comment"] == "agen-talk@" + PC and body["forgot"] == bool(paramiko), body
+                th.join(8)
+                assert not th.is_alive() and sl2["stop"] and "s2" not in srv.slots and ("u", "127.0.0.1", 2) not in SESSION_PW
+                assert [c["id"] for c in json.loads(cfg.read_text(encoding="utf-8"))["channels"]] == ["pc", "s1", "s3"]
+                assert [c["id"] for c in req("GET", "/api/channels")[1]] == ["pc", "s1", "s3"] and req("GET", "/api/state?ch=s2")[0] == 404
+                if paramiko:
+                    left = known_load()
+                    assert not left.lookup(hostspec("127.0.0.1", 2)) and left.lookup(hostspec("127.0.0.1", 1)), "only the removed server's key goes"
+                assert req("POST", "/api/servers/remove", {"id": "s2"})[0] == 404 and req("POST", "/api/servers/rename", {"id": "s2", "name": "z"})[0] == 404
+            finally:
+                stop()
+        finally:
+            conf_dir, HOME, pm_open, app_key = old
+            SESSION_PW.pop(("u", "127.0.0.1", 2), None)
+    print("sshux ok")
 
 
 def selftest_talk():
@@ -5817,6 +6624,93 @@ def selftest_talk():
     print("talk ok")
 
 
+def selftest_end():
+    """Model change detection and 세션 종료: which sessions may be stopped, the request checks, and a real child process stopped."""
+    global PROC, collect_unlocked, END_WAIT
+    import subprocess
+    mc = model_change
+    assert mc([("m", "claude-opus-5-5"), ("m", "claude-opus-5-5")]) == ("claude-opus-5-5", None, False)
+    assert mc([("m", "<synthetic>"), ("m", "claude-opus-4-8"), ("fb", "claude-fable-5", "claude-opus-4-8"), ("m", "claude-fable-5")]) == ("claude-opus-4-8", "claude-fable-5", True)
+    assert mc([("fb", "claude-fable-5", "claude-opus-4-8")]) == ("claude-opus-4-8", "claude-fable-5", True)   # rerouted, no answer yet
+    assert mc([("m", "claude-fable-5"), ("fb", "claude-fable-5", "claude-opus-4-8"), ("m", "claude-opus-4-8")]) == ("claude-fable-5", "claude-opus-4-8", False)   # back on the original
+    assert mc([("m", "gpt-6"), ("m", None), ("m", "gpt-6-mini")]) == ("gpt-6", "gpt-6-mini", False) and mc([]) == (None, None, False)
+    assert model_name(' claude-x"<b> ') == "claude-xb" and model_name("<synthetic>") == "" and model_name(7) == ""
+    n = node("m1", "claude", "x", "idle", "", NOW, **model_kw([("m", "b"), ("m", "a")]))
+    assert n["model"] == "b" and n["model_prev"] == "a" and "model_fb" not in n and "model" not in node("m2", "claude", "x", "idle", "", NOW, **model_kw([]))
+    save = (PROC, dict(CL_SESS), dict(CX_HELD), dict(CX_PARENT), set(CX_SUB), collect_unlocked, END_WAIT)
+    me = os.getpid()
+    try:
+        def P(ppid, comm="claude", cmd=None):
+            return {"ppid": ppid, "comm": comm, "uid": 0 if WIN else os.getuid(), "state": "S", "cpu": 0, "start": None if WIN else "7", "started": NOW, "cmd": cmd or comm}
+        born = str(int((NOW + 11644473600) * 1e7)) if WIN else "7"   # procStart as Claude Code writes it: FILETIME (Windows) / stat field 22
+
+        def N(i, tool="claude", st="idle", kids=()):
+            return {"id": i, "tool": tool, "st": st, "kids": list(kids)}
+        PROC = {me: P(50, "python"), 50: P(1), 60: P(1), 62: P(1), 63: P(1), 64: P(1, "node", "node server.js"), 70: P(1, "codex"), 71: P(1, "codex", "codex resume t3")}
+        CL_SESS.clear()
+        CL_SESS.update({"s-self": {"pid": 50, "procStart": born}, "s-ok": {"pid": 60, "procStart": born}, "s-dead": {"pid": 61, "procStart": born},
+                        "s-nostart": {"pid": 62}, "s-odd": {"pid": 63, "procStart": born}, "s-node": {"pid": 64, "procStart": born}})
+        CL_ODD.clear()
+        CL_ODD.add("s-odd")
+        CX_HELD.clear()
+        CX_HELD.update({"t1": 70, "t2": 70, "t3": 71, "t3k": 71})
+        CX_PARENT.clear()
+        CX_PARENT["t3k"] = "t3"
+        CX_SUB.clear()
+        f = [N("s-self"), N("s-ok", kids=[N("sub1")]), N("s-dead", st="dead"), N("t1", "codex"), N("t3", "codex", kids=[N("t3k", "codex")]), N("a1", "agy"),
+             N("s-nostart"), N("s-odd"), N("s-node")]
+        end_fill(f)
+        assert "end" not in f[6] and "end" not in f[7], f   # a session file without a process start, or one that is not its pid's own file: never stoppable
+        assert ("end" in f[8]) is (not WIN), f               # Windows: a `node` process that is not running claude is not a claude session
+        assert f[0]["end"] == {"ok": False, "reason": "self"} and f[1]["end"] == {"ok": True, "pid": 60}, f   # never the process this collector runs under
+        assert "end" not in f[1]["kids"][0] and "end" not in f[2] and "end" not in f[5], f                      # subagent, no process, unsupported tool
+        assert f[3]["end"] == {"ok": False, "reason": "shared"}, f                                              # one codex process, two sessions
+        assert f[4]["end"] == ({"ok": False, "reason": "shared"} if WIN else {"ok": True, "pid": 71}) and "end" not in f[4]["kids"][0], f
+        collect_unlocked = lambda: {"agents": f}   # noqa: E731
+
+        def rp(**kw):
+            return talk_req(json.dumps(dict({"op": "end", "msg_id": "at-0000abcd", "tool": "claude", "id": "s-ok", "pid": 60}, **kw)).encode())
+        assert rp(pid="60")["reason"] == "bad-request" and rp(msg_id="x")["reason"] == "bad-request" and rp(tool="agy")["reason"] == "bad-request"
+        assert rp(id="nope")["outcome"] == "gone" and rp(id="sub1")["outcome"] == "gone" and rp(id="s-self")["reason"] == "self"
+        assert rp(pid=61) == {"re": "at-0000abcd", "outcome": "refused", "reason": "changed"}   # not the process the user saw: nothing is signalled
+        f[1]["st"] = "work"
+        assert rp(idle=True)["reason"] == "active"   # 유휴 세션 정리 never stops a session that started working again
+        f[1]["st"] = "idle"
+        collect_unlocked = lambda: PS_OK.__setitem__(0, False) or {"agents": f}   # noqa: E731  (the process listing failed: PROC is an old snapshot)
+        assert rp()["reason"] == "stale"             # nothing is stopped on a process list that could not be refreshed
+        PS_OK[0] = True
+        collect_unlocked = lambda: {"agents": f}   # noqa: E731
+        if not getattr(sys, "frozen", False):   # a real process: asked politely, then (Linux) forced when it ignores that
+            code = "import signal,sys,time\nif len(sys.argv) > 1: signal.signal(signal.SIGTERM, signal.SIG_IGN)\nprint('r', flush=True)\ntime.sleep(120)"
+            END_WAIT = 0.5
+            for stubborn in ([False] if WIN else [False, True]):
+                kid = subprocess.Popen([sys.executable, "-c", code] + (["x"] if stubborn else []), **popen_kw(stdout=subprocess.PIPE))
+                try:
+                    kid.stdout.readline()
+                    if WIN:
+                        PROC[kid.pid] = dict(P(1, "python"), started=win_proc_started(kid.pid) + 5)
+                        assert rp(pid=kid.pid)["reason"] == "changed" and kid.poll() is None   # another process got the pid since the snapshot: left alone
+                        PROC[kid.pid]["started"] -= 5
+                    else:
+                        PROC = procs()   # the real snapshot: end_proc compares start times
+                    f[1]["end"] = {"ok": True, "pid": kid.pid}
+                    r = rp(pid=kid.pid)
+                    assert r["outcome"] == "ended" and r.get("reason") == ("forced" if stubborn else None), r
+                    kid.wait(10)
+                finally:
+                    if kid.poll() is None:
+                        kid.kill()
+                    kid.stdout.close()
+    finally:
+        PROC, cl, held, par, sub, collect_unlocked, END_WAIT = save
+        for m, v in ((CL_SESS, cl), (CX_HELD, held), (CX_PARENT, par)):
+            m.clear()
+            m.update(v)
+        CX_SUB.clear()
+        CX_SUB.update(sub)
+    print("end ok")
+
+
 def selftest():
     global NOW
     NOW = time.time()
@@ -5850,7 +6744,7 @@ def selftest():
     assert list(pb(bytes([0x0A, 0x03]) + b"abc")) == [((1,), "abc")]
     t0 = time.time()
     assert t0 <= collect()["ts"] <= time.time() + 1   # clock-skew anchor: the server's own time at collect
-    for k in "proc claude codex agy hub http project".split():
+    for k in "proc claude codex agy hub http sshux project end".split():
         globals()["selftest_" + k]()
     if not WIN and not getattr(sys, "frozen", False):
         selftest_talk()   # last: it leaves the collector's module state to be cleared, not restored

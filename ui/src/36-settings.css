@@ -69,3 +69,27 @@
 .pal-sw .pt { left: 25px; top: 20px; width: 36px; height: 3px; border-radius: 2px; background: var(--ink-2); opacity: .7; }
 .pal-sw .pa { left: 25px; bottom: 11px; width: 22px; height: 8px; border-radius: 4px; background: var(--accent); }
 .pal-sw .pd { right: 11px; bottom: 11px; width: 8px; height: 8px; border-radius: 50%; background: var(--signal); }
+/* 채널 rows: ⋯ menu (이름 바꾸기 / 수정 / 위로 / 아래로 / 삭제), inline rename, the delete confirmation, the next reconnect */
+.cmw { position: relative; display: inline-flex; }
+.cmore { min-width: 32px; padding: 0 8px; font-weight: 700; letter-spacing: 1px; }
+.cmenu { position: absolute; right: 0; top: calc(100% + 4px); z-index: 20; display: grid; min-width: 176px; padding: 4px; border: 1px solid var(--line); border-radius: var(--r-card); background: var(--surface); box-shadow: var(--shadow-float); }
+.cmenu[hidden], .cmi[hidden] { display: none; }
+.cmi { display: block; width: 100%; padding: 6px 10px; border: 0; border-radius: var(--r-btn); background: none; color: var(--ink); text-align: left; font: inherit; font-size: 13px; line-height: 20px; white-space: nowrap; cursor: pointer; }
+.cmi:hover:not(:disabled), .cmi:focus-visible { background: var(--canvas); outline: none; }
+.cmi:focus-visible { box-shadow: inset 0 0 0 2px var(--focus); }
+.cmi:disabled { color: var(--ink-2); opacity: .6; cursor: default; }
+.cmi[data-k=remove] { color: var(--signal-text); }
+.cren { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.cren[hidden] { display: none; }
+.cren .cin { flex: 1 1 160px; min-width: 0; height: 32px; padding: 0 10px; border: 0; border-radius: var(--r-btn); background: var(--canvas); color: var(--ink); font: inherit; }
+.cren .cin:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.cerr { margin-top: 4px; color: var(--signal-text); font-weight: 500; overflow-wrap: anywhere; }
+.cerr[hidden], .cnext[hidden] { display: none; }
+.cnext { font-size: 12.5px; line-height: 18px; }
+.cdel { display: grid; gap: 6px; margin-top: 8px; padding: 10px 12px; border: 1.5px solid var(--signal); border-radius: var(--r-btn); background: var(--tint-signal); }
+.cdel[hidden] { display: none; }
+.cdel p { margin: 0; overflow-wrap: anywhere; }
+.cdel code { font-size: 12px; overflow-wrap: anywhere; }
+.cdel .sess { display: flex; gap: 8px; align-items: flex-start; font-size: 12.5px; line-height: 18px; }
+.cdel .sess input { margin-top: 2px; flex: none; }
+.cdel .acts { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }

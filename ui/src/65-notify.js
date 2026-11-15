@@ -60,6 +60,11 @@
         h('button.x', { type: 'button', 'aria-label': '닫기', title: '닫기', on: { click: () => dismiss(t) } }, '×')));
     t._key = 'undo:' + u.key; t._tm = setTimeout(() => dismiss(t), 8000); stack.append(t);
   });
+  on('note', u => {   // one line, no action (세션 종료 result)
+    for (const t of [...stack.children]) if (t._key === 'note:' + u.key) t.remove();
+    const t = h('div.toast.undo', h('div.tx', h('div.meta', u.text)), h('div.ta', h('button.x', { type: 'button', 'aria-label': '닫기', title: '닫기', on: { click: () => dismiss(t) } }, '×')));
+    t._key = 'note:' + u.key; t._tm = setTimeout(() => dismiss(t), 6000); stack.append(t);
+  });
   on('talk', e => { if (e.kind === 'clear') return clearKey(e.key); toast(e); if (canNotify()) notify(e); });   // 'clear': the held talk was approved / expired, its toast is stale
   on('events', evs => {
     if (!evs || !evs.length) return;
