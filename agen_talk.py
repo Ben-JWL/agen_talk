@@ -6663,7 +6663,7 @@ def selftest_end():
              N("s-nostart"), N("s-odd"), N("s-node")]
         end_fill(f)
         assert "end" not in f[6] and "end" not in f[7], f   # a session file without a process start, or one that is not its pid's own file: never stoppable
-        assert ("end" in f[8]) is (not WIN), f               # Windows: a `node` process that is not running claude is not a claude session
+        assert "end" not in f[8], f                           # a `node` process that is not running claude is not a claude session (off Windows only comm "claude" counts)
         assert f[0]["end"] == {"ok": False, "reason": "self"} and f[1]["end"] == {"ok": True, "pid": 60}, f   # never the process this collector runs under
         assert "end" not in f[1]["kids"][0] and "end" not in f[2] and "end" not in f[5], f                      # subagent, no process, unsupported tool
         assert f[3]["end"] == {"ok": False, "reason": "shared"}, f                                              # one codex process, two sessions
